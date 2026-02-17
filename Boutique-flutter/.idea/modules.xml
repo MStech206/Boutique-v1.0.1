@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/sapthala_boutique.iml" filepath="$PROJECT_DIR$/sapthala_boutique.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/sapthala_boutique_android.iml" filepath="$PROJECT_DIR$/android/sapthala_boutique_android.iml" />
+    </modules>
+  </component>
+</project>

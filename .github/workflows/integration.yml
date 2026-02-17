@@ -1,0 +1,54 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Start Firebase emulators (background)
+        run: |
+          firebase emulators:start --only firestore,functions --project=sapthala-test &
+          sleep 10
+
+      - name: Build and run backend (tests)
+        working-directory: ./Boutique-backend
+        env:
+          PAYU_MERCHANT_KEY: 'test_key'
+          PAYU_MERCHANT_SALT: 'test_salt'
+        run: |
+          mvn -B -DskipTests=false test &
+
+      - name: Wait for backend to be healthy
+        run: |
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || true)
+            echo "backend status: $status"
+            if [ "$status" = "200" ]; then exit 0; fi
+            sleep 2
+          done
+          echo 'Backend did not become healthy' && exit 1
+
+      - name: Run node integration test
+        working-directory: ./functions
+        run: |
+          npm ci
+          npm run integration-test

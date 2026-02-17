@@ -1,0 +1,19 @@
+Starting server initialization...
+✅ MongoDB Connected Successfully to sapthala_boutique
+🔄 Initializing default data...
+🎉 Database initialization completed successfully!
+About to call app.listen()...
+🚦 app.listen() returned, server object exists: true
+🔗 Server address info: null
+🚀 SAPTHALA Boutique Server running on port 3000
+📱 Admin Panel: http://localhost:3000
+🔗 API Base: http://localhost:3000/api
+🗄️ MongoDB: Connected to sapthala_boutique database
+✅ Server is ready to accept requests
+🔌 LISTENING ON localhost:3000
+🔔 THIS MESSAGE APPEARS FROM WITHIN THE LISTEN CALLBACK
+✅ NEW CONNECTION RECEIVED
+📨 POST /api/send-whatsapp payload: { phone: '+919876543210', hasMessage: true, pdfUrlPresent: false }
+📱 WhatsApp share link generated for +919876543210: https://wa.me/919876543210?text=Test%20message%20from%20SAPT...
+📤 notifyResult: {"success":true,"sentVia":"wa.me","whatsappUrl":"https://wa.me/919876543210?text=Test%20message%20from%20SAPTHALA%20automated%20test.%20This%20is%20a%20test%20(no%20important%20action).","pdfUrl":null,"message":"Click the link or use your phone to send via WhatsApp"}
+✅ NEW CONNECTION RECEIVED

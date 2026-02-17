@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: sapthala-backend
+  profiles:
+    active: dev
+  
+  # MongoDB Configuration
+  data:
+    mongodb:
+      uri: mongodb://admin:sapthala_dev_123@localhost:27017/sapthala_boutique?authSource=admin
+      auto-index-creation: true
+
+firebase:
+  database: sapthala-test
+
+logging:
+  level:
+    root: INFO
+    com.sapthala: DEBUG
+    org.springframework.data.mongodb: DEBUG

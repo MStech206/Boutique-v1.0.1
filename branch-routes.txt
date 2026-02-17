@@ -1,0 +1,180 @@
+// ==================== BRANCH MANAGEMENT ROUTES ====================
+
+// Get all branches
+app.get('/api/branches', authenticateToken, async (req, res) => {
+  try {
+    const branches = await Branch.find().sort({ createdAt: -1 });
+    res.json({ success: true, branches });
+  } catch (error) {
+    console.error('Get branches error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch branches' });
+  }
+});
+
+// Create branch
+app.post('/api/branches', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Only main admin can create branches' });
+    }
+
+    const { branchName, location, phone, email } = req.body;
+    
+    if (!branchName || !location) {
+      return res.status(400).json({ success: false, error: 'Branch name and location are required' });
+    }
+
+    const branchId = `SAPTHALA.${branchName.replace(/\s+/g, '')}`;
+    
+    const existingBranch = await Branch.findOne({ branchId });
+    if (existingBranch) {
+      return res.status(400).json({ success: false, error: 'Branch already exists' });
+    }
+
+    const branch = new Branch({
+      branchId,
+      branchName,
+      location,
+      phone,
+      email,
+      createdBy: req.user.id
+    });
+
+    await branch.save();
+    console.log(`✅ Branch created: ${branchName}`);
+    
+    res.json({ success: true, branch });
+  } catch (error) {
+    console.error('Create branch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create branch' });
+  }
+});
+
+// Update branch
+app.put('/api/branches/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const { branchName, location, phone, email, isActive } = req.body;
+    
+    const branch = await Branch.findByIdAndUpdate(
+      req.params.id,
+      { branchName, location, phone, email, isActive, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    if (!branch) {
+      return res.status(404).json({ success: false, error: 'Branch not found' });
+    }
+    
+    res.json({ success: true, branch });
+  } catch (error) {
+    console.error('Update branch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update branch' });
+  }
+});
+
+// Delete branch
+app.delete('/api/branches/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const branch = await Branch.findByIdAndDelete(req.params.id);
+    
+    if (!branch) {
+      return res.status(404).json({ success: false, error: 'Branch not found' });
+    }
+    
+    res.json({ success: true, message: 'Branch deleted successfully' });
+  } catch (error) {
+    console.error('Delete branch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete branch' });
+  }
+});
+
+// Get last N orders report
+app.get('/api/reports/last-orders-custom', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 10, branch } = req.query;
+    
+    let matchQuery = {};
+    
+    if (req.user.role === 'sub-admin') {
+      matchQuery.branch = req.user.branch;
+    } else if (branch && branch !== 'all') {
+      matchQuery.branch = branch;
+    }
+    
+    const orders = await Order.find(matchQuery)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .select('orderId customerName customerPhone garmentType totalAmount advanceAmount balanceAmount status createdAt branch');
+    
+    const totalAmount = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalAdvance = orders.reduce((sum, o) => sum + (o.advanceAmount || 0), 0);
+    const totalBalance = orders.reduce((sum, o) => sum + (o.balanceAmount || 0), 0);
+    
+    res.json({
+      success: true,
+      orders: orders.map(o => ({
+        orderId: o.orderId,
+        date: o.createdAt,
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
+        garmentType: o.garmentType,
+        totalAmount: o.totalAmount || 0,
+        advanceAmount: o.advanceAmount || 0,
+        balanceAmount: o.balanceAmount || 0,
+        status: o.status,
+        branch: o.branch
+      })),
+      summary: {
+        totalOrders: orders.length,
+        totalAmount,
+        totalAdvance,
+        totalBalance
+      }
+    });
+  } catch (error) {
+    console.error('Last orders custom report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate report' });
+  }
+});
+
+// Get branch-wise summary
+app.get('/api/reports/branch-summary', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const branches = await Branch.find({ isActive: true });
+    const summary = [];
+
+    for (const branch of branches) {
+      const orders = await Order.find({ branch: branch.branchId });
+      const totalAmount = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+      const totalAdvance = orders.reduce((sum, o) => sum + (o.advanceAmount || 0), 0);
+      const totalBalance = orders.reduce((sum, o) => sum + (o.balanceAmount || 0), 0);
+
+      summary.push({
+        branchId: branch.branchId,
+        branchName: branch.branchName,
+        location: branch.location,
+        totalOrders: orders.length,
+        totalAmount,
+        totalAdvance,
+        totalBalance
+      });
+    }
+
+    res.json({ success: true, summary });
+  } catch (error) {
+    console.error('Branch summary error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate branch summary' });
+  }
+});

@@ -1,0 +1,13 @@
+# Java
+target/
+*.class
+
+# Maven
+.settings/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/

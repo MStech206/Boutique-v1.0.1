@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-01-30T05:24:48.336Z",
+  "results": [
+    {
+      "name": "GET /api/staff",
+      "ok": true,
+      "status": 200
+    },
+    {
+      "name": "POST /api/staff/login",
+      "ok": true,
+      "status": 200
+    },
+    {
+      "name": "POST /api/share-order-pdf",
+      "ok": true,
+      "status": 200
+    },
+    {
+      "name": "GET /api/admin/orders",
+      "ok": false,
+      "status": 401
+    }
+  ],
+  "login": {
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5N2FmMmVkZDhkODU0NTUzNzRlYzg5NyIsInN0YWZmSWQiOiJzdGFmZl8wMDQiLCJyb2xlIjoic3RhZmYiLCJpYXQiOjE3Njk3NTA2ODgsImV4cCI6MTc2OTgzNzA4OH0.Hreb-pdO1iQR0RNrussJrwN3-8GagdxtcBoVReC85xo",
+    "staff": {
+      "id": "697af2edd8d85455374ec897",
+      "staffId": "staff_004",
+      "name": "Sneha Desai",
+      "role": "khakha expert",
+      "workflowStages": [
+        "khakha"
+      ],
+      "phone": "9876543213",
+      "avatarUrl": ""
+    }
+  },
+  "share": {
+    "success": true,
+    "pdf": {
+      "success": true,
+      "htmlPath": "/pdfs/ORD-RUNTEST-1769750688370.html",
+      "pdfPath": "/pdfs/ORD-RUNTEST-1769750688370.pdf"
+    },
+    "notify": {
+      "sent": false,
+      "provider": "wa.me",
+      "whatsappUrl": null
+    }
+  }
+}

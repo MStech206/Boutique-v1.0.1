@@ -1,0 +1,19 @@
+# Flutter
+build/
+.dart_tool/
+.packages
+.pub/
+
+# Android
+android/.gradle/
+
+# iOS
+ios/Pods/
+
+# Secrets
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# VSCode
+.vscode/

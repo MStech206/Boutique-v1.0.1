@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Boutique Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; }
+        /* Login Page Styles */
+        .login-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%); /* Burgundy gradient */
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+
+        /* Dashboard charts function moved to the main <script> block so it runs after Chart.js and DOM load. */
+        .login-box {
+            background: white; border-radius: 24px; padding: 48px 36px 36px 36px; width: 100%; max-width: 410px;
+            box-shadow: 0 24px 64px rgba(124,24,60,0.18); text-align: center;
+            animation: slideUp 0.6s cubic-bezier(.23,1.01,.32,1);
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-logo {
+            width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 22px;
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%); /* Burgundy */
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; color: white;
+            box-shadow: 0 4px 16px rgba(124,24,60,0.12);
+        }
+        .login-title {
+            font-size: 30px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        .login-subtitle {
+            color: #b22234; margin-bottom: 32px; font-size: 16px; font-weight: 500;
+        }
+        .login-form { display: flex; flex-direction: column; gap: 22px; }
+        .login-input {
+            padding: 16px 22px; border: 2px solid #e2e8f0; border-radius: 14px;
+            font-size: 17px; transition: all 0.3s;
+            background: #f9fafb;
+        }
+        .login-input:focus {
+            outline: none; border-color: #b22234; box-shadow: 0 0 0 3px rgba(124,24,60,0.08);
+        }
+        .login-btn {
+            padding: 16px; background: linear-gradient(135deg, #b22234 0%, #7c183c 100%);
+            color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: bold;
+            cursor: pointer; transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(124,24,60,0.10);
+        }
+        .login-btn:hover {
+            transform: translateY(-2px); box-shadow: 0 12px 28px rgba(124,24,60,0.18);
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+        }
+        .login-footer {
+            margin-top: 28px; color: #7c183c; font-size: 14px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+        }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header-logo { width: 95px; height: 95px; border-radius: 50%; }
+        
+        .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab {
+            padding: 12px 24px; background: #e5e7eb; color: #666; border: none;
+            border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer; transition: all 0.3s;
+        }
+        .tab.active { background: white; color: #3b82f6; border: 3px solid #3b82f6; }
+        
+        .tab-content { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card {
+            padding: 25px; border-radius: 16px; color: white; text-align: center;
+            transition: all 0.4s; cursor: pointer;
+        }
+        .stat-card:hover { transform: translateY(-8px) scale(1.05); }
+        .stat-card.blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+        .stat-card.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .stat-card.yellow { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .stat-card.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        
+        .stat-value { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
+        .stat-label { font-size: 16px; opacity: 0.9; }
+        
+        .form-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 25px; }
+        .section-title { font-size: 20px; font-weight: bold; color: #1e293b; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #3b82f6; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: bold; color: #374151; margin-bottom: 8px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 16px;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: #3b82f6;
+        }
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        
+        .category-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .category-btn {
+            padding: 20px; border: 2px solid #e2e8f0; border-radius: 16px; background: white;
+            color: #374151; font-weight: bold; cursor: pointer; transition: all 0.3s; text-align: left;
+        }
+        .category-btn:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .category-btn.active { border-color: #3b82f6; background: #3b82f6; color: white; }
+        
+        .garment-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .garment-btn {
+            text-align: center; padding: 16px; min-height: 180px; display: flex; flex-direction: column;
+            justify-content: space-between; border: 2px solid #e2e8f0; border-radius: 16px; background: white;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .garment-btn:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .garment-btn.active { border-color: #3b82f6; background: #3b82f6; color: white; }
+        
+        .category-info { display: flex; flex-direction: column; gap: 8px; }
+        .category-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+        .category-desc { font-size: 14px; color: #64748b; font-weight: 500; }
+        .category-count { font-size: 12px; color: #3b82f6; font-weight: 600; background: #dbeafe; padding: 4px 8px; border-radius: 6px; align-self: flex-start; }
+        
+        .subcategory { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 20px; }
+        .subcategory-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .subcategory-btn { padding: 20px; border: 2px solid #e2e8f0; border-radius: 16px; background: white; color: #374151; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        .subcategory-btn:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .subcategory-btn.active { border-color: #3b82f6; background: #3b82f6; color: white; }
+        
+        .measurement-design-container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+
+        /* Theme card styles */
+        .theme-card { background: white; border-radius: 14px; padding: 12px; border: 1px solid #e6edf3; box-shadow: 0 6px 18px rgba(2,6,23,0.04); cursor: pointer; transition: all 0.25s; position: relative; }
+        .theme-card::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 6px; border-radius: 8px 8px 0 0; }
+        .theme-card:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(2,6,23,0.06); }
+        .theme-card.active { outline: 3px solid rgba(59,130,246,0.12); }
+        .theme-card h4 { margin-top: 12px; font-size: 18px; }
+        .theme-card p { font-size: 13px; color: #6b7280; margin-top: 6px; }
+
+        /* Disabled (graded-out) theme appearance for sub-admins */
+        .theme-card.disabled { opacity: 0.46; filter: grayscale(40%); pointer-events: none; }
+        .theme-card.disabled .theme-preview { transform: scale(0.98); }
+
+        /* Tricolor preview helper for Independence theme */
+        .theme-preview.tricolor { background: linear-gradient(90deg, #FF9933 0%, #FF9933 33.33%, #ffffff 33.33%, #ffffff 66.66%, #138808 66.66%, #138808 100%); position: relative; }
+        .theme-preview.tricolor .ashoka { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 56px; height: 56px; }
+        .theme-card .badge-upcoming { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.95); color: #0b3d91; border-radius: 12px; padding: 4px 8px; font-size: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(2,6,23,0.06); }
+        .measurements-panel, .design-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .design-section { margin-bottom: 20px; }
+        .design-section textarea { width: 100%; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px; resize: vertical; font-family: inherit; }
+        
+        .image-upload { border: 2px dashed #d1d5db; border-radius: 8px; padding: 20px; text-align: center; transition: all 0.3s; }
+        .image-upload:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .image-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 15px; }
+        .image-preview img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; }
+        
+        .pricing-container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .pricing-left, .pricing-right { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .price-breakdown { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #bfdbfe; }
+        .price-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(59, 130, 246, 0.1); }
+        .price-item.total { font-size: 18px; font-weight: bold; color: #1e293b; margin-top: 10px; padding-top: 15px; border-top: 2px solid #3b82f6; }
+        
+        .balance-due { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 15px; border-radius: 8px; border: 1px solid #f59e0b; }
+        .balance-item { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; color: #92400e; }
+        
+        .form-actions { display: flex; gap: 15px; justify-content: center; margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
+        .pdf-actions { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
+        .btn-pdf { padding: 12px 24px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        .btn-pdf:hover { background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%); transform: translateY(-2px); }
+        
+        .add-custom-btn { padding: 10px 15px; background: #f3f4f6; border: 2px dashed #9ca3af; border-radius: 8px; color: #6b7280; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        .add-custom-btn:hover { background: #e5e7eb; border-color: #6b7280; }
+        
+        .btn-primary, .btn-secondary {
+            padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold;
+            font-size: 16px; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+        .btn-primary:hover { background: linear-gradient(135deg, #059669 0%, #047857 100%); transform: translateY(-2px); }
+        .btn-secondary { background: #f3f4f6; color: #374151; border: 2px solid #d1d5db; }
+        .btn-secondary:hover { background: #e5e7eb; }
+        
+        .hidden { display: none !important; }
+        
+        /* Staff Management Styles */
+        .staff-item {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: grid;
+            grid-template-columns: 60px 1fr 1fr 1fr auto;
+            gap: 20px;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        .staff-item:hover { background: #f8fafc; }
+        .staff-item:last-child { border-bottom: none; }
+        .staff-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+            overflow: hidden; /* allow avatar image */
+        }
+        .staff-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .role-badge { padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; color: white; display: inline-block; }
+        .role-dyeing { background: linear-gradient(90deg,#7c3aed,#06b6d4); }
+        .role-cutting { background: linear-gradient(90deg,#ef4444,#f97316); }
+        .role-stitching { background: linear-gradient(90deg,#10b981,#047857); }
+        .role-khakha { background: linear-gradient(90deg,#f59e0b,#d97706); }
+        .role-maggam { background: linear-gradient(90deg,#a78bfa,#7c3aed); }
+        .role-painting { background: linear-gradient(90deg,#f472b6,#fb7185); }
+        .role-finishing { background: linear-gradient(90deg,#06b6d4,#3b82f6); }
+        .role-quality { background: linear-gradient(90deg,#374151,#6b7280); }
+        .role-delivery { background: linear-gradient(90deg,#f97316,#f43f5e); }
+
+        .stage-tag { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 8px; font-size: 12px; margin-right: 6px; }
+        .staff-item { gap: 18px; }
+        .staff-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+        .staff-info h3 { display:flex; align-items:center; gap:8px; }
+        .staff-info h3 .role-small { font-size: 12px; font-weight: 700; margin-left: 8px; }
+        .staff-info h3 { margin: 0 0 4px 0; font-size: 16px; color: #1e293b; }
+        .staff-info p { margin: 0; font-size: 12px; color: #6b7280; }
+        .staff-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-available { background: #d1fae5; color: #065f46; }
+        .badge-busy { background: #fee2e2; color: #991b1b; }
+        .staff-actions { display: flex; gap: 8px; }
+        .btn-edit { padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .btn-delete { padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .btn-toggle { padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .modal-header h2 { margin: 0; color: #1e293b; font-size: 24px; }
+        .modal-close {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .checkbox-label:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .checkbox-label input[type="checkbox"] { transform: scale(1.2); accent-color: #3b82f6; }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .orders-list, .customers-list {
+            background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .order-item, .customer-item {
+            padding: 20px; border-bottom: 1px solid #e2e8f0; display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto; gap: 20px; align-items: center;
+        }
+        .order-item:last-child, .customer-item:last-child { border-bottom: none; }
+        
+        .measurement-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .measurement-field { display: flex; flex-direction: column; }
+        .measurement-field label { font-size: 12px; font-weight: bold; color: #6b7280; margin-bottom: 5px; }
+        .measurement-field input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; text-align: center; }
+        
+        /* Enhanced Dashboard Charts */
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+        .chart-container {
+            background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .chart-container:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+        .chart-container::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #10b981, #f59e0b, #ef4444);
+        }
+        .chart-title {
+            text-align: center; margin-bottom: 20px; color: #1e293b; font-size: 18px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .chart-canvas { width: 100%; height: 300px; }
+        
+        /* Enhanced Theme Cards */
+        .theme-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 20px;
+            padding: 24px;
+            border: 3px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .theme-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.6s;
+        }
+        .theme-card:hover::before {
+            left: 100%;
+        }
+        .theme-card:hover {
+            border-color: #6366f1;
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(99,102,241,0.2);
+        }
+        .theme-card.active {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(99,102,241,0.25);
+        }
+        .theme-preview {
+            width: 100%;
+            height: 100px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            transition: all 0.3s;
+        }
+        .theme-card:hover .theme-preview {
+            transform: scale(1.05);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+        }
+        .theme-preview::after {
+            content: attr(data-emoji);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+        .theme-card h4 {
+            margin: 0 0 12px 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            letter-spacing: -0.025em;
+        }
+        .theme-card p {
+            margin: 0;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.5;
+        }
+        .theme-card.active h4 {
+            color: #1e40af;
+        }
+        .theme-card.active p {
+            color: #1e40af;
+        }
+        /* Mobile select fixes to avoid overflow on Android emulator */
+        select, .form-group select, #orderBranch, #staffFilterBranch, #staffBranch {
+            min-width: 0;
+            max-width: 100%;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 480px) {
+            select, input, textarea { font-size: 14px; }
+            #orderBranch { padding: 8px; }
+            .sidebar-tab { font-size: 15px; padding-left: 20px; }
+        }
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .staff-item { grid-template-columns: 1fr; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        (function earlyPopulateBranches(){
+            try {
+                document.addEventListener('DOMContentLoaded', async () => {
+                    try {
+                        const res = await fetch('/api/public/branches');
+                        if (!res.ok) return;
+                        const branches = await res.json();
+                        const selIds = ['orderBranch','staffBranch','staffFilterBranch','reportBranch'];
+                        selIds.forEach(id => {
+                            const el = document.getElementById(id);
+                            if (!el) return;
+                            if (el.tagName === 'SELECT') el.innerHTML = '<option value="">All</option>';
+                        });
+                        (branches || []).forEach(b => {
+                            const display = (b.branchName || b.branchId || b.branch || '').toString();
+                            const value = (b.branchId || display).toString();
+                            selIds.forEach(id => {
+                                const el = document.getElementById(id);
+                                if (!el) return;
+                                if (el.tagName === 'SELECT') {
+                                    const o = document.createElement('option'); o.value = value; o.textContent = `${display} (${value})`; el.appendChild(o);
+                                }
+                            });
+                            const datalist = document.getElementById('branchesDatalist');
+                            if (datalist) {
+                                const d = document.createElement('option'); d.value = display; datalist.appendChild(d);
+                            }
+                        });
+                    } catch (e) { console.warn('earlyPopulateBranches failed', e); }
+                });
+
+                // Initialize demo orders if none exist
+                if (!localStorage.getItem('sapthala_orders') || JSON.parse(localStorage.getItem('sapthala_orders')).length === 0) {
+                    initializeDemoOrders();
+                }
+            } catch (e) { console.warn('earlyPopulateBranches init failed', e); }
+        })();
+    </script>
+    <script>
+        // Initialize demo orders with assigned staff
+        function initializeDemoOrders() {
+            const demoOrders = [
+                {
+                    id: 'ORD-1707492000001',
+                    orderId: 'ORD-DEMO-001',
+                    customer: { name: 'John Doe', phone: '9876543210', address: 'Mumbai, MH' },
+                    customerName: 'John Doe',
+                    customerPhone: '9876543210',
+                    garmentType: 'Shirt',
+                    measurements: { chest: '38', length: '28' },
+                    designNotes: 'Blue colored shirt with custom collar',
+                    pricing: { total: 5000, advance: 2500, balance: 2500 },
+                    deliveryDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                    status: 'pending',
+                    branch: 'SAPTHALA.MAIN',
+                    createdAt: new Date().toISOString(),
+                    progress: 0,
+                    assignedStaff: [
+                        { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' },
+                        { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
+                    ]
+                },
+                {
+                    id: 'ORD-1707492000002',
+                    orderId: 'ORD-DEMO-002',
+                    customer: { name: 'Sarah Khan', phone: '9876543220', address: 'Delhi, DL' },
+                    customerName: 'Sarah Khan',
+                    customerPhone: '9876543220',
+                    garmentType: 'Saree',
+                    measurements: { length: '180', blouse_chest: '36' },
+                    designNotes: 'Traditional silk saree with embroidery',
+                    pricing: { total: 22030, advance: 11000, balance: 11030 },
+                    deliveryDate: new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0],
+                    status: 'pending',
+                    branch: 'SAPTHALA.MAIN',
+                    createdAt: new Date().toISOString(),
+                    progress: 0,
+                    assignedStaff: [
+                        { staffId: 'STAFF-001', name: 'Raj Kumar', phone: '9876543210', role: 'dyer' },
+                        { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
+                    ]
+                },
+                {
+                    id: 'ORD-1707492000003',
+                    orderId: 'ORD-DEMO-003',
+                    customer: { name: 'Rajesh Sharma', phone: '9876543230', address: 'Bangalore, KA' },
+                    customerName: 'Rajesh Sharma',
+                    customerPhone: '9876543230',
+                    garmentType: 'Pants',
+                    measurements: { waist: '34', length: '32' },
+                    designNotes: 'Formal black pants with slim fit',
+                    pricing: { total: 2662, advance: 1331, balance: 1331 },
+                    deliveryDate: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
+                    status: 'pending',
+                    branch: 'SAPTHALA.MAIN',
+                    createdAt: new Date().toISOString(),
+                    progress: 0,
+                    assignedStaff: [
+                        { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' }
+                    ]
+                }
+            ];
+            
+            localStorage.setItem('sapthala_orders', JSON.stringify(demoOrders));
+            console.log(' Demo orders initialized with assigned staff');
+        }
+        // Defensive global wrappers: ensure basic UI actions work
+        (function(){
+            // Provide a safe, global showTab that falls back when the main script fails to load
+            if (!window.showTab || typeof window.showTab !== 'function') {
+                window.showTab = function(tabName){
+                    try {
+                        // prefer original implementation if it exists later
+                        if (typeof window.__original_showTab === 'function') return window.__original_showTab(tabName);
+                    } catch(e){}
+
+                    try {
+                        document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+                        document.querySelectorAll('.sidebar-tab').forEach(b => b.classList.remove('active'));
+                        const panel = document.getElementById(tabName);
+                        if (panel) panel.style.display = 'block';
+
+                        // attempt to mark matching sidebar button active
+                        const btn = Array.from(document.querySelectorAll('.sidebar-tab')).find(b => {
+                            try { return b.getAttribute('onclick') && b.getAttribute('onclick').indexOf(tabName) !== -1; } catch(e){ return false; }
+                        });
+                        if (btn) btn.classList.add('active');
+
+                        // Best-effort: call related loader functions if they exist
+                        const loaders = {
+                            'dashboard': 'updateDashboardStats',
+                            'orders': 'loadOrders',
+                            'customers': 'loadCustomers',
+                            'staff': 'loadStaff',
+                            'sub-admins': 'loadSubAdmins',
+                            'reports': 'loadReports',
+                            'new-order': 'refreshBranchesAndPopulate'
+                        };
+                        const fn = loaders[tabName];
+                        if (fn && typeof window[fn] === 'function') {
+                            try { window[fn](); } catch(e){ console.warn('Loader', fn, 'failed', e); }
+                        }
+                    } catch (e) {
+                        console.warn('Fallback showTab error', e);
+                    }
+                };
+            } else {
+                // keep a reference to original if present
+                try { window.__original_showTab = window.showTab; } catch(e){}
+            }
+
+            // Safe helper to call named functions if available
+            window.safeCall = function(fnName, ...args){ try { if (typeof window[fnName] === 'function') return window[fnName](...args); } catch(e){ console.warn('safeCall failed', fnName, e); } };
+        })();
+    </script>
+    <script>
+        // Minimal login handlers to keep login functional even if main script fails to parse
+        (function(){
+            if (typeof window.handleLogin === 'function') return; // main script will provide full implementation
+
+            window.handleLogin = async function(event) {
+                try {
+                    if (event && event.preventDefault) event.preventDefault();
+                    const username = (document.getElementById('username') && document.getElementById('username').value) || '';
+                    const password = (document.getElementById('password') && document.getElementById('password').value) || '';
+                    if (!username || !password) { alert('Enter username and password'); return; }
+                    const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+                    let data = null;
+                    try { data = await res.json(); } catch(e) { alert('Login failed: invalid server response'); return; }
+                    if (res.ok && data && data.token) {
+                        try { localStorage.setItem('sapthala_token', data.token); localStorage.setItem('sapthala_user', JSON.stringify(data.user || { username })); localStorage.setItem('sapthala_logged_in','true'); } catch(e) { sessionStorage.setItem('sapthala_token', data.token); sessionStorage.setItem('sapthala_user', JSON.stringify(data.user || { username })); sessionStorage.setItem('sapthala_logged_in','true'); }
+                        // Hide login and show main app
+                        try { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden'); } catch(e){}
+                        // attempt to call dashboard updater if available
+                        try { if (typeof updateDashboardStats === 'function') updateDashboardStats(); } catch(e){}
+                    } else {
+                        alert((data && data.error) || 'Login failed');
+                    }
+                } catch (e) { console.error('Minimal handleLogin error', e); alert('Login error'); }
+            };
+
+            window.bypassLogin = function(){
+                try {
+                    localStorage.setItem('sapthala_logged_in','true'); localStorage.setItem('sapthala_token','BYPASS_'+Date.now()); localStorage.setItem('sapthala_user', JSON.stringify({ username:'bypass', role:'admin' }));
+                    document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden');
+                    try { if (typeof updateDashboardStats === 'function') updateDashboardStats(); } catch(e){}
+                } catch(e){ console.warn('bypassLogin fallback failed', e); }
+            };
+
+            window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_in') === 'true') { try { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden'); } catch(e){} } };
+        })();
+    </script>
+    <script>
+        // Order detail modal helpers
+        let currentOpenOrderId = null;
+
+        async function openOrderDetail(orderId) {
+            try {
+                currentOpenOrderId = orderId;
+                const modal = document.getElementById('orderDetailModal');
+                const body = document.getElementById('orderDetailBody');
+                body.innerHTML = '<div style="padding:20px;color:#6b7280;">Loading order details...</div>';
+                modal.classList.add('show');
+
+                // Fetch order defensively
+                let data = null;
+                try {
+                    const res = await api.getOrder(orderId);
+                    data = (res && (res.order || res.data || res)) || null;
+                } catch (e) {
+                    console.warn('api.getOrder failed, trying fallback endpoints', e);
+                    try {
+                        const r = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`);
+                        if (r.ok) data = await r.json();
+                    } catch (e2) { console.warn('fallback fetch failed', e2); }
+                }
+
+                if (!data) {
+                    body.innerHTML = '<div style="padding:20px;color:#dc2626;">Unable to load order details.</div>';
+                    return;
+                }
+
+                // Normalize common fields
+                const oid = data.orderId || data.id || data._id || orderId;
+                const customerName = data.customerName || (data.customer && data.customer.name) || '';
+                const customerPhone = data.customerPhone || (data.customer && (data.customer.phone || data.customer.whatsapp)) || '';
+                const address = data.customerAddress || (data.customer && data.customer.address) || '';
+                const garment = data.garmentType || data.category || (data.garment && data.garment.name) || '';
+                const amount = (data.totalAmount || data.pricing?.total || 0);
+                const status = data.status || data.stage || 'pending';
+                const branch = data.branchId || data.branch || '';
+                const createdAt = data.createdAt ? new Date(data.createdAt).toLocaleString() : '';
+                const stages = data.workflow || data.stages || data.workflowStages || [];
+
+                let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+                        <div style="font-weight:700">Order</div>
+                        <div style="margin-top:6px">${oid}</div>
+                        <div style="font-size:12px;color:#6b7280">Created: ${createdAt}</div>
+                        <div style="margin-top:12px;font-weight:700">Status</div>
+                        <div style="margin-top:6px">${status}</div>
+                        <div style="margin-top:12px;font-weight:700">Branch</div>
+                        <div style="margin-top:6px">${(window.branchMap && window.branchMap[branch]) ? window.branchMap[branch] + ' ('+branch+')' : branch}</div>
+                    </div>
+                    <div style="background:#fff7ed;padding:12px;border-radius:8px;">
+                        <div style="font-weight:700">Customer</div>
+                        <div style="margin-top:6px">${customerName}</div>
+                        <div style="font-size:13px;color:#6b7280">${customerPhone}</div>
+                        <div style="margin-top:8px;font-size:13px;color:#6b7280">${address}</div>
+                        <div style="margin-top:12px;font-weight:700">Amount</div>
+                        <div style="margin-top:6px">${amount.toLocaleString()}</div>
+                    </div>
+                </div>`;
+
+                html += '<div style="margin-top:12px;background:white;padding:12px;border-radius:8px;">';
+                html += `<div style="margin-bottom:20px;padding:15px;background:#f8fafc;border-radius:8px;"><p style="margin:5px 0;"><strong>Customer:</strong> ${order.customerName} (${order.customerPhone})</p><p style="margin:5px 0;"><strong>Branch:</strong> ${(window.branchMap && window.branchMap[order.branch]) ? window.branchMap[order.branch] + ' (' + order.branch + ')' : (order.branch || 'Not specified')}</p><p style="margin:5px 0;"><strong>Garment:</strong> ${order.garmentType}</p><p style="margin:5px 0;"><strong>Amount:</strong> ${order.totalAmount}</p><p style="margin:5px 0;"><strong>Status:</strong> ${order.status}</p></div>`
+                            <p> Created: ${new Date(subAdmin.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                            <span class="stage-tag">${permissionsList}</span>
+                        </div>
+                        <div>
+                            <span class="staff-badge badge-available">
+                                 Active
+                            </span>
+                        </div>
+                        <div class="staff-actions">
+                            <button class="btn-delete" onclick="deleteSubAdmin('${subAdmin._id}')" title="Delete Sub-Admin"> Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            subAdminsList.innerHTML = html;
+        }
+
+        function showAddSubAdminModal() {
+            // Only main admin may create sub-admins. Check current user role first.
+            try {
+                const userStr = localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                if (!user || user.role !== 'admin') {
+                    alert(' Only main admin can create sub-admins');
+                    return;
+                }
+            } catch (e) {
+                console.warn('Could not verify user role for add sub-admin:', e);
+            }
+
+            document.getElementById('subAdminModalTitle').textContent = ' Add Sub-Admin';
+            document.getElementById('subAdminForm').reset();
+            document.getElementById('subAdminEditId').value = '';
+
+            // Populate branch suggestions using centralized refresh so labels are consistent
+            (async function populateBranches() {
+                try {
+                    await refreshBranchesAndPopulate();
+                    const datalist = document.getElementById('branchesDatalist');
+                    if (datalist && window.branchMap) {
+                        datalist.innerHTML = '';
+                        Object.keys(window.branchMap).forEach(id => {
+                            const display = window.branchMap[id] || id;
+                            const opt = document.createElement('option');
+                            opt.value = `${display} (${id})`;
+                            datalist.appendChild(opt);
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Could not populate branches for sub-admin modal:', e);
+                } finally {
+                    document.getElementById('subAdminModal').classList.add('show');
+                }
+            })();
+        }
+
+        function closeSubAdminModal() {
+            document.getElementById('subAdminModal').classList.remove('show');
+        }
+
+        async function saveSubAdmin(event) {
+            event.preventDefault();
+            
+            // Enforce frontend branch limit: max 11 unique branches
+            try {
+                const checkRes = await fetch('/api/admin/sub-admins', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}` }
+                });
+                if (checkRes.ok) {
+                    const existing = await checkRes.json();
+                    const branches = new Set(existing.map(s => s.branch).filter(Boolean));
+                    const editId = document.getElementById('subAdminEditId').value;
+                    const newBranch = document.getElementById('subAdminBranch').value;
+                    // If creating new (not editing) and branch is new and limit reached, block
+                    if (!editId && !branches.has(newBranch) && branches.size >= 11) {
+                        alert(' Branch limit reached. You cannot create more than 11 branches.');
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Branch limit check failed (continuing):', e);
+            }
+
+            const permissions = {};
+            document.querySelectorAll('input[name="permissions"]:checked').forEach(cb => {
+                permissions[cb.value] = true;
+            });
+
+            const formData = {
+                username: document.getElementById('subAdminUsername').value,
+                password: document.getElementById('subAdminPassword').value,
+                branch: document.getElementById('subAdminBranch').value,
+                permissions
+            };
+
+            // Normalize branch input: support "Display (ID)" or plain name
+            try {
+                let raw = (formData.branch || '').toString().trim();
+                if (!raw) {
+                    // allow server to handle empty
+                } else {
+                    const m = raw.match(/\(([^)]+)\)\s*$/);
+                    if (m && m[1]) {
+                        formData.branch = m[1].trim();
+                    } else if (window.branchReverseMap && window.branchReverseMap[raw.toLowerCase()]) {
+                        formData.branch = window.branchReverseMap[raw.toLowerCase()];
+                    } else {
+                        formData.branch = raw;
+                    }
+                }
+            } catch (e) { console.warn('Branch normalization failed', e); }
+
+            try {
+                const response = await fetch('/api/admin/sub-admins', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    // try to read error message
+                    let errMsg = 'Failed to save sub-admin';
+                    try {
+                        const err = await response.json();
+                        errMsg = err.error || err.message || errMsg;
+                    } catch (e) {
+                        console.warn('Non-JSON error response', e);
+                    }
+                    alert(' Failed to save sub-admin: ' + errMsg);
+                    // If server says only main admin can create, provide clearer UX
+                    return;
+                }
+
+                alert(' Sub-admin created successfully!');
+                closeSubAdminModal();
+                await loadSubAdmins();
+                // Refresh branch lists across the UI so staff/selects/reports reflect the new branch
+                try { await refreshBranchesAndPopulate(); } catch (e) { console.warn('refreshBranches failed after create', e); }
+                try { await loadStaff(); } catch (e) { console.warn('loadStaff failed after create', e); }
+                try { await loadReports(); } catch (e) { console.warn('loadReports failed after create', e); }
+            } catch (error) {
+                console.error('saveSubAdmin error', error);
+                alert(' Failed to save sub-admin: ' + (error.message || error));
+            }
+        }
+
+        async function deleteSubAdmin(subAdminId) {
+            if (!confirm('Are you sure you want to delete this sub-admin?')) return;
+            
+            try {
+                const response = await fetch(`/api/admin/sub-admins/${subAdminId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete sub-admin');
+                
+                alert(' Sub-admin deleted successfully!');
+                await loadSubAdmins();
+                // Refresh branch lists across the UI so staff/selects/reports reflect the deletion
+                try { await refreshBranchesAndPopulate(); } catch (e) { console.warn('refreshBranches failed after delete', e); }
+                try { await loadStaff(); } catch (e) { console.warn('loadStaff failed after delete', e); }
+                try { await loadReports(); } catch (e) { console.warn('loadReports failed after delete', e); }
+            } catch (error) {
+                alert(' Failed to delete sub-admin: ' + error.message);
+            }
+        }
+
+        // Enhanced Reports with Last 10 Orders
+        async function loadLastOrdersReport() {
+            try {
+                const response = await fetch('/api/reports/last-orders?limit=10', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load last orders report');
+                
+                const data = await response.json();
+                
+                // Add to dashboard
+                const dashboardStats = document.querySelector('.dashboard-grid');
+                if (dashboardStats && data.summary) {
+                    const lastOrdersCard = document.createElement('div');
+                    lastOrdersCard.className = 'stat-card';
+                    lastOrdersCard.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+                    lastOrdersCard.innerHTML = `
+                        <div class="stat-value">${data.summary.totalAmount.toLocaleString()}</div>
+                        <div class="stat-label">Last 10 Orders</div>
+                    `;
+                    dashboardStats.appendChild(lastOrdersCard);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Last orders report error:', error);
+                return null;
+            }
+        }
+
+        // Staff Management
+        async function loadStaff() {
+            console.log(' Loading staff members...');
+            const staffList = document.getElementById('staffList');
+            
+            staffList.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6b7280;">
+                    <div style="font-size: 24px; margin-bottom: 16px;"></div>
+                    <p>Loading staff members...</p>
+                </div>
+            `;
+            
+            try {
+                // If a branch filter is selected, pass it to the API
+                const branchFilterEl = document.getElementById('staffFilterBranch');
+                const branchVal = branchFilterEl && branchFilterEl.value ? branchFilterEl.value : null;
+                const url = branchVal ? `/api/staff?branch=${encodeURIComponent(branchVal)}` : '/api/staff';
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to load staff');
+                
+                const staff = await response.json();
+                console.log(` Loaded ${staff.length} staff members`);
+                
+                if (!staff || staff.length === 0) {
+                    staffList.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div style="font-size: 48px; margin-bottom: 16px;"></div>
+                            <h3>No Staff Members Found</h3>
+                            <p>Click "Add New Staff" to create your first staff member.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                displayStaff(staff);
+            } catch (error) {
+                console.error(' Staff loading failed:', error);
+                staffList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #dc2626;">
+                        <div style="font-size: 48px; margin-bottom: 16px;"></div>
+                        <h3>Failed to Load Staff</h3>
+                        <p>${error.message}</p>
+                        <button onclick="loadStaff()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px;"> Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        function displayStaff(staff) {
+            const staffList = document.getElementById('staffList');
+            console.log(' Displaying staff:', staff.length, 'members');
+            
+            if (!staff || staff.length === 0) {
+                staffList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #6b7280; background: white; border-radius: 12px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;"></div>
+                        <h3>No Staff Members Found</h3>
+                        <p>Click "Add New Staff" to create your first staff member.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort staff by staffId to ensure proper order (staff_001, staff_002, etc.)
+            const sortedStaff = [...staff].sort((a, b) => {
+                const aNum = parseInt(a.staffId.replace('staff_', '')) || 999;
+                const bNum = parseInt(b.staffId.replace('staff_', '')) || 999;
+                return aNum - bNum;
+            });
+
+            let html = '';
+            sortedStaff.forEach((member, index) => {
+                const stages = member.workflowStages || [];
+                const roleClass = `role-${(stages[0] || 'default').replace('-', '')}`.toLowerCase();
+                
+                console.log(`   ${index + 1}. ${member.name} (${member.staffId}) - ${stages.join(', ')}`);
+                
+                const mapped = (window.branchMap && window.branchMap[member.branch]) ? window.branchMap[member.branch] : null;
+                const branchLabel = mapped ? `${mapped} (${member.branch})` : (member.branchName ? `${member.branchName} (${member.branch})` : (member.branch || 'Unknown'));
+                // Use a stable identifier for actions: prefer Mongo `_id`, fall back to `id` (public API) or `staffId`
+                const actionId = (member._id || member.id || member.staffId || '').toString();
+                html += `
+                    <div class="staff-item">
+                        <div class="staff-avatar">
+                            ${member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="staff-info">
+                            <h3>${member.name} <span class="role-small">(${member.staffId})</span></h3>
+                            <p><strong>${member.role}</strong>  <small style="color:#6b7280;">${branchLabel}</small></p>
+                            <p> ${member.phone || 'No phone'}</p>
+                            ${member.email ? `<p> ${member.email}</p>` : ''}
+                        </div>
+                        <div>
+                            ${stages.map(stage => `<span class="stage-tag">${stage.replace('-', ' ').toUpperCase()}</span>`).join('')}
+                        </div>
+                        <div>
+                            <span class="staff-badge ${member.isAvailable ? 'badge-available' : 'badge-busy'}">
+                                ${member.isAvailable ? ' Available' : ' Busy'}
+                            </span>
+                        </div>
+                        <div class="staff-actions">
+                            <button class="btn-edit" onclick="editStaff('${actionId}')" title="Edit Staff"> Edit</button>
+                            <button class="btn-toggle" onclick="toggleStaffAvailability('${actionId}', ${!member.isAvailable})" title="Toggle Availability">
+                                ${member.isAvailable ? ' Set Busy' : ' Set Available'}
+                            </button>
+                            <button class="btn-delete" onclick="deleteStaff('${actionId}')" title="Delete Staff"> Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            staffList.innerHTML = html;
+            console.log(' Staff display updated successfully');
+        }
+
+        function showAddStaffModal() {
+            document.getElementById('staffModalTitle').textContent = ' Add New Staff';
+            document.getElementById('staffForm').reset();
+            document.getElementById('staffEditId').value = '';
+            (async function populateBranchesForStaff() {
+                try {
+                    await refreshBranchesAndPopulate();
+                } catch (e) {
+                    console.warn('Could not refresh branches for staff modal:', e);
+                } finally {
+                    document.getElementById('staffModal').classList.add('show');
+                }
+            })();
+        }
+
+        function closeStaffModal() {
+            document.getElementById('staffModal').classList.remove('show');
+        }
+
+        async function saveStaff(event) {
+            event.preventDefault();
+            
+            const formData = {
+                staffId: document.getElementById('staffUsername').value,
+                name: document.getElementById('staffName').value,
+                phone: document.getElementById('staffPhone').value,
+                email: document.getElementById('staffEmail').value,
+                role: document.getElementById('staffRole').value,
+                pin: document.getElementById('staffPin').value,
+                    branch: document.getElementById('staffBranch') ? document.getElementById('staffBranch').value : undefined,
+                workflowStages: Array.from(document.querySelectorAll('input[name="stages"]:checked')).map(cb => cb.value)
+            };
+
+            try {
+                const editId = document.getElementById('staffEditId').value;
+                if (editId) {
+                    await api.updateStaff(editId, formData);
+                    alert(' Staff updated successfully!');
+                } else {
+                    await api.createStaff(formData);
+                    alert(' Staff created successfully!');
+                }
+                closeStaffModal();
+                loadStaff();
+            } catch (error) {
+                alert(' Failed to save staff: ' + error.message);
+            }
+        }
+
+        async function editStaff(staffId) {
+            try {
+                console.log(' Editing staff:', staffId);
+                
+                const response = await fetch('/api/staff');
+                if (!response.ok) throw new Error('Failed to fetch staff');
+                
+                const staff = await response.json();
+                // Try to find the staff member by multiple identifier fields returned by different API shapes
+                const member = staff.find(s => s._id === staffId || s.id === staffId || s.staffId === staffId || (s._id && s._id.toString() === staffId));
+                
+                if (!member) throw new Error('Staff member not found');
+
+                document.getElementById('staffModalTitle').textContent = ' Edit Staff';
+                // For updates we need a Mongo _id where possible; prefer member._id then member.id, otherwise pass the provided id (may be staffId)
+                document.getElementById('staffEditId').value = member._id || member.id || staffId;
+                document.getElementById('staffUsername').value = member.staffId;
+                document.getElementById('staffName').value = member.name;
+                document.getElementById('staffPhone').value = member.phone;
+                document.getElementById('staffEmail').value = member.email || '';
+                document.getElementById('staffRole').value = member.role;
+                document.getElementById('staffPin').value = member.pin;
+                // member.branch is stored as branchId; ensure we set select value accordingly
+                document.getElementById('staffBranch').value = member.branch || '';
+                
+                document.querySelectorAll('input[name="stages"]').forEach(cb => {
+                    cb.checked = member.workflowStages.includes(cb.value);
+                });
+                
+                document.getElementById('staffModal').classList.add('show');
+                
+            } catch (error) {
+                console.error(' Edit staff failed:', error);
+                alert(' Failed to load staff details: ' + error.message);
+            }
+        }
+
+        async function toggleStaffAvailability(staffId, isAvailable) {
+            try {
+                console.log(` Toggling availability for staff ${staffId} to ${isAvailable}`);
+                // Resolve to a Mongo _id if a public API returned a different identifier
+                const resolvedId = await resolveStaffMongoId(staffId);
+                const targetId = resolvedId || staffId;
+
+                const response = await fetch(`/api/staff/${targetId}/availability`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}`
+                    },
+                    body: JSON.stringify({ isAvailable })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to update availability');
+                }
+                
+                const result = await response.json();
+                console.log(' Availability updated successfully');
+                
+                // Reload staff list to show updated status
+                await loadStaff();
+                
+                alert(` Staff availability updated: ${isAvailable ? 'Available' : 'Busy'}`);
+            } catch (error) {
+                console.error(' Toggle availability failed:', error);
+                alert(' Failed to update availability: ' + error.message);
+            }
+        }
+
+        // Prompt admin to ensure a branch has staff for all workflow stages
+        function ensureBranchStaffPrompt() {
+            // Prefer the branch selected in the staff filter select
+            const filter = document.getElementById('staffFilterBranch');
+            let branch = filter && filter.value ? filter.value : null;
+            if (!branch) {
+                branch = prompt('Enter branchId or branchName to ensure staff for (e.g. SAPTHALA.MAIN or Main):');
+            }
+            if (!branch) return;
+            ensureBranchStaff(branch);
+        }
+
+        async function ensureBranchStaff(branch) {
+            try {
+                const token = localStorage.getItem('sapthala_token');
+                if (!token) {
+                    alert(' You must be logged in as admin to perform this action');
+                    return;
+                }
+                const res = await fetch('/api/admin/ensure-branch-staff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ branch })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(()=>({ error: 'Failed' }));
+                    alert(' Could not ensure branch staff: ' + (err.error || err.message || 'Server error'));
+                    return;
+                }
+                const data = await res.json();
+
+                // Try to fetch branch display name for friendlier messages
+                let branchDisplay = branch;
+                try {
+                    const bres = await fetch('/api/public/branches');
+                    if (bres && bres.ok) {
+                        const blist = await bres.json();
+                        const found = (blist || []).find(b => (b.branchId && b.branchId.toString().toLowerCase() === branch.toString().toLowerCase()) || (b.branchName && b.branchName.toString().toLowerCase() === branch.toString().toLowerCase()));
+                        if (found) branchDisplay = found.branchName || found.branchId || branch;
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch branches for display name', e);
+                }
+
+                const created = Array.isArray(data.created) ? data.created : [];
+                if (created.length > 0) {
+                    // Refresh staff list and navigate to staff tab
+                    await loadStaff();
+                    showTab('staff');
+
+                    // Inform user and open edit modal for the first created staff (best-effort)
+                    showInfoModal('Branch Staffing', ` Created ${created.length} staff member(s) for ${branchDisplay}. Opening staff list...`);
+
+                    // Try to open the first created staff in the edit modal
+                    const first = created[0];
+                    const firstId = first && (first._id || first.id || first.staffId);
+                    // Resolve to Mongo _id if necessary
+                    const resolved = firstId ? await resolveStaffMongoId(firstId) : null;
+                    setTimeout(async () => {
+                        try {
+                            // Ensure staff list is fresh
+                            await loadStaff();
+                            // Open edit modal for the created staff (if resolvable)
+                            if (resolved || firstId) {
+                                editStaff(resolved || firstId);
+                            }
+                        } catch (e) {
+                            console.warn('Could not auto-open created staff modal', e);
+                        }
+                    }, 600);
+                } else {
+                    alert(' No new staff needed for branch ' + branchDisplay);
+                    await loadStaff();
+                }
+            } catch (e) {
+                console.error('ensureBranchStaff error', e);
+                alert(' Failed to ensure branch staff: ' + e.message);
+            }
+        }
+
+        async function deleteStaff(staffId) {
+            if (!confirm('Are you sure you want to delete this staff member?')) return;
+            
+            try {
+                // Resolve to Mongo _id if needed
+                const resolvedId = await resolveStaffMongoId(staffId);
+                const targetId = resolvedId || staffId;
+                await api.deleteStaff(targetId);
+                alert(' Staff deleted successfully!');
+                loadStaff();
+            } catch (error) {
+                alert(' Failed to delete staff');
+            }
+        }
+
+        // Helper: try to map different API identifier shapes to Mongo _id by fetching staff list
+        async function resolveStaffMongoId(identifier) {
+            try {
+                if (!identifier) return null;
+                // Quick check for ObjectId pattern
+                if (/^[0-9a-fA-F]{24}$/.test(identifier)) return identifier;
+                const res = await fetch('/api/staff');
+                if (!res.ok) return null;
+                const list = await res.json();
+                const member = list.find(s => s._id === identifier || s.id === identifier || s.staffId === identifier || (s._id && s._id.toString() === identifier));
+                if (member) return member._id || member.id || null;
+            } catch (e) {
+                console.warn('resolveStaffMongoId failed', e);
+            }
+            return null;
+        }
+
+        // Helper: refresh branch list (public/auth) and populate branch selects/datalists across the UI
+        async function refreshBranchesAndPopulate() {
+            try {
+                const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                let branches = [];
+                if (token) {
+                    try {
+                        const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${token}` } });
+                        if (res.ok) {
+                            const data = await res.json();
+                            branches = Array.isArray(data.branches) ? data.branches : (Array.isArray(data) ? data : []);
+                        }
+                    } catch (e) { /* ignore and fallback */ }
+                }
+                if (!branches || branches.length === 0) {
+                    try {
+                        const pub = await fetch('/api/public/branches');
+                        if (pub.ok) branches = await pub.json();
+                    } catch (e) { /* ignore */ }
+                }
+
+                // Build mappings for friendly display names and reverse lookup
+                window.branchMap = window.branchMap || {};
+                window.branchReverseMap = window.branchReverseMap || {};
+                (branches || []).forEach(b => {
+                    const id = (b.branchId || b.branch || b.branchName || '').toString();
+                    const name = (b.branchName || b.branchId || b.branch || '').toString();
+                    if (id) {
+                        window.branchMap[id] = name;
+                        window.branchReverseMap[name.toLowerCase()] = id;
+                        // also map id lowercased for flexible reverse lookup
+                        window.branchReverseMap[id.toLowerCase()] = id;
+                    }
+                });
+
+                // Populate UI selects/datalists
+                const datalist = document.getElementById('branchesDatalist');
+                const staffBranchSelect = document.getElementById('staffBranch');
+                const staffFilter = document.getElementById('staffFilterBranch');
+                const reportBranch = document.getElementById('reportBranch');
+                const orderBranch = document.getElementById('orderBranch');
+
+                if (datalist) datalist.innerHTML = '';
+                if (staffBranchSelect) staffBranchSelect.innerHTML = '<option value="">Select branch</option>';
+                if (staffFilter) staffFilter.innerHTML = '<option value="">All Branches</option>';
+                if (reportBranch) reportBranch.innerHTML = '<option value="">All Branches</option>';
+                if (orderBranch) orderBranch.innerHTML = '<option value="">Choose branch...</option>';
+
+                (branches || []).forEach(b => {
+                    const display = (b.branchName || b.branchId || b.branch || '').toString();
+                    const value = (b.branchId || display).toString();
+                    if (datalist) {
+                        const opt = document.createElement('option'); opt.value = display; datalist.appendChild(opt);
+                    }
+                    if (staffBranchSelect) {
+                        const opt = document.createElement('option'); opt.value = value; opt.textContent = `${display} (${value})`; staffBranchSelect.appendChild(opt);
+                    }
+                    if (staffFilter) {
+                        const o2 = document.createElement('option'); o2.value = value; o2.textContent = `${display} (${value})`; staffFilter.appendChild(o2);
+                    }
+                    if (reportBranch) {
+                        const o3 = document.createElement('option'); o3.value = value; o3.textContent = `${display} (${value})`; reportBranch.appendChild(o3);
+                    }
+                    if (orderBranch) {
+                        const o4 = document.createElement('option'); o4.value = value; o4.textContent = `${display} (${value})`; orderBranch.appendChild(o4);
+                    }
+                });
+            } catch (e) {
+                console.warn('refreshBranchesAndPopulate failed', e);
+            }
+        }
+
+        // PDF Functions
+        async function generateOrderPDF() {
+            try {
+                const orderData = collectOrderData();
+                const response = await api.shareOrderPDF(orderData, false);
+                if (response.success) {
+                    window.open(response.pdf.pdfPath || response.pdf.htmlPath, '_blank');
+                }
+            } catch (error) {
+                alert(' Failed to generate PDF: ' + error.message);
+            }
+        }
+
+        async function shareViaWhatsApp() {
+            try {
+                const orderData = collectOrderData();
+                const response = await api.shareOrderPDF(orderData, true);
+                if (response.success) {
+                    alert(' WhatsApp message sent successfully!');
+                }
+            } catch (error) {
+                alert(' Failed to send WhatsApp: ' + error.message);
+            }
+        }
+
+        // Preview generated PDF in a new tab (does not send WhatsApp)
+        async function previewPDF() {
+            try {
+                const orderData = collectOrderData();
+                const response = await api.shareOrderPDF(orderData, false);
+                if (response && response.pdf) {
+                    const path = response.pdf.pdfPath || response.pdf.htmlPath || (response.pdf && (response.pdf.htmlPath || response.pdf.pdfPath));
+                    if (path) {
+                        const url = path.startsWith('/') ? window.location.origin + path : path;
+                        window.open(url, '_blank');
+                        return;
+                    }
+                }
+                alert(' Preview not available');
+            } catch (e) {
+                console.error('previewPDF error', e);
+                alert(' Failed to preview PDF: ' + (e.message || e));
+            }
+        }
+
+        // Generate measurement-specific PDF (uses same endpoint but flags measurements)
+        async function generateMeasurementPDF() {
+            try {
+                const orderData = collectOrderData();
+                orderData.measurementOnly = true;
+                const response = await api.shareOrderPDF(orderData, false);
+                if (response && response.pdf) {
+                    const path = response.pdf.pdfPath || response.pdf.htmlPath;
+                    if (path) {
+                        const url = path.startsWith('/') ? window.location.origin + path : path;
+                        window.open(url, '_blank');
+                        return;
+                    }
+                }
+                alert(' Measurement PDF not available');
+            } catch (e) {
+                console.error('generateMeasurementPDF error', e);
+                alert(' Failed to generate measurement PDF: ' + (e.message || e));
+            }
+        }
+
+        function collectOrderData() {
+            const currentTheme = localStorage.getItem('sapthala_current_theme') || 'default';
+            return {
+                orderId: `ORD-${Date.now()}`,
+                customerName: document.getElementById('customerName').value,
+                customerPhone: document.getElementById('customerPhone').value,
+                customerAddress: document.getElementById('customerAddress').value,
+                garmentType: currentOrder.garment?.name || 'Custom',
+                totalAmount: parseInt(document.getElementById('totalAmount').textContent.replace('', '')) || 0,
+                advanceAmount: parseFloat(document.getElementById('advancePayment').value) || 0,
+                deliveryDate: document.getElementById('deliveryDate').value,
+                theme: currentTheme
+            };
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log(' Initializing SAPTHALA Admin Panel...');
+            
+            checkAuthStatus();
+            initializeOrderForm();
+            
+            // Load saved theme
+            const savedTheme = localStorage.getItem('sapthala_current_theme') || 'default';
+            console.log(' Loading saved theme:', savedTheme);
+            // Load festival overrides and UI settings first
+            try { loadFestivalSettings(); } catch(e) { console.warn('loadFestivalSettings failed', e); }
+            applyTheme(savedTheme);
+            document.getElementById('themeSelector').value = savedTheme;
+            
+            // Initialize theme cards
+            document.querySelectorAll('.theme-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const themeName = this.dataset.theme;
+                    applyTheme(themeName);
+                });
+            });
+            
+            // Theme selector change
+            document.getElementById('themeSelector').addEventListener('change', function() {
+                applyTheme(this.value);
+            });
+            
+            // Set active theme card
+            const activeThemeCard = document.querySelector(`[data-theme="${savedTheme}"]`);
+            if (activeThemeCard) {
+                activeThemeCard.classList.add('active');
+            }
+            // Initialize festival settings UI
+            try { initFestivalSettingsUI(); } catch(e) { console.warn('initFestivalSettingsUI failed', e); }
+            
+            console.log(' Admin Panel initialized successfully');
+
+            // Auto-activate nearest festival theme (if enabled)
+            try {
+                autoActivateNearestFestival();
+            } catch (e) {
+                console.warn('Auto theme activation failed:', e);
+            }
+            // Ensure branch lists are up-to-date across the UI
+            try { refreshBranchesAndPopulate(); } catch (e) { console.warn('Initial branch refresh failed', e); }
+        });
+
+        // NEW FUNCTION: Apply UI restrictions based on user role
+        function applyPermissionRestrictions() {
+            try {
+                const userStr = localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user');
+                if (!userStr) return;
+                const user = JSON.parse(userStr);
+
+                // If sub-admin, apply restrictions
+                if (user.role === 'sub-admin') {
+                    console.log(' Applying sub-admin restrictions...');
+
+                    // Hide Sub-Admins tab (sub-admin should not manage other sub-admins)
+                    const subAdminsTab = document.getElementById('subAdminsTab');
+                    if (subAdminsTab) subAdminsTab.style.display = 'none';
+
+                    // Hide Staff tab if no permission to manage staff
+                    if (!user.permissions?.canManageStaff) {
+                        const staffTab = Array.from(document.querySelectorAll('.sidebar-tab')).find(t => t.textContent && t.textContent.includes('Staff'));
+                        if (staffTab) staffTab.style.display = 'none';
+                    }
+
+                    // Hide Reports tab if no permission
+                    if (!user.permissions?.canViewReports) {
+                        const reportsTab = Array.from(document.querySelectorAll('.sidebar-tab')).find(t => t.textContent && t.textContent.includes('Reports'));
+                        if (reportsTab) reportsTab.style.display = 'none';
+                    }
+
+                    // Hide revenue cards on dashboard
+                    hideRevenueData();
+
+                    // Hide revenue and category charts on dashboard
+                    try {
+                        const revenueCanvas = document.getElementById('revenueChart');
+                        if (revenueCanvas && revenueCanvas.parentElement) revenueCanvas.parentElement.style.display = 'none';
+                        const categoryCanvas = document.getElementById('categoryChart');
+                        if (categoryCanvas && categoryCanvas.parentElement) categoryCanvas.parentElement.style.display = 'none';
+                    } catch (e) {
+                        console.warn('Could not hide charts for sub-admin:', e);
+                    }
+
+                    // Hide Reports panel and download buttons
+                    try {
+                        const reportsPanel = document.getElementById('reports');
+                        if (reportsPanel) reportsPanel.style.display = 'none';
+
+                        const downloadPdfBtn = Array.from(document.querySelectorAll('button')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes('downloadReportPDF'));
+                        if (downloadPdfBtn) downloadPdfBtn.style.display = 'none';
+                    } catch (e) {
+                        console.warn('Could not hide reports for sub-admin:', e);
+                    }
+
+                    // Gray-out theme cards but keep visible
+                    try {
+                        document.querySelectorAll('.theme-card').forEach(tc => tc.classList.add('disabled'));
+                        const applyBtn = Array.from(document.querySelectorAll('button')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes('applyTheme'));
+                        if (applyBtn) applyBtn.disabled = true, applyBtn.style.opacity = '0.6', applyBtn.style.pointerEvents = 'none';
+                    } catch (e) {
+                        console.warn('Could not disable themes for sub-admin:', e);
+                    }
+
+                    console.log(' Sub-admin restrictions applied');
+                }
+            } catch (error) {
+                console.error('Error applying permissions:', error);
+            }
+        }
+
+        // NEW FUNCTION: Hide revenue-related data for sub-admins
+        function hideRevenueData() {
+            // Hide Total Revenue card
+            const revenueCard = document.getElementById('totalRevenue');
+            if (revenueCard && revenueCard.parentElement) {
+                revenueCard.parentElement.style.display = 'none';
+            }
+
+            // Hide Advance Collected card
+            const advanceCard = document.getElementById('advanceCollected');
+            if (advanceCard && advanceCard.parentElement) {
+                advanceCard.parentElement.style.display = 'none';
+            }
+        }
+    </script>
+    
+    <!-- Branches Management Module -->
+    <script src="/js/branches-manager.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA - Super Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; }
+        
+        .login-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        
+        .login-box {
+            background: white; border-radius: 24px; padding: 48px 36px; width: 100%; max-width: 410px;
+            box-shadow: 0 24px 64px rgba(30,58,138,0.18); text-align: center;
+        }
+        
+        .login-logo {
+            width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 22px;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; color: white;
+        }
+        
+        .login-title {
+            font-size: 30px; font-weight: bold; color: #1e3a8a; margin-bottom: 8px;
+        }
+        
+        .login-subtitle {
+            color: #3b82f6; margin-bottom: 32px; font-size: 16px; font-weight: 500;
+        }
+        
+        .login-input {
+            width: 100%; padding: 16px 22px; border: 2px solid #e2e8f0; border-radius: 14px;
+            font-size: 17px; transition: all 0.3s; background: #f9fafb; margin-bottom: 20px;
+        }
+        
+        .login-input:focus {
+            outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+        }
+        
+        .login-btn {
+            width: 100%; padding: 16px; background: linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%);
+            color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: bold;
+            cursor: pointer; transition: all 0.3s;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px); box-shadow: 0 12px 28px rgba(30,58,138,0.18);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;
+        }
+        
+        .sidebar {
+            width: 250px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white; min-height: calc(100vh - 80px); padding: 20px 0;
+        }
+        
+        .sidebar-tab {
+            padding: 15px 30px; cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; gap: 12px;
+        }
+        
+        .sidebar-tab:hover, .sidebar-tab.active {
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .stat-card {
+            background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        
+        .stat-value { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
+        .stat-label { font-size: 16px; color: #6b7280; }
+        
+        .admin-card {
+            background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;
+            display: grid; grid-template-columns: 60px 1fr auto; gap: 20px; align-items: center;
+        }
+        
+        .admin-avatar {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; font-size: 20px;
+        }
+        
+        .btn-primary {
+            padding: 12px 24px; background: #3b82f6; color: white; border: none;
+            border-radius: 8px; font-weight: 600; cursor: pointer;
+        }
+        
+        .btn-danger {
+            padding: 8px 16px; background: #ef4444; color: white; border: none;
+            border-radius: 6px; cursor: pointer;
+        }
+        
+        .hidden { display: none !important; }
+        
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 10000; display: none;
+            align-items: center; justify-content: center;
+        }
+        
+        .modal.show { display: flex; }
+        
+        .modal-content {
+            background: white; border-radius: 16px; padding: 30px;
+            max-width: 500px; width: 100%;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block; margin-bottom: 8px; font-weight: 600;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%; padding: 12px; border: 2px solid #e2e8f0;
+            border-radius: 8px; font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <div class="login-logo"></div>
+            <h1 class="login-title">SAPTHALA</h1>
+            <p class="login-subtitle">Super Admin Panel</p>
+            
+            <div id="loginError" style="display:none;color:#ef4444;margin-bottom:15px;"></div>
+            
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="username" class="login-input" placeholder=" Username" required>
+                <input type="password" id="password" class="login-input" placeholder=" Password" required>
+                <button type="submit" class="login-btn"> Login to Dashboard</button>
+            </form>
+            
+            <div style="margin-top:20px;color:#6b7280;font-size:14px;">
+                Default: superadmin / superadmin@2029
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <div class="header">
+            <div style="display:flex;align-items:center;gap:15px;">
+                <div style="font-size:32px;"></div>
+                <div>
+                    <h1>SAPTHALA Super Admin</h1>
+                    <p>Manage All Admins & Branches</p>
+                </div>
+            </div>
+            <button onclick="logout()" style="padding:10px 20px;background:white;color:#1e3a8a;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Logout</button>
+        </div>
+
+        <div style="display:flex;">
+            <div class="sidebar">
+                <div class="sidebar-tab active" onclick="showTab('dashboard')">
+                    <span></span> Dashboard
+                </div>
+                <div class="sidebar-tab" onclick="showTab('admins')">
+                    <span></span> Manage Admins
+                </div>
+                <div class="sidebar-tab" onclick="showTab('branches')">
+                    <span></span> Branches
+                </div>
+            </div>
+
+            <div style="flex:1;">
+                <!-- Dashboard Tab -->
+                <div id="dashboard" class="container">
+                    <h2 style="margin-bottom:20px;">Dashboard Overview</h2>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;">
+                        <div class="stat-card" style="border-left:4px solid #3b82f6;">
+                            <div class="stat-value" id="totalAdmins">0</div>
+                            <div class="stat-label">Total Admins</div>
+                        </div>
+                        <div class="stat-card" style="border-left:4px solid #10b981;">
+                            <div class="stat-value" id="totalBranches">0</div>
+                            <div class="stat-label">Total Branches</div>
+                        </div>
+                        <div class="stat-card" style="border-left:4px solid #f59e0b;">
+                            <div class="stat-value" id="totalOrders">0</div>
+                            <div class="stat-label">Total Orders</div>
+                        </div>
+                        <div class="stat-card" style="border-left:4px solid #ef4444;">
+                            <div class="stat-value" id="totalRevenue">0</div>
+                            <div class="stat-label">Total Revenue</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admins Tab -->
+                <div id="admins" class="container hidden">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                        <h2>Manage Admins</h2>
+                        <button class="btn-primary" onclick="showAddAdminModal()"> Add Admin</button>
+                    </div>
+                    <div id="adminsList"></div>
+                </div>
+
+                <!-- Branches Tab -->
+                <div id="branches" class="container hidden">
+                    <h2 style="margin-bottom:20px;">All Branches</h2>
+                    <div id="branchesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Admin Modal -->
+    <div id="addAdminModal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom:20px;">Add New Admin</h2>
+            <form onsubmit="saveAdmin(event)">
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="adminUsername" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="adminEmail">
+                </div>
+                <div class="form-group">
+                    <label>Password *</label>
+                    <input type="password" id="adminPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select id="adminRole" required>
+                        <option value="admin">Admin (Full Access)</option>
+                        <option value="sub-admin">Sub-Admin (Branch Limited)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="branchGroup" style="display:none;">
+                    <label>Branch Name *</label>
+                    <input type="text" id="adminBranch" placeholder="e.g., Jubilee Hills">
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button type="submit" class="btn-primary" style="flex:1;">Save</button>
+                    <button type="button" onclick="closeModal()" style="flex:1;padding:12px;background:#e5e7eb;border:none;border-radius:8px;cursor:pointer;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let currentToken = null;
+
+        document.getElementById('adminRole').addEventListener('change', function() {
+            document.getElementById('branchGroup').style.display = 
+                this.value === 'sub-admin' ? 'block' : 'none';
+        });
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success && data.user.role === 'super-admin') {
+                    currentToken = data.token;
+                    localStorage.setItem('super_admin_token', data.token);
+                    document.getElementById('loginPage').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    loadDashboard();
+                } else if (data.user && data.user.role !== 'super-admin') {
+                    errorDiv.textContent = 'Access denied. Super-admin only.';
+                    errorDiv.style.display = 'block';
+                } else {
+                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please check backend.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('super_admin_token');
+            location.reload();
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.container').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.sidebar-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.remove('hidden');
+            event.target.closest('.sidebar-tab').classList.add('active');
+
+            if (tab === 'dashboard') loadDashboard();
+            if (tab === 'admins') loadAdmins();
+            if (tab === 'branches') loadBranches();
+        }
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/super-admin/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('totalAdmins').textContent = data.stats.totalAdmins;
+                    document.getElementById('totalBranches').textContent = data.stats.totalBranches;
+                    document.getElementById('totalOrders').textContent = data.stats.totalOrders;
+                    document.getElementById('totalRevenue').textContent = '' + data.stats.totalRevenue.toLocaleString();
+                }
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+            }
+        }
+
+        async function loadAdmins() {
+            try {
+                const res = await fetch(`${API_BASE}/super-admin/admins`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const container = document.getElementById('adminsList');
+                    container.innerHTML = data.admins.map(admin => `
+                        <div class="admin-card">
+                            <div class="admin-avatar">${admin.username.charAt(0).toUpperCase()}</div>
+                            <div>
+                                <h3 style="margin-bottom:4px;">${admin.username}</h3>
+                                <p style="color:#6b7280;font-size:14px;">
+                                    ${admin.email || 'No email'} | ${admin.role}
+                                    ${admin.branchName ? ' |  ' + admin.branchName : ''}
+                                </p>
+                                <p style="color:#9ca3af;font-size:12px;margin-top:4px;">
+                                    Created: ${new Date(admin.createdAt).toLocaleDateString()}
+                                    ${admin.lastLogin ? ' | Last login: ' + new Date(admin.lastLogin).toLocaleDateString() : ''}
+                                </p>
+                            </div>
+                            <button class="btn-danger" onclick="deleteAdmin('${admin._id}')">Delete</button>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Load admins error:', error);
+            }
+        }
+
+        async function loadBranches() {
+            try {
+                const res = await fetch(`${API_BASE}/branches`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const container = document.getElementById('branchesList');
+                    container.innerHTML = data.branches.map(branch => `
+                        <div class="admin-card">
+                            <div class="admin-avatar"></div>
+                            <div>
+                                <h3>${branch.branchName}</h3>
+                                <p style="color:#6b7280;font-size:14px;">${branch.branchId} | ${branch.location}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Load branches error:', error);
+            }
+        }
+
+        function showAddAdminModal() {
+            document.getElementById('addAdminModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('addAdminModal').classList.remove('show');
+        }
+
+        async function saveAdmin(e) {
+            e.preventDefault();
+            
+            const adminData = {
+                username: document.getElementById('adminUsername').value,
+                email: document.getElementById('adminEmail').value,
+                password: document.getElementById('adminPassword').value,
+                role: document.getElementById('adminRole').value,
+                branch: document.getElementById('adminBranch').value
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/super-admin/admins`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify(adminData)
+                });
+
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert(' Admin created successfully!');
+                    closeModal();
+                    loadAdmins();
+                    e.target.reset();
+                } else {
+                    alert(' ' + data.error);
+                }
+            } catch (error) {
+                alert(' Failed to create admin');
+            }
+        }
+
+        async function deleteAdmin(id) {
+            if (!confirm(' Delete this admin? This will also delete their branch.')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/super-admin/admins/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert(' Admin deleted successfully!');
+                    loadAdmins();
+                    loadDashboard();
+                } else {
+                    alert(' ' + data.error);
+                }
+            } catch (error) {
+                alert(' Failed to delete admin');
+            }
+        }
+
+        // Check if already logged in
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('super_admin_token');
+            if (token) {
+                currentToken = token;
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                loadDashboard();
+            }
+        });
+    </script>
+</body>
+</html>

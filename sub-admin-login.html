@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Sub-Admin Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-box {
+            background: white;
+            border-radius: 24px;
+            padding: 48px 36px;
+            width: 100%;
+            max-width: 410px;
+            box-shadow: 0 24px 64px rgba(102,126,234,0.3);
+            animation: slideUp 0.6s ease;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-logo {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            margin: 0 auto 22px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: white;
+            box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+        }
+        .login-title {
+            font-size: 30px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .login-subtitle {
+            color: #764ba2;
+            margin-bottom: 32px;
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+        .login-input {
+            padding: 16px 22px;
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            font-size: 17px;
+            transition: all 0.3s;
+            background: #f9fafb;
+        }
+        .login-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        .login-btn {
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+        }
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(102,126,234,0.4);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .message {
+            padding: 14px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-align: center;
+            animation: slideDown 0.3s ease;
+        }
+        .error {
+            color: #dc2626;
+            background: #fef2f2;
+            border: 2px solid #fca5a5;
+        }
+        .success {
+            color: #059669;
+            background: #d1fae5;
+            border: 2px solid #86efac;
+        }
+        .login-footer {
+            margin-top: 28px;
+            text-align: center;
+            color: #667eea;
+            font-size: 14px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="login-logo">👨💼</div>
+        <h1 class="login-title">SAPTHALA</h1>
+        <p class="login-subtitle">Branch Admin Portal</p>
+        
+        <form class="login-form" onsubmit="handleSubAdminLogin(event)">
+            <div id="messageContainer"></div>
+            
+            <input type="text" id="username" class="login-input" placeholder="👤 Username" required>
+            <input type="password" id="password" class="login-input" placeholder="🔒 Password" required>
+            <button type="submit" class="login-btn" id="loginBtn">🚀 Login to Dashboard</button>
+        </form>
+        
+        <div class="login-footer">
+            <p>📞 Contact: 7794021608</p>
+            <a href="/" class="back-link">← Back to Main Admin Login</a>
+        </div>
+    </div>
+
+    <script>
+        async function handleSubAdminLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
+            const messageContainer = document.getElementById('messageContainer');
+            
+            // Clear previous messages
+            messageContainer.innerHTML = '';
+            
+            // Validate inputs
+            if (!username || !password) {
+                showMessage('Please enter both username and password', 'error');
+                return;
+            }
+            
+            // Disable button and show loading
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '🔄 Logging in...';
+            
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success && data.token) {
+                    // Check if user is sub-admin
+                    if (data.user.role !== 'sub-admin') {
+                        showMessage('This portal is for sub-admins only. Please use the main admin login.', 'error');
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '🚀 Login to Dashboard';
+                        return;
+                    }
+                    
+                    // Store credentials
+                    localStorage.setItem('sapthala_logged_in', 'true');
+                    localStorage.setItem('sapthala_token', data.token);
+                    localStorage.setItem('sapthala_user', JSON.stringify(data.user));
+                    
+                    // Show success message
+                    showMessage('✅ Login successful! Redirecting...', 'success');
+                    
+                    // Redirect to main admin panel
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 800);
+                } else {
+                    showMessage(data.error || 'Invalid username or password', 'error');
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = '🚀 Login to Dashboard';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Cannot connect to server. Please ensure the backend is running.', 'error');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '🚀 Login to Dashboard';
+            }
+        }
+        
+        function showMessage(msg, type) {
+            const messageContainer = document.getElementById('messageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = type === 'error' ? '❌ ' + msg : msg;
+            messageContainer.innerHTML = '';
+            messageContainer.appendChild(messageDiv);
+        }
+    </script>
+</body>
+</html>

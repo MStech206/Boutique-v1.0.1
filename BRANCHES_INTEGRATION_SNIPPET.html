@@ -1,0 +1,87 @@
+<!-- ============================================ -->
+<!-- BRANCHES SECTION - READY TO INTEGRATE -->
+<!-- Copy this entire section into sapthala-admin-clean.html -->
+<!-- ============================================ -->
+
+<!-- STEP 1: Add this button to your navigation tabs -->
+<!-- Find the tabs section and add after Sub-Admins tab -->
+<button class="tab-btn" onclick="showTab('branches')" data-tab="branches">
+    🏢 Branches
+</button>
+
+<!-- STEP 2: Add this content section after Sub-Admins content -->
+<!-- Find the tab-content sections and add this -->
+<div id="branches-tab" class="tab-content" style="display:none;">
+    <div style="background:white;padding:30px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:25px;padding-bottom:15px;border-bottom:2px solid #e2e8f0;">
+            <h2 style="color:#1e293b;font-size:22px;margin:0;">🏢 Branch Management</h2>
+            <button onclick="BranchesManager.openAddModal()" style="padding:12px 24px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">
+                + Add Branch
+            </button>
+        </div>
+        <div id="branchesList">
+            <div style="text-align:center;padding:40px;color:#667eea;">
+                <div style="font-size:48px;margin-bottom:16px;">⏳</div>
+                <div style="font-size:16px;font-weight:600;">Loading branches...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- STEP 3: Add this script tag before closing </body> tag -->
+<script src="/js/branches-manager.js"></script>
+
+<!-- ============================================ -->
+<!-- ALTERNATIVE: MINIMAL VERSION -->
+<!-- If you want a simpler integration -->
+<!-- ============================================ -->
+
+<!-- Minimal Tab Button -->
+<button class="tab-btn" onclick="showTab('branches')">🏢 Branches</button>
+
+<!-- Minimal Content -->
+<div id="branches-tab" class="tab-content" style="display:none;">
+    <h2>🏢 Branch Management</h2>
+    <button onclick="BranchesManager.openAddModal()">+ Add Branch</button>
+    <div id="branchesList"></div>
+</div>
+
+<!-- Script -->
+<script src="/js/branches-manager.js"></script>
+
+<!-- ============================================ -->
+<!-- NOTES -->
+<!-- ============================================ -->
+<!--
+1. Make sure the tab-btn class matches your existing tabs
+2. The showTab('branches') function should exist in your admin panel
+3. If showTab doesn't exist, add this function:
+
+function showTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    
+    // Remove active class from all buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab
+    const selectedTab = document.getElementById(tabName + '-tab');
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+    }
+    
+    // Add active class to clicked button
+    const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+    }
+}
+
+4. The branches-manager.js file is already created in /public/js/
+5. All API endpoints are already configured in server.js
+6. No database changes needed - Branch model already exists
+-->

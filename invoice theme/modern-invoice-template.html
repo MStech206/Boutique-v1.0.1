@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Invoice - {{orderId}}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        
+        .invoice-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .invoice-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .invoice-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .company-info h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .company-info p {
+            font-size: 14px;
+            opacity: 0.95;
+            line-height: 1.6;
+        }
+        
+        .invoice-meta {
+            text-align: right;
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .invoice-meta h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .invoice-meta p {
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        
+        .invoice-body {
+            padding: 40px;
+        }
+        
+        .customer-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .info-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .info-card h3 {
+            color: #667eea;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .info-card p {
+            color: #2d3748;
+            font-size: 16px;
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .info-card strong {
+            color: #1a202c;
+            font-weight: 600;
+        }
+        
+        .order-details {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .order-details h3 {
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .detail-label {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .detail-value {
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .measurements-section {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .measurements-section h3 {
+            color: #2d3748;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        
+        .measurements-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+        
+        .measurement-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .measurement-label {
+            color: #718096;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .measurement-value {
+            color: #2d3748;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .pricing-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            color: white;
+        }
+        
+        .pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            font-size: 16px;
+        }
+        
+        .pricing-row:last-child {
+            border-bottom: none;
+            padding-top: 20px;
+            margin-top: 10px;
+            border-top: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .pricing-row.total {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        .footer {
+            background: #2d3748;
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .footer p {
+            margin: 8px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .footer strong {
+            color: #667eea;
+        }
+        
+        @media print {
+            body { background: white; padding: 0; }
+            .invoice-container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="invoice-header">
+            <div class="header-content">
+                <div class="company-info">
+                    <h1>🌟 SAPTHALA</h1>
+                    <p>Designer Workshop</p>
+                    <p>📍 {{companyAddress}}</p>
+                    <p>📞 {{companyPhone}} | ✉️ {{companyEmail}}</p>
+                </div>
+                <div class="invoice-meta">
+                    <h2>INVOICE</h2>
+                    <p><strong>Order ID:</strong> {{orderId}}</p>
+                    <p><strong>Date:</strong> {{orderDate}}</p>
+                    <p><strong>Delivery:</strong> {{deliveryDate}}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="invoice-body">
+            <div class="customer-section">
+                <div class="info-card">
+                    <h3>👤 Customer Details</h3>
+                    <p><strong>Name:</strong> {{customerName}}</p>
+                    <p><strong>Phone:</strong> {{customerPhone}}</p>
+                    <p><strong>Address:</strong> {{customerAddress}}</p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>👗 Order Details</h3>
+                    <p><strong>Garment:</strong> {{garmentType}}</p>
+                    <p><strong>Status:</strong> {{orderStatus}}</p>
+                    <p><strong>Branch:</strong> {{branch}}</p>
+                </div>
+            </div>
+            
+            <div class="measurements-section">
+                <h3>📏 Measurements</h3>
+                <div class="measurements-grid">
+                    {{#each measurements}}
+                    <div class="measurement-item">
+                        <div class="measurement-label">{{@key}}</div>
+                        <div class="measurement-value">{{this}}"</div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            
+            <div class="order-details">
+                <h3>📋 Design Notes</h3>
+                <p style="color: #2d3748; line-height: 1.8; margin-top: 15px;">{{designNotes}}</p>
+            </div>
+            
+            <div class="pricing-section">
+                <div class="pricing-row">
+                    <span>Total Amount</span>
+                    <span>₹{{totalAmount}}</span>
+                </div>
+                <div class="pricing-row">
+                    <span>Advance Paid</span>
+                    <span>₹{{advanceAmount}}</span>
+                </div>
+                <div class="pricing-row total">
+                    <span>Balance Due</span>
+                    <span>₹{{balanceAmount}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Thank you for choosing SAPTHALA!</strong></p>
+            <p>For any queries, contact us at {{companyPhone}}</p>
+            <p>📧 {{companyEmail}} | 🌐 www.sapthala.com</p>
+        </div>
+    </div>
+</body>
+</html>

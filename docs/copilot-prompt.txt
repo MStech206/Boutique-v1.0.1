@@ -1,0 +1,5 @@
+Build a complete, beautiful, efficient, elegant Shopify-like e-commerce app for custom tailoring using Flutter, Spring Boot, Firebase. Follow this step-by-step plan and to-do list:
+
+[Paste full combined prompt here from project plan — include Steps 1-7 and the To-Do list provided in the earlier planning message.]
+
+(Use this file as the prompt when invoking Copilot to scaffold or generate code iterations.)

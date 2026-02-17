@@ -1,0 +1,78 @@
+services:
+  mongodb:
+    image: mongo:7.0-alpine
+    container_name: sapthala-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: sapthala_dev_123
+      MONGO_INITDB_DATABASE: sapthala_boutique
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  firebase:
+    image: node:20-alpine
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    ports:
+      - "4000:4000"   # Emulator Suite UI
+      - "9099:9099"   # Authentication emulator
+      - "9000:9000"   # Firestore emulator
+    command: npx firebase-tools emulators:start --only auth,firestore
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  boutique-backend:
+    build:
+      context: ./Boutique-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"   # Changed to 8081 to avoid conflict
+    volumes:
+      - ./Boutique-backend:/app
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
+      - PAYU_MERCHANT_KEY=${PAYU_MERCHANT_KEY:-test_key}
+      - PAYU_MERCHANT_SALT=${PAYU_MERCHANT_SALT:-test_salt}
+      # Connect to Firestore emulator
+      - FIRESTORE_EMULATOR_HOST=firebase:9000
+      - FIREBASE_AUTH_EMULATOR_HOST=firebase:9099
+      # MongoDB connection
+      - SPRING_DATA_MONGODB_URI=mongodb://admin:sapthala_dev_123@mongodb:27017/sapthala_boutique?authSource=admin
+    depends_on:
+      firebase:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  boutique-frontend:
+    build:
+      context: ./Boutique-flutter
+      dockerfile: Dockerfile   # Must be named exactly "Dockerfile"
+    ports:
+      - "3000:80"
+    depends_on:
+      - boutique-backend
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

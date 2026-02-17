@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Admin - Complete System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #667eea;
+            font-size: 28px;
+        }
+        
+        .nav {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .nav-btn {
+            padding: 12px 24px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .nav-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .nav-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            min-height: 500px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .section {
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .btn-primary {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            padding: 12px 24px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+        }
+        
+        .summary-card {
+            text-align: center;
+            color: white;
+        }
+        
+        .summary-card h3 {
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+        
+        .summary-card p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌟 SAPTHALA Admin Panel</h1>
+            <button onclick="logout()" class="btn-primary">Logout</button>
+        </div>
+        
+        <div class="nav">
+            <button class="nav-btn active" onclick="showSection('dashboard')">📊 Dashboard</button>
+            <button class="nav-btn" onclick="showSection('branches')">🏢 Branches</button>
+            <button class="nav-btn" onclick="showSection('subadmins')">👥 Sub-Admins</button>
+            <button class="nav-btn" onclick="showSection('reports')">📈 Reports</button>
+        </div>
+        
+        <div class="content">
+            <!-- Dashboard Section -->
+            <div id="dashboard" class="section active">
+                <h2>Dashboard</h2>
+                <div id="dashboardStats"></div>
+            </div>
+            
+            <!-- Branches Section -->
+            <div id="branches" class="section">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                    <h2>Branch Management</h2>
+                    <button class="btn-primary" onclick="showCreateBranchModal()">+ Create Branch</button>
+                </div>
+                <div id="branchesList" class="grid"></div>
+            </div>
+            
+            <!-- Sub-Admins Section -->
+            <div id="subadmins" class="section">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                    <h2>Sub-Admin Management</h2>
+                    <button class="btn-primary" onclick="showCreateSubAdminModal()">+ Create Sub-Admin</button>
+                </div>
+                <div id="subadminsList"></div>
+            </div>
+            
+            <!-- Reports Section -->
+            <div id="reports" class="section">
+                <h2>Last Orders Report</h2>
+                <div style="display:flex;gap:10px;margin:20px 0;flex-wrap:wrap;">
+                    <select id="reportLimit" style="padding:10px;border-radius:6px;" onchange="generateReport()">
+                        <option value="10">Last 10 Orders</option>
+                        <option value="15">Last 15 Orders</option>
+                        <option value="20">Last 20 Orders</option>
+                        <option value="50">Last 50 Orders</option>
+                    </select>
+                    <select id="reportBranch" style="padding:10px;border-radius:6px;" onchange="generateReport()">
+                        <option value="all">All Branches</option>
+                    </select>
+                    <button class="btn-success" onclick="downloadCSV()">📥 Download CSV</button>
+                </div>
+                <div id="reportContent"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Branch Modal -->
+    <div id="createBranchModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Branch</h2>
+                <button class="modal-close" onclick="closeModal('createBranchModal')">×</button>
+            </div>
+            <form onsubmit="createBranch(event)">
+                <div class="form-group">
+                    <label>Branch Name *</label>
+                    <input type="text" id="branchName" required placeholder="e.g., Jubilee Hills">
+                </div>
+                <div class="form-group">
+                    <label>Location *</label>
+                    <input type="text" id="branchLocation" required placeholder="e.g., Road No. 36">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="branchPhone" placeholder="9876543210">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="branchEmail" placeholder="branch@sapthala.com">
+                </div>
+                <button type="submit" class="btn-primary" style="width:100%;">Create Branch</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Create Sub-Admin Modal -->
+    <div id="createSubAdminModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Sub-Admin</h2>
+                <button class="modal-close" onclick="closeModal('createSubAdminModal')">×</button>
+            </div>
+            <form onsubmit="createSubAdmin(event)">
+                <div class="form-group">
+                    <label>Branch *</label>
+                    <select id="subAdminBranch" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="subAdminUsername" required placeholder="e.g., jubileehills_admin">
+                </div>
+                <div class="form-group">
+                    <label>Password *</label>
+                    <div style="display:flex;gap:10px;">
+                        <input type="password" id="subAdminPassword" required placeholder="Enter password">
+                        <button type="button" onclick="generatePassword()" class="btn-success">Generate</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary" style="width:100%;">Create Sub-Admin</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api';
+        let currentReportData = null;
+        
+        function getToken() {
+            return localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+        }
+        
+        function showSection(section) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(section).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (section === 'branches') loadBranches();
+            if (section === 'subadmins') loadSubAdmins();
+            if (section === 'reports') {
+                loadBranchesForReport();
+                generateReport(); // Auto-load report
+            }
+        }
+        
+        async function loadBranches() {
+            try {
+                const response = await fetch(`${API_BASE}/branches`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayBranches(data.branches);
+                    populateBranchDropdown(data.branches);
+                }
+            } catch (error) {
+                console.error('Load branches error:', error);
+            }
+        }
+        
+        function displayBranches(branches) {
+            const container = document.getElementById('branchesList');
+            container.innerHTML = branches.map(b => `
+                <div class="card">
+                    <h3>${b.branchName}</h3>
+                    <p>📍 ${b.location}</p>
+                    ${b.phone ? `<p>📞 ${b.phone}</p>` : ''}
+                    <p>🆔 ${b.branchId}</p>
+                    <div style="margin-top:15px;display:flex;gap:10px;">
+                        <button class="btn-primary" onclick="createSubAdminForBranch('${b.branchId}')">+ Sub-Admin</button>
+                        <button class="btn-success" onclick="deleteBranch('${b._id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function populateBranchDropdown(branches) {
+            const select = document.getElementById('subAdminBranch');
+            select.innerHTML = '<option value="">Select Branch</option>' + 
+                branches.map(b => `<option value="${b.branchId}">${b.branchName}</option>`).join('');
+        }
+        
+        function showCreateBranchModal() {
+            document.getElementById('createBranchModal').classList.add('show');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        async function createBranch(e) {
+            e.preventDefault();
+            
+            const data = {
+                branchName: document.getElementById('branchName').value,
+                location: document.getElementById('branchLocation').value,
+                phone: document.getElementById('branchPhone').value,
+                email: document.getElementById('branchEmail').value
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/branches`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getToken()}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Branch created successfully!');
+                    closeModal('createBranchModal');
+                    loadBranches();
+                } else {
+                    alert('❌ ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Failed to create branch');
+            }
+        }
+        
+        async function deleteBranch(id) {
+            if (!confirm('Delete this branch?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/branches/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Branch deleted!');
+                    loadBranches();
+                } else {
+                    alert('❌ ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Failed to delete branch');
+            }
+        }
+        
+        function createSubAdminForBranch(branchId) {
+            document.getElementById('subAdminBranch').value = branchId;
+            document.getElementById('createSubAdminModal').classList.add('show');
+        }
+        
+        function showCreateSubAdminModal() {
+            document.getElementById('createSubAdminModal').classList.add('show');
+        }
+        
+        function generatePassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+            let password = '';
+            for (let i = 0; i < 12; i++) {
+                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('subAdminPassword').value = password;
+        }
+        
+        async function createSubAdmin(e) {
+            e.preventDefault();
+            
+            const data = {
+                username: document.getElementById('subAdminUsername').value,
+                password: document.getElementById('subAdminPassword').value,
+                branch: document.getElementById('subAdminBranch').value,
+                permissions: {
+                    canEdit: false,
+                    canDelete: false,
+                    canViewReports: true,
+                    canManageStaff: false,
+                    branchAccess: [document.getElementById('subAdminBranch').value]
+                }
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/sub-admins`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getToken()}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Sub-admin created!\\n\\nUsername: ${data.username}\\nPassword: ${data.password}\\n\\nPlease save these credentials!`);
+                    closeModal('createSubAdminModal');
+                    loadSubAdmins();
+                } else {
+                    alert('❌ ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Failed to create sub-admin');
+            }
+        }
+        
+        async function loadSubAdmins() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/sub-admins`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await response.json();
+                
+                displaySubAdmins(data);
+            } catch (error) {
+                console.error('Load sub-admins error:', error);
+            }
+        }
+        
+        function displaySubAdmins(subadmins) {
+            const container = document.getElementById('subadminsList');
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Branch</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${subadmins.map(s => `
+                            <tr>
+                                <td>${s.username}</td>
+                                <td>${s.branch}</td>
+                                <td>${new Date(s.createdAt).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="btn-success" onclick="deleteSubAdmin('${s._id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        async function deleteSubAdmin(id) {
+            if (!confirm('Delete this sub-admin?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/sub-admins/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Sub-admin deleted!');
+                    loadSubAdmins();
+                } else {
+                    alert('❌ ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Failed to delete sub-admin');
+            }
+        }
+        
+        async function loadBranchesForReport() {
+            try {
+                const response = await fetch(`${API_BASE}/branches`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('reportBranch');
+                    select.innerHTML = '<option value="all">All Branches</option>' + 
+                        data.branches.map(b => `<option value="${b.branchId}">${b.branchName}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Load branches error:', error);
+            }
+        }
+        
+        async function generateReport() {
+            const limit = document.getElementById('reportLimit').value;
+            const branch = document.getElementById('reportBranch').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/reports/last-orders-custom?limit=${limit}&branch=${branch}`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentReportData = data;
+                    displayReport(data);
+                } else {
+                    alert('❌ Failed to generate report');
+                }
+            } catch (error) {
+                alert('❌ Error generating report');
+            }
+        }
+        
+        function displayReport(data) {
+            const container = document.getElementById('reportContent');
+            
+            if (!data.orders || data.orders.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">📊 No orders found</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <h3>${data.summary.totalOrders}</h3>
+                        <p>Total Orders</p>
+                    </div>
+                    <div class="summary-card">
+                        <h3>₹${Math.round(data.summary.totalAmount).toLocaleString()}</h3>
+                        <p>Total Amount</p>
+                    </div>
+                    <div class="summary-card">
+                        <h3>₹${Math.round(data.summary.totalAdvance).toLocaleString()}</h3>
+                        <p>Advance Collected</p>
+                    </div>
+                    <div class="summary-card">
+                        <h3>₹${Math.round(data.summary.totalBalance).toLocaleString()}</h3>
+                        <p>Balance Due</p>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Date/Time</th>
+                            <th>Customer</th>
+                            <th>Phone</th>
+                            <th>Garment</th>
+                            <th>Progress</th>
+                            <th>Total</th>
+                            <th>Advance</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th>Branch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.orders.map(o => {
+                            const progress = o.progress || o.progressPercentage || 0;
+                            const progressColor = progress === 100 ? '#10b981' : progress > 50 ? '#f59e0b' : '#ef4444';
+                            return `
+                            <tr>
+                                <td><strong>${o.orderId || 'N/A'}</strong></td>
+                                <td>${o.date ? new Date(o.date).toLocaleString() : 'N/A'}</td>
+                                <td>${o.customerName || 'N/A'}</td>
+                                <td>${o.customerPhone || 'N/A'}</td>
+                                <td>${o.garmentType || 'N/A'}</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                        <div style="background:#e5e7eb;border-radius:10px;height:8px;width:80px;position:relative;">
+                                            <div style="background:${progressColor};height:100%;border-radius:10px;width:${progress}%;"></div>
+                                        </div>
+                                        <span style="font-weight:600;color:${progressColor};font-size:12px;">${progress}%</span>
+                                    </div>
+                                </td>
+                                <td>₹${Math.round(o.totalAmount || 0).toLocaleString()}</td>
+                                <td>₹${Math.round(o.advanceAmount || 0).toLocaleString()}</td>
+                                <td>₹${Math.round(o.balanceAmount || 0).toLocaleString()}</td>
+                                <td>${o.status || 'pending'}</td>
+                                <td>${o.branch || 'N/A'}</td>
+                            </tr>
+                        `}).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        function downloadCSV() {
+            if (!currentReportData) {
+                alert('Please generate a report first');
+                return;
+            }
+            
+            // Create CSV with proper Excel format
+            const headers = ['Order ID', 'Date/Time', 'Customer', 'Phone', 'Garment', 'Total', 'Advance', 'Balance', 'Status', 'Branch'];
+            const rows = currentReportData.orders.map(o => [
+                o.orderId,
+                new Date(o.date).toLocaleString(),
+                o.customerName,
+                o.customerPhone,
+                o.garmentType,
+                o.totalAmount,
+                o.advanceAmount,
+                o.balanceAmount,
+                o.status,
+                o.branch
+            ]);
+            
+            // Add BOM for Excel UTF-8 recognition
+            const BOM = '\uFEFF';
+            const csv = BOM + [headers, ...rows].map(row => 
+                row.map(cell => `"${cell}"`).join(',')
+            ).join('\r\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `SAPTHALA-Report-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            alert('✅ Report downloaded successfully! Open with Excel.');
+        }
+        
+        function logout() {
+            localStorage.removeItem('sapthala_token');
+            sessionStorage.removeItem('sapthala_token');
+            window.location.href = '/';
+        }
+        
+        // Initialize
+        loadBranches();
+    </script>
+</body>
+</html>

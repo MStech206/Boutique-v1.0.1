@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SAPTHALA - System Test</title>
+    <style>
+        body { font-family: Arial; margin: 40px; background: #f5f5f5; }
+        .card { background: white; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { color: #3b82f6; margin-bottom: 20px; }
+        .test { padding: 15px; margin: 10px 0; border-radius: 8px; background: #f0f9ff; border-left: 4px solid #3b82f6; }
+        .success { background: #d1fae5; border-left-color: #10b981; }
+        .error { background: #fee2e2; border-left-color: #ef4444; }
+        button { padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin: 5px; }
+        button:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🚀 SAPTHALA System Test</h1>
+        
+        <div id="results"></div>
+        
+        <button onclick="testAll()">Run All Tests</button>
+        <button onclick="location.href='/'">Go to Admin Panel</button>
+        <button onclick="location.href='/super-admin'">Go to Super Admin</button>
+        <button onclick="location.href='/staff'">Go to Staff Portal</button>
+    </div>
+
+    <script>
+        async function testEndpoint(url, name) {
+            try {
+                const res = await fetch(url);
+                const isOk = res.ok && res.status === 200;
+                return { name, status: res.status, ok: isOk };
+            } catch (e) {
+                return { name, status: 'ERROR', ok: false, error: e.message };
+            }
+        }
+
+        async function testAll() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<div class="test">Testing...</div>';
+            
+            const tests = [
+                { url: '/api/settings', name: 'API Settings' },
+                { url: '/api/public/branches', name: 'Branches API' },
+                { url: '/', name: 'Admin Panel' },
+                { url: '/super-admin', name: 'Super Admin' },
+                { url: '/staff', name: 'Staff Portal' }
+            ];
+
+            let html = '';
+            for (const test of tests) {
+                const result = await testEndpoint(test.url, test.name);
+                const className = result.ok ? 'test success' : 'test error';
+                const icon = result.ok ? '✅' : '❌';
+                html += `<div class="${className}">${icon} ${result.name}: ${result.status}</div>`;
+            }
+            
+            results.innerHTML = html;
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', testAll);
+    </script>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tax Invoice - Sapthala Designer Workshop</title>
+
+<style>
+:root {
+  --burgundy: #6b1e2d;
+  --orange: #ff8c00;
+  --light-bg: #f8f2f4;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #eee;
+}
+
+.invoice-container {
+  width: 800px;
+  margin: 20px auto;
+  background: #fff;
+  padding: 25px;
+  border: 2px solid var(--burgundy);
+  position: relative;
+}
+
+/* WATERMARK */
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+  object-fit: contain;
+}
+
+/* SANKRANTHI DECORATIONS */
+.sankranthi-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.festival-element {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0.2;
+}
+
+.title {
+  text-align: center;
+  color: var(--burgundy);
+}
+
+.sankranthi-greeting {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--orange);
+  font-weight: bold;
+}
+
+hr {
+  margin: 15px 0;
+}
+
+.header,
+.billing,
+table,
+.totals,
+.words,
+.footer {
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.company {
+  display: flex;
+  align-items: center;
+  color: var(--burgundy);
+}
+
+.logo {
+  width: 60px;
+  height: 60px;
+  margin-right: 10px;
+  object-fit: contain;
+}
+
+.contact {
+  text-align: right;
+}
+
+.billing {
+  display: flex;
+  justify-content: space-between;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+th {
+  background: var(--burgundy);
+  color: #fff;
+}
+
+th, td {
+  border: 1px solid #999;
+  padding: 8px;
+  text-align: center;
+}
+
+.totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 50px;
+  margin-top: 10px;
+}
+
+.signature {
+  text-align: right;
+  margin-top: 40px;
+}
+
+.sign-line {
+  width: 200px;
+  border-top: 2px solid var(--burgundy);
+  margin-left: auto;
+  margin-top: 30px;
+}
+/* SANKRANTHI IMAGE WATERMARKS */
+.sankranthi-watermark {
+  position: absolute;
+  width: 140px;
+  opacity: 0.25;          /* good visibility + professional */
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sankranthi-top-left {
+  top: 10px;
+  left: 10px;
+}
+
+.sankranthi-top-right {
+  top: 10px;
+  right: 10px;
+}
+
+.sankranthi-bottom-left {
+  bottom: 10px;
+  left: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="invoice-container">
+
+  <!-- WATERMARK -->
+  <img src="./sapthala logo.PNG" class="watermark" alt="Watermark">
+  
+  <!-- SANKRANTHI DECORATIONS -->
+   <!-- SANKRANTHI CORNER WATERMARKS -->
+<img src="sankranthi.png"
+     class="sankranthi-watermark sankranthi-top-left"
+     alt="Sankranthi Decoration">
+
+<img src="sankranthi.png"
+     class="sankranthi-watermark sankranthi-top-right"
+     alt="Sankranthi Decoration">
+
+<img src="sankranthi.png"
+     class="sankranthi-watermark sankranthi-bottom-left"
+     alt="Sankranthi Decoration">
+
+  <h1 class="title">Tax Invoice</h1>
+  <p class="sankranthi-greeting">
+    🪁 शुभ मकर संक्रांति! May this harvest festival bring prosperity and joy! 🌾
+  </p>
+
+  <hr>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="company">
+      <img src="./sapthala logo.PNG" class="logo" alt="Logo">
+      <h2>Sapthala Designer Workshop</h2>
+    </div>
+    <div class="contact">
+      <p><strong>Phone:</strong> 7794021608</p>
+      <p><strong>Email:</strong> sapthalareddydesigns@gmail.com</p>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- BILLING -->
+  <div class="billing">
+    <div>
+      <h3>Bill To:</h3>
+      <p>[Customer Name]</p>
+      <p>Contact No: [Phone Number]</p>
+    </div>
+    <div>
+      <h3>Invoice Details:</h3>
+      <p><strong>No:</strong> [Invoice Number]</p>
+      <p><strong>Date:</strong> [Invoice Date]</p>
+    </div>
+  </div>
+
+  <!-- ITEMS -->
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Item Name</th>
+        <th>HSN/SAC</th>
+        <th>Qty</th>
+        <th>Unit</th>
+        <th>Price (₹)</th>
+        <th>Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody id="items">
+      <tr>
+        <td>1</td>
+        <td>[Item Name]</td>
+        <td>-</td>
+        <td class="qty">1</td>
+        <td>Pcs</td>
+        <td class="price">0</td>
+        <td class="amount">0</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- TOTALS -->
+  <div class="totals">
+    <div>
+      <p>Sub Total</p>
+      <p><strong>Total</strong></p>
+    </div>
+    <div>
+      <p>₹ <span id="subTotal">0</span></p>
+      <p><strong>₹ <span id="grandTotal">0</span></strong></p>
+    </div>
+  </div>
+
+  <!-- WORDS -->
+  <p class="words">
+    <strong>Invoice Amount in Words:</strong>
+    <span id="amountWords">Zero Rupees only</span>
+  </p>
+
+  <!-- BALANCE -->
+  <p><strong>Received:</strong> ₹ 0.00</p>
+  <p><strong>Balance:</strong> ₹ <span id="balance">0</span></p>
+
+  <hr>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p><strong>Terms & Conditions:</strong></p>
+    <p>Thanks for doing business with us!</p>
+
+    <div class="signature">
+      <p>For Sapthala Designer Workshop</p>
+      <div class="sign-line"></div>
+      <p>Authorized Signatory</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function numberToWords(num) {
+  const ones = [
+    "", "One", "Two", "Three", "Four", "Five", "Six",
+    "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
+    "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+    "Seventeen", "Eighteen", "Nineteen"
+  ];
+
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  if (num < 20) return ones[num];
+  if (num < 100) return tens[Math.floor(num / 10)] + " " + ones[num % 10];
+  if (num < 1000) return ones[Math.floor(num / 100)] + " Hundred " + numberToWords(num % 100);
+
+  return num;
+}
+
+function calculateTotals() {
+  let total = 0;
+  document.querySelectorAll(".amount").forEach(a => {
+    total += parseFloat(a.innerText);
+  });
+
+  document.getElementById("subTotal").innerText = total;
+  document.getElementById("grandTotal").innerText = total;
+  document.getElementById("balance").innerText = total;
+  document.getElementById("amountWords").innerText =
+    numberToWords(total) + " Rupees only";
+}
+
+calculateTotals();
+</script>
+
+</body>
+</html>

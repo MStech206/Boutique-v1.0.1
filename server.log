@@ -1,0 +1,14 @@
+Starting server initialization...
+✅ MongoDB Connected Successfully to sapthala_boutique
+🔄 Initializing default data...
+🎉 Database initialization completed successfully!
+About to call app.listen()...
+🚦 app.listen() returned, server object exists: true
+🔗 Server address info: null
+🚀 SAPTHALA Boutique Server running on port 3000
+📱 Admin Panel: http://localhost:3000
+🔗 API Base: http://localhost:3000/api
+🗄️ MongoDB: Connected to sapthala_boutique database
+✅ Server is ready to accept requests
+🔌 LISTENING ON 127.0.0.1:3000
+🔔 THIS MESSAGE APPEARS FROM WITHIN THE LISTEN CALLBACK

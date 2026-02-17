@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAPTHALA Login Fix Verification</title>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+        }
+        h1 { color: #7c183c; margin-bottom: 10px; font-size: 32px; }
+        h2 { color: #666; margin-bottom: 30px; font-size: 18px; font-weight: normal; }
+        .credentials {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border-left: 4px solid #7c183c;
+        }
+        .credentials p { margin: 8px 0; font-size: 16px; }
+        .credentials strong { color: #7c183c; }
+        .button-group {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(124,24,60,0.3);
+        }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid #d1d5db;
+        }
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+        #results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 12px;
+            display: none;
+        }
+        .log {
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .log.success { border-left-color: #10b981; color: #065f46; }
+        .log.error { border-left-color: #ef4444; color: #991b1b; }
+        .log.info { border-left-color: #3b82f6; color: #1e40af; }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .status.success { background: #d1fae5; color: #065f46; }
+        .status.error { background: #fee2e2; color: #991b1b; }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 SAPTHALA Login Test</h1>
+        <h2>Verify that login is working correctly</h2>
+        
+        <div class="credentials">
+            <p><strong>Username:</strong> admin</p>
+            <p><strong>Password:</strong> sapthala@2029</p>
+            <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                ℹ️ These are the correct credentials for the admin panel
+            </p>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn-primary" onclick="testLogin()">
+                🧪 Test Login API
+            </button>
+            <button class="btn-primary" onclick="testAndRedirect()">
+                🚀 Test Login & Go to Dashboard
+            </button>
+            <button class="btn-secondary" onclick="clearAndTest()">
+                🔄 Clear Cache & Test
+            </button>
+            <button class="btn-secondary" onclick="window.location.href='/'">
+                🏠 Go to Admin Panel
+            </button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            results.style.display = 'block';
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = message;
+            results.appendChild(logDiv);
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        async function testLogin() {
+            clearLogs();
+            log('🔄 Starting login test...', 'info');
+            
+            try {
+                log('📤 Sending POST request to /api/admin/login', 'info');
+                
+                const startTime = Date.now();
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'sapthala@2029'
+                    })
+                });
+                const endTime = Date.now();
+                
+                log(`📥 Response received in ${endTime - startTime}ms <span class="status ${response.ok ? 'success' : 'error'}">HTTP ${response.status}</span>`, 'info');
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    log('✅ <strong>LOGIN SUCCESSFUL!</strong>', 'success');
+                    log(`🎫 Token received: ${data.token.substring(0, 40)}...`, 'success');
+                    log(`👤 User: ${data.user.username} (${data.user.role})`, 'success');
+                    
+                    // Store token
+                    localStorage.setItem('sapthala_token', data.token);
+                    localStorage.setItem('sapthala_logged_in', 'true');
+                    localStorage.setItem('sapthala_user', JSON.stringify(data.user));
+                    
+                    log('💾 Credentials saved to localStorage', 'success');
+                    log('✅ <strong>You can now access the admin panel!</strong>', 'success');
+                    
+                    // Show response data
+                    log('📦 Full response data:<pre>' + JSON.stringify(data, null, 2) + '</pre>', 'info');
+                } else {
+                    log('❌ <strong>LOGIN FAILED!</strong>', 'error');
+                    log(`Error: ${data.error || 'Unknown error'}`, 'error');
+                    log('📦 Response data:<pre>' + JSON.stringify(data, null, 2) + '</pre>', 'error');
+                }
+            } catch (error) {
+                log('❌ <strong>REQUEST FAILED!</strong>', 'error');
+                log(`Error: ${error.message}`, 'error');
+                log('💡 Make sure the server is running on port 3000', 'error');
+            }
+        }
+        
+        async function testAndRedirect() {
+            clearLogs();
+            log('🔄 Testing login and redirecting...', 'info');
+            
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'sapthala@2029'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    log('✅ Login successful!', 'success');
+                    
+                    // Store credentials
+                    localStorage.setItem('sapthala_token', data.token);
+                    localStorage.setItem('sapthala_logged_in', 'true');
+                    localStorage.setItem('sapthala_user', JSON.stringify(data.user));
+                    
+                    log('🚀 Redirecting to admin panel in 2 seconds...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } else {
+                    log('❌ Login failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                log('❌ Request failed: ' + error.message, 'error');
+            }
+        }
+        
+        function clearAndTest() {
+            clearLogs();
+            log('🧹 Clearing browser cache...', 'info');
+            
+            // Clear localStorage
+            localStorage.clear();
+            log('✅ localStorage cleared', 'success');
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            log('✅ sessionStorage cleared', 'success');
+            
+            log('🔄 Running login test...', 'info');
+            setTimeout(testLogin, 500);
+        }
+        
+        // Check if already logged in
+        window.addEventListener('load', () => {
+            const isLoggedIn = localStorage.getItem('sapthala_logged_in');
+            const token = localStorage.getItem('sapthala_token');
+            
+            if (isLoggedIn === 'true' && token) {
+                log('ℹ️ You are already logged in!', 'info');
+                log('🎫 Token found in localStorage', 'success');
+                log('💡 Click "Go to Admin Panel" to access the dashboard', 'info');
+            } else {
+                log('ℹ️ Not logged in. Click "Test Login API" to verify login works.', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
