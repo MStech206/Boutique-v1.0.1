@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Boutique - Integration Template</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        .section { background: white; padding: 24px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .section h2 { color: #1e293b; margin-bottom: 16px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+        
+        .code-block { background: #2d3748; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.4; }
+        
+        .example-box { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 12px 0; border-radius: 6px; }
+        .example-box strong { color: #0c4a6e; }
+        
+        button { padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2563eb; }
+        
+        .status { padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+        .status.connected { background: #d1fae5; color: #065f46; }
+        .status.disconnected { background: #fee2e2; color: #991b1b; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-weight: bold; color: #1e293b; }
+        
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge.admin { background: #dbeafe; color: #0c4a6e; }
+        .badge.staff { background: #d1fae5; color: #065f46; }
+        .badge.subadmin { background: #fef3c7; color: #92400e; }
+        .badge.superadmin { background: #e9d5ff; color: #581c87; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h2>✅ SAPTHALA Boutique - Unified Database Integration</h2>
+            
+            <p style="color: #64748b; margin-bottom: 16px;">
+                This template demonstrates how to properly integrate the database services with your Admin Panel, 
+                Sub-Admin Panel, and Staff Application. All services work together seamlessly with real-time 
+                synchronization and offline support.
+            </p>
+
+            <div class="example-box">
+                <strong>✨ Key Features:</strong><br>
+                • Unified Database Service for all operations<br>
+                • Secure Authentication Service with role-based access<br>
+                • Real-time data synchronization across all panels<br>
+                • Offline support with intelligent caching<br>
+                • Staff task management and tracking<br>
+                • Complete order lifecycle management<br>
+                • Performance metrics and analytics
+            </div>
+        </div>
+
+        <!-- Services Architecture -->
+        <div class="section">
+            <h2>🏗️ Services Architecture</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Purpose</th>
+                        <th>Global Variable</th>
+                        <th>Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>DatabaseService</strong></td>
+                        <td>Core data operations (CRUD)</td>
+                        <td><code>db</code></td>
+                        <td>await db.getOrders(), db.createStaff(), etc.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AuthService</strong></td>
+                        <td>Authentication & authorization</td>
+                        <td><code>auth</code></td>
+                        <td>await auth.adminLogin(), auth.hasRole(), etc.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>StaffService</strong></td>
+                        <td>Staff management & tasks</td>
+                        <td><code>staff</code></td>
+                        <td>await staff.createStaff(), staff.acceptTask(), etc.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>OrderService</strong></td>
+                        <td>Order management & tracking</td>
+                        <td><code>orders</code></td>
+                        <td>await orders.createOrder(), orders.updateStage(), etc.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Integration Examples -->
+        <div class="section">
+            <h2>💼 Integration Examples</h2>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">1. Admin Panel Login</h3>
+            <div class="code-block">
+async function handleAdminLogin(username, password) {
+    try {
+        const result = await auth.adminLogin(username, password);
+        console.log('✅ Logged in as:', result.data.user.name);
+        
+        // Refresh UI based on role
+        updateDashboard();
+    } catch (error) {
+        console.error('❌ Login failed:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">2. Staff Panel Login</h3>
+            <div class="code-block">
+async function handleStaffLogin(staffId, pin) {
+    try {
+        const result = await auth.staffLogin(staffId, pin);
+        console.log('✅ Staff logged in:', result.data.user.name);
+        
+        // Load staff tasks
+        const tasks = await staff.getStaffTasks(staffId);
+        displayTasks(tasks);
+    } catch (error) {
+        console.error('❌ Login failed:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">3. Create New Order</h3>
+            <div class="code-block">
+async function createNewOrder(formData) {
+    try {
+        const orderData = {
+            customerId: formData.phone,
+            customerName: formData.name,
+            customerPhone: formData.phone,
+            branch: auth.getBranch(),
+            items: formData.items,
+            totalAmount: formData.total,
+            measurements: formData.measurements,
+            deliveryDate: formData.deliveryDate,
+            createdBy: auth.getUser().id
+        };
+        
+        const order = await orders.createOrder(orderData);
+        console.log('✅ Order created:', order.orderId);
+        showNotification('Order created successfully!');
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">4. Assign Task to Staff</h3>
+            <div class="code-block">
+async function assignTaskToStaff(orderId, stageName, staffId) {
+    try {
+        const result = await orders.assignStaffToStage(orderId, stageName, staffId);
+        
+        // Notify staff about new task
+        await notifyStaff(staffId, {
+            type: 'task-assigned',
+            orderId: orderId,
+            stage: stageName
+        });
+        
+        console.log('✅ Task assigned to staff');
+    } catch (error) {
+        console.error('❌ Assignment failed:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">5. Staff Complete Task</h3>
+            <div class="code-block">
+async function staffCompleteTask(staffId, taskId, completionData) {
+    try {
+        const result = await staff.completeTask(staffId, taskId, {
+            notes: completionData.notes,
+            images: completionData.images,
+            qualityRating: completionData.rating
+        });
+        
+        console.log('✅ Task completed successfully');
+        
+        // Task automatically moves to next stage
+        // Performance metrics are updated automatically
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">6. Record Payment</h3>
+            <div class="code-block">
+async function recordPayment(orderId, amount, method) {
+    try {
+        const result = await orders.recordPayment(orderId, amount, method);
+        
+        const paymentStatus = await orders.getPaymentStatus(orderId);
+        console.log('✅ Payment recorded');
+        console.log('Balance Due:', paymentStatus.balanceDue);
+    } catch (error) {
+        console.error('❌ Payment error:', error.message);
+    }
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">7. Real-time Listeners</h3>
+            <div class="code-block">
+// Listen to order updates
+const unsubscribe = orders.subscribe('update', (change) => {
+    console.log('Order updated:', change.data);
+    updateOrderInUI(change.data);
+});
+
+// Listen to staff availability changes
+staff.subscribe('availability', (change) => {
+    console.log('Staff availability:', change.data);
+    refreshStaffList();
+});
+
+// Unsubscribe when done
+// unsubscribe();
+            </div>
+        </div>
+
+        <!-- Authentication Flow -->
+        <div class="section">
+            <h2>🔐 Authentication & Authorization</h2>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Check User Permissions</h3>
+            <div class="code-block">
+// Check if user has specific role
+if (auth.hasRole('admin')) {
+    console.log('User is admin');
+}
+
+// Check if user has permission
+if (auth.hasPermission('manage_staff')) {
+    console.log('Can manage staff');
+}
+
+// Check if user can access branch
+if (auth.canAccessBranch('SAPTHALA Main')) {
+    console.log('User can access this branch');
+}
+
+// Get accessible branches
+const branches = auth.getAccessibleBranches();
+console.log('Accessible branches:', branches);
+
+// Check authentication status
+if (auth.isAuthenticated()) {
+    console.log('User is logged in');
+}
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Role-Based Access Control</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Role</th>
+                        <th>Can Manage</th>
+                        <th>Can View</th>
+                        <th>Restrictions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge superadmin">Super Admin</span></td>
+                        <td>Everything (all branches)</td>
+                        <td>All data, all branches</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge admin">Admin</span></td>
+                        <td>Branch data, staff, orders</td>
+                        <td>Only owned branch</td>
+                        <td>Cannot manage other branches</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge subadmin">Sub-Admin</span></td>
+                        <td>Limited staff & order ops</td>
+                        <td>Only owned branch</td>
+                        <td>Cannot add staff, manage payments</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge staff">Staff</span></td>
+                        <td>Accept/complete tasks</td>
+                        <td>Own tasks only</td>
+                        <td>Cannot create orders</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Data Sync & Offline Support -->
+        <div class="section">
+            <h2>🔄 Real-Time Sync & Offline Support</h2>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Automatic Synchronization</h3>
+            <div class="code-block">
+// Database service automatically:
+// ✅ Caches GET requests
+// ✅ Queues offline operations
+// ✅ Syncs when online resumes
+// ✅ Retries failed operations up to 3 times
+
+// Check if online
+if (db.isOnline()) {
+    console.log('Online - Real-time sync active');
+} else {
+    console.log('Offline - Using cached data');
+}
+
+// Export cache for offline recovery
+const cacheData = db.exportCache();
+localStorage.setItem('offline_cache', cacheData);
+
+// Import cache when resuming
+const cached = localStorage.getItem('offline_cache');
+db.importCache(cached);
+            </div>
+        </div>
+
+        <!-- Error Handling -->
+        <div class="section">
+            <h2>⚠️ Error Handling Best Practices</h2>
+
+            <div class="code-block">
+try {
+    // Make API call
+    const result = await db.createOrder(orderData);
+} catch (error) {
+    if (error.message.includes('401')) {
+        // Token expired - redirect to login
+        window.location.href = '/login';
+    } else if (error.message.includes('403')) {
+        // Permission denied
+        showError('You do not have permission for this action');
+    } else if (error.message.includes('Network')) {
+        // Offline
+        showError('Connection lost. Data will sync when online.');
+        db.addToSyncQueue({
+            method: 'POST',
+            endpoint: '/orders',
+            body: orderData
+        });
+    } else {
+        // Other errors
+        showError(error.message);
+    }
+}
+            </div>
+        </div>
+
+        <!-- Setup Instructions -->
+        <div class="section">
+            <h2>📦 Setup Instructions</h2>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Step 1: Include Service Files</h3>
+            <div class="code-block">
+&lt;!-- In your HTML &lt;head&gt; or before &lt;/body&gt; --&gt;
+&lt;script src="/database-service.js"&gt;&lt;/script&gt;
+&lt;script src="/auth-service.js"&gt;&lt;/script&gt;
+&lt;script src="/staff-service.js"&gt;&lt;/script&gt;
+&lt;script src="/order-service.js"&gt;&lt;/script&gt;
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Step 2: Wait for Initialization</h3>
+            <div class="code-block">
+// Wait for services to initialize
+window.addEventListener('load', async () => {
+    // Give services 1 second to initialize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Now you can use: auth, db, staff, orders
+    console.log('✅ All services ready');
+});
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Step 3: Check Authentication</h3>
+            <div class="code-block">
+document.addEventListener('DOMContentLoaded', async () => {
+    // Wait for auth service to initialize
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    if (auth.isAuthenticated()) {
+        console.log('✅ User is already logged in');
+        showMainApp();
+    } else {
+        console.log('User needs to log in');
+        showLoginPage();
+    }
+});
+            </div>
+
+            <h3 style="margin-top: 16px; color: #1e293b;">Step 4: Listen to Auth Changes</h3>
+            <div class="code-block">
+// Subscribe to authentication events
+auth.subscribe((change) => {
+    if (change.event === 'login') {
+        console.log('User logged in:', change.data.user);
+        showMainApp();
+    } else if (change.event === 'logout') {
+        console.log('User logged out');
+        showLoginPage();
+    } else if (change.event === 'user-update') {
+        console.log('User data updated');
+        updateUserProfile(change.data.user);
+    }
+});
+            </div>
+        </div>
+
+        <!-- API Endpoints Required -->
+        <div class="section">
+            <h2>🔗 Required Backend API Endpoints</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Purpose</th>
+                        <th>Auth Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/admin/login</td>
+                        <td>Admin authentication</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/staff/login</td>
+                        <td>Staff authentication</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/subadmin/login</td>
+                        <td>Sub-admin authentication</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/auth/validate</td>
+                        <td>Validate token</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/auth/refresh</td>
+                        <td>Refresh token</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/staff</td>
+                        <td>Get all staff</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/staff</td>
+                        <td>Create staff</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/admin/orders</td>
+                        <td>Get all orders</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/orders</td>
+                        <td>Create order</td>
+                        <td>Yes</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Quick Test -->
+        <div class="section">
+            <h2>🧪 Quick Connection Test</h2>
+
+            <button onclick="testConnection()">Test Database Connection</button>
+            <button onclick="testAuth()">Test Authentication</button>
+            <button onclick="testServices()">Test All Services</button>
+
+            <div id="testOutput" style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-top: 16px; display: none;">
+                <pre id="testLog" style="color: #1e293b; font-family: monospace; font-size: 12px; overflow-x: auto;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Scripts -->
+    <script src="database-service.js"></script>
+    <script src="auth-service.js"></script>
+    <script src="staff-service.js"></script>
+    <script src="order-service.js"></script>
+
+    <script>
+        const log = (msg) => {
+            const output = document.getElementById('testOutput');
+            const testLog = document.getElementById('testLog');
+            output.style.display = 'block';
+            testLog.textContent += msg + '\n';
+        };
+
+        async function testConnection() {
+            try {
+                log('🔍 Testing connection to backend...');
+                await db.healthCheck();
+                log('✅ Backend connection successful\n');
+            } catch (error) {
+                log('❌ Connection failed: ' + error.message + '\n');
+            }
+        }
+
+        async function testAuth() {
+            try {
+                log('🔍 Testing authentication service...');
+                log('Authentication service:', auth ? '✅ Loaded' : '❌ Not loaded');
+                log('User authenticated:', auth.isAuthenticated() ? 'Yes' : 'No');
+                log('User role:', auth.getRole() || 'None\n');
+            } catch (error) {
+                log('❌ Auth test failed: ' + error.message + '\n');
+            }
+        }
+
+        async function testServices() {
+            const output = document.getElementById('testOutput');
+            output.style.display = 'block';
+            document.getElementById('testLog').textContent = '';
+
+            try {
+                log('⏳ Testing all services...\n');
+                
+                log('Database Service: ' + (window.db ? '✅ Loaded' : '❌ Missing'));
+                log('Auth Service: ' + (window.auth ? '✅ Loaded' : '❌ Missing'));
+                log('Staff Service: ' + (window.staff ? '✅ Loaded' : '❌ Missing'));
+                log('Order Service: ' + (window.orders ? '✅ Loaded' : '❌ Missing'));
+                
+                log('\n✅ All services are loaded and ready!');
+            } catch (error) {
+                log('❌ Test failed: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

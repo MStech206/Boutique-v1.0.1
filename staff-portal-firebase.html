@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Portal - Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
+        .task-card { background: white; border-radius: 12px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .task-status { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-progress { background: #dbeafe; color: #1e40af; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-success { background: #10b981; color: white; }
+
+        /* Modal (mobile-friendly) */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 9999; }
+        .modal-backdrop.show { display: flex; }
+        .modal-card { background: white; border-radius: 12px; width: 94%; max-width: 760px; max-height: 92vh; overflow-y: auto; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+        .modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
+        .modal-title { font-size:18px; font-weight:700; color:#111827; }
+        .modal-body { font-size:14px; color:#374151; }
+        .measurement-list { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin:12px 0; }
+        .measurement-item { background:#f3f4f6; padding:8px 10px; border-radius:8px; font-weight:600; }
+        .photo-grid { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+        .photo-thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; }
+        .modal-close { background:transparent;border:none;font-size:20px;cursor:pointer;color:#6b7280; }
+        .modal-actions { margin-top:14px; display:flex; gap:8px; }
+        @media (min-width:760px){ .measurement-list{grid-template-columns:repeat(3,1fr);} .photo-thumb{width:96px;height:96px;} }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧑‍🔧 Staff Portal</h1>
+        <p id="staffInfo">Loading...</p>
+    </div>
+
+    <div class="container">
+        <div id="loginSection">
+            <div class="task-card">
+                <h2>Staff Login</h2>
+                <input type="text" id="staffId" placeholder="Staff ID (e.g., staff_001)" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px;">
+                <input type="password" id="staffPin" placeholder="PIN" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px;">
+                <button class="btn btn-primary" onclick="staffLogin()">Login</button>
+            </div>
+        </div>
+
+        <div id="dashboardSection" style="display: none;">
+            <div class="task-card">
+                <h2>📋 My Tasks</h2>
+                <div id="tasksList">Loading tasks...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJeYt7PVEp0J8Y4MpDJcsw8KIXlhx5vUM",
+            authDomain: "boutique-staff-app.firebaseapp.com",
+            projectId: "boutique-staff-app",
+            storageBucket: "boutique-staff-app.firebasestorage.app",
+            messagingSenderId: "265096534234",
+            appId: "1:265096534234:web:421200826b93466b482de3",
+            measurementId: "G-NH2FZVQDH2"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        let currentStaff = null;
+
+        async function staffLogin() {
+            const staffId = document.getElementById('staffId').value.trim();
+            const pin = document.getElementById('staffPin').value.trim();
+
+            if (!staffId || !pin) {
+                alert('Please enter Staff ID and PIN');
+                return;
+            }
+
+            try {
+                // Verify staff credentials
+                const staffQuery = await db.collection('staff')
+                    .where('staffId', '==', staffId)
+                    .where('pin', '==', pin)
+                    .get();
+
+                if (staffQuery.empty) {
+                    alert('Invalid Staff ID or PIN');
+                    return;
+                }
+
+                currentStaff = { id: staffQuery.docs[0].id, ...staffQuery.docs[0].data() };
+                
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'block';
+                document.getElementById('staffInfo').textContent = `Welcome, ${currentStaff.name} (${currentStaff.staffId})`;
+
+                loadTasks();
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Login failed. Please try again.');
+            }
+        }
+
+        async function loadTasks() {
+            try {
+                const tasksQuery = await db.collection('tasks')
+                    .where('assignedTo', '==', currentStaff.id)
+                    .orderBy('createdAt', 'desc')
+                    .get();
+
+                const tasksList = document.getElementById('tasksList');
+                
+                if (tasksQuery.empty) {
+                    tasksList.innerHTML = '<p>No tasks assigned yet.</p>';
+                    // clear cached tasks
+                    window._enhanced_staff_tasks = [];
+                    return;
+                }
+
+                // Build tasks array and HTML (also keep a client-side cache for the details modal)
+                const tasksArr = [];
+                let html = '';
+                tasksQuery.docs.forEach(doc => {
+                    const task = doc.data();
+                    // keep the Firestore doc id for lookup
+                    task._docId = doc.id;
+                    tasksArr.push(task);
+
+                    const statusClass = `status-${task.status || 'pending'}`;
+                    
+                    html += `
+                        <div class="task-card" style="margin: 10px 0; border-left: 4px solid #3b82f6;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h3>${task.title || 'Task'}</h3>
+                                    <p><strong>Order:</strong> ${task.orderId || '-'} ${task.stage ? `<small style="color:#6b7280">(${task.stage})</small>` : ''}</p>
+                                    <p>${task.description || ''}</p>
+                                </div>
+                                <div style="text-align:right">
+                                    <span class="task-status ${statusClass}">${task.status || 'pending'}</span>
+                                    <br><br>
+                                    <!-- View details button (opens modal) -->
+                                    <button class="btn btn-primary" onclick="viewTaskDetailsFirebase('${doc.id}')">View details</button>
+                                    &nbsp;
+                                    ${task.status !== 'completed' ? 
+                                        `<button class="btn btn-success" onclick="completeTask('${doc.id}')">Complete</button>` : 
+                                        '✅ Done'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                // cache tasks for modal lookup
+                window._enhanced_staff_tasks = tasksArr;
+                tasksList.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                document.getElementById('tasksList').innerHTML = '<p>Error loading tasks.</p>';
+            }
+        }
+
+        async function completeTask(taskId) {
+            try {
+                await db.collection('tasks').doc(taskId).update({
+                    status: 'completed',
+                    completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    completedBy: currentStaff.id
+                });
+
+                alert('✅ Task completed!');
+                loadTasks(); // Reload tasks
+                
+            } catch (error) {
+                console.error('Error completing task:', error);
+                alert('Failed to complete task');
+            }
+        }
+
+        // Real-time task updates
+        function setupRealtimeUpdates() {
+            if (!currentStaff) return;
+            
+            db.collection('tasks')
+                .where('assignedTo', '==', currentStaff.id)
+                .onSnapshot((snapshot) => {
+                    console.log('Tasks updated in real-time');
+                    loadTasks();
+                });
+        }
+
+        // Show a modal with order details, measurements and photos (Firebase variant)
+        function viewTaskDetailsFirebase(taskDocId) {
+            try {
+                const tasks = window._enhanced_staff_tasks || [];
+                const task = tasks.find(t => t._docId === taskDocId);
+                if (!task) {
+                    alert('Task details not available locally. Refreshing tasks...');
+                    loadTasks();
+                    return;
+                }
+
+                const backdrop = document.getElementById('taskDetailsBackdrop');
+                const modal = document.getElementById('taskDetailsModal');
+                const title = modal.querySelector('.modal-title');
+                const body = modal.querySelector('.modal-body');
+
+                title.textContent = `${task.title || 'Task'} — ${task.orderId || ''}`;
+
+                // Measurements
+                const m = (task.orderDetails && task.orderDetails.measurements) || task.measurements || {};
+                let measHtml = '<div class="section-title">📏 Measurements</div>';
+                if (!m || Object.keys(m).length === 0) {
+                    measHtml += '<div style="margin-top:8px;color:#6b7280;">No measurements available</div>';
+                } else {
+                    measHtml += '<div class="measurement-list">';
+                    Object.entries(m).forEach(([k,v]) => { measHtml += `<div class="measurement-item"><div style="font-size:12px;color:#6b7280;margin-bottom:6px">${k}</div><div>${v}</div></div>`; });
+                    measHtml += '</div>';
+                }
+
+                // Photos
+                const photos = task.images || (task.orderDetails && task.orderDetails.images) || task.designImages || [];
+                let photosHtml = '<div class="section-title">📸 Photos</div>';
+                if (!photos || photos.length === 0) {
+                    photosHtml += '<div style="margin-top:8px;color:#6b7280;">No photos available</div>';
+                } else {
+                    photosHtml += '<div class="photo-grid">';
+                    photos.forEach((src, idx) => {
+                        photosHtml += `<img class="photo-thumb" src="${src}" alt="photo-${idx}" onclick="openLargePhoto('${src}')" onerror="this.style.opacity=0.6;this.title='failed to load'">`;
+                    });
+                    photosHtml += '</div>';
+                }
+
+                const designNotes = task.orderDetails?.designNotes || task.designNotes || '';
+
+                body.innerHTML = `
+                    <div><strong>Customer:</strong> ${task.orderDetails?.customerName || task.customerName || '-'}<br><strong>Phone:</strong> ${task.orderDetails?.customerPhone || task.customerPhone || '-'}</div>
+                    <div style="margin-top:8px"><strong>Garment:</strong> ${task.orderDetails?.garmentType || task.garmentType || '-'}</div>
+
+                    <div class="section-title">🎨 Design Information</div>
+                    <div style="margin-top:6px;color:#374151;white-space:pre-wrap">${designNotes ? designNotes : '<span style="color:#6b7280">No design notes available</span>'}</div>
+
+                    ${measHtml}
+                    ${photosHtml}
+                `;
+
+                backdrop.classList.add('show');
+                modal.classList.add('show');
+            } catch (err) {
+                console.warn('viewTaskDetailsFirebase failed', err);
+                alert('Unable to show task details');
+            }
+        }
+
+        function openLargePhoto(src) {
+            const imgWin = window.open('', '_blank');
+            if (!imgWin) return; imgWin.document.write(`<img src="${src}" style="max-width:100%;height:auto;display:block;margin:0 auto;">`);
+        }
+    </script>
+
+    <!-- Task Details Modal -->
+    <div id="taskDetailsBackdrop" class="modal-backdrop" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');"></div>
+    <div id="taskDetailsModal" class="modal-card" style="display:none;">
+        <div class="modal-header">
+            <div class="modal-title">Task Details</div>
+            <button class="modal-close" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">✕</button>
+        </div>
+        <div class="modal-body">Loading...</div>
+        <div class="modal-actions">
+            <button class="task-btn" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">Close</button>
+        </div>
+    </div>
+</body>
+</html>

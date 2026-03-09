@@ -1,0 +1,62 @@
+[
+  {
+    "orderId": "ORD-DEMO-001",
+    "customerName": "Anita Singh",
+    "customerPhone": "9876543220",
+    "garmentType": "Party Saree",
+    "category": "Saree",
+    "totalAmount": 5000,
+    "advanceAmount": 2000,
+    "status": "in_progress",
+    "branch": "Main",
+    "createdAt": "2026-02-11T09:13:33.915Z"
+  },
+  {
+    "orderId": "ORD-DEMO-002",
+    "customerName": "Priya Gupta",
+    "customerPhone": "9876543221",
+    "garmentType": "Bridal Lehenga",
+    "category": "Lehenga",
+    "totalAmount": 15000,
+    "advanceAmount": 5000,
+    "status": "pending",
+    "branch": "Main",
+    "createdAt": "2026-02-14T09:13:33.915Z"
+  },
+  {
+    "orderId": "ORD-DEMO-003",
+    "customerName": "Siya Verma",
+    "customerPhone": "9876543222",
+    "garmentType": "Silk Kurta",
+    "category": "Kurta",
+    "totalAmount": 3500,
+    "advanceAmount": 1500,
+    "status": "completed",
+    "branch": "Main",
+    "createdAt": "2026-02-06T09:13:33.915Z"
+  },
+  {
+    "orderId": "ORD-DEMO-004",
+    "customerName": "Neha Desai",
+    "customerPhone": "9876543223",
+    "garmentType": "Wedding Saree",
+    "category": "Saree",
+    "totalAmount": 8000,
+    "advanceAmount": 3000,
+    "status": "in_progress",
+    "branch": "Main",
+    "createdAt": "2026-02-15T09:13:33.915Z"
+  },
+  {
+    "orderId": "ORD-DEMO-005",
+    "customerName": "Divya Nair",
+    "customerPhone": "9876543224",
+    "garmentType": "Designer Suit",
+    "category": "Suit",
+    "totalAmount": 6500,
+    "advanceAmount": 2000,
+    "status": "pending",
+    "branch": "Main",
+    "createdAt": "2026-02-16T09:13:33.915Z"
+  }
+]

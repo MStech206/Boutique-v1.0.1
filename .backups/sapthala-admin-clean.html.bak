@@ -195,6 +195,7 @@
         .hidden { display: none !important; }
         
         /* Staff Management Styles */
+        /* */ Staff List */
         .staff-item {
             padding: 20px;
             border-bottom: 1px solid #e2e8f0;
@@ -846,10 +847,12 @@
                 <input type="text" id="username" class="login-input" placeholder="👤 Username" required>
                 <input type="password" id="password" class="login-input" placeholder="🔒 Password" required>
                 <button type="submit" class="login-btn">🚀 Login to Dashboard</button>
+                <button type="button" class="login-btn" style="margin-top:12px; background: linear-gradient(135deg,#10b981 0%, #059669 100%);" onclick="bypassLogin()">⚠️ Skip to Dashboard (Bypass)</button>
             </form>
             
             <div class="login-footer">
                 <p>📞 Contact: 7794021608 | 📧 sapthalaredddydesigns@gmail.com</p>
+                <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">Default: admin / 1234</p>
             </div>
         </div>
     </div>
@@ -888,6 +891,7 @@
                 <option value="independence">🇮🇳 Independence</option>
                 <option value="christmas">🎄 Christmas</option>
             </select>
+            <span id="firestoreStatus" style="padding:6px 10px;border-radius:8px;background:#fde68a;color:#92400e;font-weight:700;margin-left:8px;font-size:13px;">Firestore: unknown</span>
             <button class="btn-secondary" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -952,7 +956,8 @@
                                     </div>
             <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-panel active">
-                <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1e293b;">Dashboard</h2>
+                <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">Dashboard</h2>
+                <div id="dashboardStatus" style="margin-bottom:12px;display:inline-block;padding:6px 10px;border-radius:999px;background:#f3f4f6;color:#374151;font-size:13px;font-weight:700;">Status: unknown</div>
                 
                 <div class="dashboard-grid">
                     <div class="stat-card blue" onclick="showTab('orders')">
@@ -1366,7 +1371,7 @@
                             <h3 style="font-size: 24px; font-weight: bold; color: #1e293b; margin: 0;">🏢 Branch Management</h3>
                             <p style="color: #64748b; margin: 8px 0 0 0; font-size: 14px;">Manage all boutique branches and locations</p>
                         </div>
-                        <button onclick="BranchesManager.openAddModal()" style="padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 14px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.3s;">
+                        <button id="addBranchBtn" onclick="BranchesManager.openAddModal()" style="padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 14px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.3s;">
                             <span>➕</span> Add Branch
                         </button>
                     </div>
@@ -1691,8 +1696,9 @@
                 }
             },
 
-            async getOrder(id) { return await this.request(`/admin/orders/${encodeURIComponent(id)}`); },
-            async createBranch(data) { return await this.request('/admin/branches', { method: 'POST', body: JSON.stringify(data) }); },
+            async getOrder(id) { return await this.request(`/orders/${encodeURIComponent(id)}`); },
+            async createBranch(data) { return await this.request('/branches', { method: 'POST', body: JSON.stringify(data) }); },
+            async getBranches() { return await this.request('/branches'); },
 
             async getStaff() { return await this.request('/staff'); },
             async createStaff(data) { return await this.request('/staff', { method: 'POST', body: JSON.stringify(data) }); },
@@ -1702,7 +1708,7 @@
             async getDashboard() { return await this.request('/dashboard'); },
             async getOrders(branch) { 
                 const q = branch ? `?branch=${encodeURIComponent(branch)}` : '';
-                return await this.request(`/admin/orders${q}`); 
+                return await this.request(`/orders${q}`); 
             }
             ,
             // PDF Generation and Sharing (client helper)
@@ -1751,18 +1757,6 @@
                 }
             }
         };
-
-        // Safe helpers: guarded event attachment and element lookup
-        function safeAddListener(id, event, handler) {
-            try {
-                const el = document.getElementById(id);
-                if (el && typeof el.addEventListener === 'function') {
-                    el.addEventListener(event, handler);
-                }
-            } catch (e) { console.warn('safeAddListener error for', id, e); }
-        }
-
-        function el(id) { return document.getElementById(id); }
 
         // Authentication Functions
         async function handleLogin(event) {
@@ -1839,6 +1833,7 @@
                         document.getElementById('loginPage').classList.add('hidden');
                         document.getElementById('mainApp').classList.remove('hidden');
                         updateDashboardStats();
+                        try { updateFirestoreStatus(); } catch(e) { console.warn('Firestore status check failed to run', e); }
                         showTab('dashboard');
                     }, 800);
                 } else {
@@ -1944,11 +1939,53 @@
         }
 
         function bypassLogin() {
-            // Bypass login is disabled for security. Use proper credentials.
-            alert('Bypass login is disabled for security reasons. Please sign in using your admin credentials.');
+            if (!confirm('⚠️ Bypass authentication and enter dashboard directly?\n\nNote: This is for testing only.')) {
+                return;
+            }
+            
+            // Load demo data into localStorage
+            const demoOrders = [
+                { orderId: 'ORD-DEMO-001', customerName: 'Anita Singh', customerPhone: '9876543220', garmentType: 'Party Saree', category: 'Saree', totalAmount: 5000, advance: 2000, advanceAmount: 2000, status: 'in_progress', branch: 'Main' },
+                { orderId: 'ORD-DEMO-002', customerName: 'Priya Gupta', customerPhone: '9876543221', garmentType: 'Bridal Lehenga', category: 'Lehenga', totalAmount: 15000, advance: 5000, advanceAmount: 5000, status: 'pending', branch: 'Main' },
+                { orderId: 'ORD-DEMO-003', customerName: 'Siya Verma', customerPhone: '9876543222', garmentType: 'Silk Kurta', category: 'Kurta', totalAmount: 3500, advance: 1500, advanceAmount: 1500, status: 'completed', branch: 'Main' },
+                { orderId: 'ORD-DEMO-004', customerName: 'Neha Desai', customerPhone: '9876543223', garmentType: 'Wedding Saree', category: 'Saree', totalAmount: 8000, advance: 3000, advanceAmount: 3000, status: 'in_progress', branch: 'Main' },
+                { orderId: 'ORD-DEMO-005', customerName: 'Divya Nair', customerPhone: '9876543224', garmentType: 'Designer Suit', category: 'Suit', totalAmount: 6500, advance: 2000, advanceAmount: 2000, status: 'pending', branch: 'Main' },
+            ];
+            const existing = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
+            const merged = [...existing];
+            for (const demo of demoOrders) {
+                if (!merged.find(o => o.orderId === demo.orderId)) {
+                    merged.push(demo);
+                }
+            }
+            localStorage.setItem('sapthala_orders', JSON.stringify(merged));
+            console.log('✅ Demo data loaded to localStorage:', merged.length + ' orders');
+            
+            // Store bypass credentials
+            localStorage.setItem('sapthala_logged_in', 'true');
+            localStorage.setItem('sapthala_token', 'BYPASS_TOKEN_' + Date.now());
+            localStorage.setItem('sapthala_user', JSON.stringify({
+                id: 'bypass',
+                username: 'admin',
+                role: 'admin',
+                permissions: {
+                    canEdit: true,
+                    canDelete: true,
+                    canViewReports: true,
+                    canManageStaff: true
+                }
+            }));
+            
+            // Show success and redirect
+            showLoginSuccess('✅ Bypass activated with demo data! Redirecting...');
+            
+            setTimeout(() => {
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                updateDashboardStats();
+                showTab('dashboard');
+            }, 800);
         }
-
-
         
         function showMainApp() {
             document.getElementById('loginPage').classList.add('hidden');
@@ -2029,24 +2066,10 @@
             document.getElementById('password').value = '';
         }
         
-        async function checkAuthStatus() {
-            const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
-            if (!token) return;
-            try {
-                // quick auth check: request branches (public but requires auth for detailed view)
-                const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${token}` } });
-                if (res.ok) {
-                    // valid token
-                    showMainApp();
-                } else {
-                    // invalid token - clear stored auth
-                    localStorage.removeItem('sapthala_token');
-                    localStorage.removeItem('sapthala_logged_in');
-                    localStorage.removeItem('sapthala_user');
-                }
-            } catch (e) {
-                // server might be unreachable; do not auto-login in this case
-                console.warn('checkAuthStatus error', e);
+        function checkAuthStatus() {
+            const isLoggedIn = localStorage.getItem('sapthala_logged_in');
+            if (isLoggedIn === 'true') {
+                showMainApp();
             }
         }
 
@@ -2398,15 +2421,14 @@
                 }
 
                 const autoPref = localStorage.getItem('sapthala_auto_theme');
-                const autoThemeToggleEl = document.getElementById('autoThemeToggle');
-                if (autoThemeToggleEl) autoThemeToggleEl.checked = (autoPref !== 'false');
+                document.getElementById('autoThemeToggle').checked = (autoPref !== 'false');
 
-                safeAddListener('saveFestivalBtn', 'click', function(e) {
+                document.getElementById('saveFestivalBtn').addEventListener('click', function(e) {
                     e.preventDefault();
                     saveFestivalSettings();
                 });
 
-                safeAddListener('autoThemeToggle', 'change', function() {
+                document.getElementById('autoThemeToggle').addEventListener('change', function() {
                     const v = this.checked ? 'true' : 'false';
                     localStorage.setItem('sapthala_auto_theme', v);
                 });
@@ -2496,22 +2518,22 @@
         // Initialize Order Form
         function initializeOrderForm() {
             // Show category section only after customer info is filled
-            safeAddListener('customerPhone', 'input', function() {
-                const nameEl = el('customerName');
-                const name = nameEl ? nameEl.value : '';
+            document.getElementById('customerPhone').addEventListener('input', function() {
+                const name = document.getElementById('customerName').value;
                 if (this.value.length >= 10 && name.length >= 2) {
                     setTimeout(() => {
-                        const cs = el('categorySection'); if (cs) { cs.style.display = 'block'; cs.scrollIntoView({ behavior: 'smooth' }); }
+                        document.getElementById('categorySection').style.display = 'block';
+                        document.getElementById('categorySection').scrollIntoView({ behavior: 'smooth' });
                     }, 500);
                 }
             });
             
-            safeAddListener('customerName', 'input', function() {
-                const phoneEl = el('customerPhone');
-                const phone = phoneEl ? phoneEl.value : '';
+            document.getElementById('customerName').addEventListener('input', function() {
+                const phone = document.getElementById('customerPhone').value;
                 if (this.value.length >= 2 && phone.length >= 10) {
                     setTimeout(() => {
-                        const cs = el('categorySection'); if (cs) { cs.style.display = 'block'; cs.scrollIntoView({ behavior: 'smooth' }); }
+                        document.getElementById('categorySection').style.display = 'block';
+                        document.getElementById('categorySection').scrollIntoView({ behavior: 'smooth' });
                     }, 500);
                 }
             });
@@ -2533,8 +2555,7 @@
             // Set minimum delivery date to tomorrow
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            const deliveryDateEl = el('deliveryDate');
-            if (deliveryDateEl) deliveryDateEl.min = tomorrow.toISOString().split('T')[0];
+            document.getElementById('deliveryDate').min = tomorrow.toISOString().split('T')[0];
         }
         
         // Customer Functions
@@ -3409,7 +3430,7 @@
                         <img src="${garment.image}" alt="${garment.name}" class="garment-image" 
                              style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; background: #f8fafc; transition: all 0.3s;">
                         <div class="garment-title" style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 8px; line-height: 1.3;">${garment.name}</div>
-                        <div class="garment-price" style="font-size: 16px; color: #059669; font-weight: 700; background: #d1fae5; padding: 6px 12px; border-radius: 6px; margin-top: auto;">${garment.price > 0 ? 'â‚¹' + garment.price : 'Custom Price'}</div>
+                        <div class="garment-price" style="font-size: 16px; color: #059669; font-weight: 700; background: #d1fae5; padding: 6px 12px; border-radius: 6px; margin-top: auto;">${garment.price > 0 ? '₹' + garment.price : 'Custom Price'}</div>
                     `;
                     button.addEventListener('click', function() {
                         selectGarment(category, garmentKey);
@@ -3585,7 +3606,7 @@
                     if (discountFixed > fixedCap) {
                         discountAmount = fixedCap;
                         document.getElementById('discountAmount').value = discountAmount;
-                        showInfoModal('Discount Limit', `Fixed discount exceeds 15% of subtotal. Applying maximum allowed discount of â‚¹${fixedCap}.`);
+                        showInfoModal('Discount Limit', `Fixed discount exceeds 15% of subtotal. Applying maximum allowed discount of ₹ ${fixedCap}.`);
                     } else {
                         discountAmount = Math.round(discountFixed);
                     }
@@ -3799,42 +3820,124 @@
         }
 
         // Dashboard Functions
+        // Helper: compute dashboard numbers from locally cached orders (localStorage)
+        function computeDashboardFromLocalOrders() {
+            const orders = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
+            const totalOrders = orders.length;
+            const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+            const advanceCollected = orders.reduce((sum, o) => sum + (Number(o.advance) || 0), 0);
+            const pendingOrders = orders.filter(o => { const s = (o.status || '').toString().toLowerCase(); return s !== 'completed' && s !== 'delivered'; }).length;
+            return { totalOrders, totalRevenue, advanceCollected, pendingOrders };
+        }
+
+        function setDashboardStatus(text, color = '#f3f4f6', textColor = '#374151') {
+            const el = document.getElementById('dashboardStatus');
+            if (!el) return;
+            el.textContent = `Status: ${text}`;
+            el.style.background = color;
+            el.style.color = textColor;
+        }
+
+        function writeStatsToDom(data) {
+            document.getElementById('totalOrders').textContent = data.totalOrders || 0;
+            document.getElementById('totalRevenue').textContent = `₹${(Number(data.totalRevenue) || 0).toLocaleString()}`;
+            document.getElementById('advanceCollected').textContent = `₹${(Number(data.advanceCollected) || 0).toLocaleString()}`;
+            document.getElementById('pendingOrders').textContent = data.pendingOrders || 0;
+        }
+
+        // Dashboard Functions (improved: live -> cached fallback -> offline)
         async function updateDashboardStats() {
             try {
+                const token = localStorage.getItem('sapthala_token');
                 const response = await fetch('/api/dashboard', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}` }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById('totalOrders').textContent = data.totalOrders || 0;
-                    document.getElementById('totalRevenue').textContent = `₹${(data.totalRevenue || 0).toLocaleString()}`;
-                    document.getElementById('advanceCollected').textContent = `₹${(data.advanceCollected || 0).toLocaleString()}`;
-                    document.getElementById('pendingOrders').textContent = data.pendingOrders || 0;
-                    
-                    // Make stat cards clickable
+                    writeStatsToDom(data);
+                    setDashboardStatus('Live', '#def7ec', '#065f46'); // green
+
+                    // make stat cards clickable
                     document.querySelectorAll('.stat-card').forEach((card, index) => {
                         card.style.cursor = 'pointer';
                         card.onclick = () => {
                             switch(index) {
                                 case 0: showTab('orders'); break;
                                 case 1: showTab('reports'); break;
-                                case 2: showTab('orders'); break;
-                                case 3: showTab('orders'); break;
+                                default: showTab('orders'); break;
                             }
                         };
                     });
+                } else if (response.status === 401 || response.status === 403) {
+                    // not authenticated — show cached data if available
+                    const cached = computeDashboardFromLocalOrders();
+                    if (cached.totalOrders > 0) {
+                        writeStatsToDom(cached);
+                        setDashboardStatus('Cached (not authenticated)', '#fff7ed', '#92400e'); // amber
+                    } else {
+                        writeStatsToDom({ totalOrders: 0, totalRevenue: 0, advanceCollected: 0, pendingOrders: 0 });
+                        setDashboardStatus('Not authenticated', '#fee2e2', '#991b1b'); // red
+                    }
                 } else {
-                    throw new Error('Dashboard API failed');
+                    throw new Error('Dashboard API returned ' + response.status);
                 }
-                // Render charts using recent orders
+
                 try { renderDashboardCharts(); } catch (e) { console.warn('Chart render failed:', e); }
-            } catch (error) {
-                console.warn('Using fallback dashboard data');
-                // Fallback to basic display
-                document.getElementById('totalOrders').textContent = '0';
-                document.getElementById('totalRevenue').textContent = '₹0';
-                document.getElementById('advanceCollected').textContent = '₹0';
+            } catch (err) {
+                console.warn('Dashboard fetch failed — using cached/local fallback', err);
+                const cached = computeDashboardFromLocalOrders();
+                if (cached.totalOrders > 0) {
+                    writeStatsToDom(cached);
+                    setDashboardStatus('Offline — showing cached', '#fef3c7', '#92400e'); // yellow
+                } else {
+                    writeStatsToDom({ totalOrders: 0, totalRevenue: 0, advanceCollected: 0, pendingOrders: 0 });
+                    setDashboardStatus('Offline — no cached data', '#f3f4f6', '#374151'); // neutral
+                }
+            }
+        }
+
+        // Firestore status helper — shows connection state in header
+        async function updateFirestoreStatus() {
+            const el = document.getElementById('firestoreStatus');
+            if (!el) return;
+            el.textContent = 'Firestore: checking...';
+            el.style.background = '#f3f4f6';
+            el.style.color = '#374151';
+
+            const token = localStorage.getItem('sapthala_token');
+            if (!token) {
+                el.textContent = 'Firestore: unknown';
+                el.style.background = '#fde68a';
+                el.style.color = '#92400e';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/health/firestore', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    el.textContent = 'Firestore: connected';
+                    el.style.background = '#dcfce7';
+                    el.style.color = '#065f46';
+                } else {
+                    const body = await res.json().catch(() => ({}));
+                    el.textContent = 'Firestore: unavailable';
+                    el.title = body.error || body.message || 'Unavailable';
+                    el.style.background = '#fee2e2';
+                    el.style.color = '#991b1b';
+                }
+            } catch (err) {
+                el.textContent = 'Firestore: error';
+                el.title = err.message || String(err);
+                el.style.background = '#fee2e2';
+                el.style.color = '#991b1b';
+            }
+        }
+
+        // Periodically refresh Firestore status while dashboard is open
+        setInterval(() => {
+            try { if (localStorage.getItem('sapthala_logged_in') === 'true') updateFirestoreStatus(); } catch(e){}
+        }, 30000);
                 document.getElementById('pendingOrders').textContent = '0';
             }
         }
@@ -3947,6 +4050,8 @@
                     else displayCustomers([]);
                 }
             } catch (error) {
+                console.warn('Failed to load customers:', error.message || 'Unknown error');
+                // fallback to cached customers in localStorage for offline resilience
                 const customers = JSON.parse(localStorage.getItem('sapthala_customers') || '[]');
                 displayCustomers(customers);
             }
@@ -4788,8 +4893,7 @@
             // Load festival overrides and UI settings first
             try { loadFestivalSettings(); } catch(e) { console.warn('loadFestivalSettings failed', e); }
             applyTheme(savedTheme);
-            const themeSelectorEl = document.getElementById('themeSelector');
-            if (themeSelectorEl) themeSelectorEl.value = savedTheme;
+            document.getElementById('themeSelector').value = savedTheme;
             
             // Initialize theme cards
             document.querySelectorAll('.theme-card').forEach(card => {
@@ -4799,8 +4903,8 @@
                 });
             });
             
-            // Theme selector change (guarded)
-            safeAddListener('themeSelector', 'change', function() {
+            // Theme selector change
+            document.getElementById('themeSelector').addEventListener('change', function() {
                 applyTheme(this.value);
             });
             
@@ -4838,6 +4942,19 @@
                     // Hide Sub-Admins tab (sub-admin should not manage other sub-admins)
                     const subAdminsTab = document.getElementById('subAdminsTab');
                     if (subAdminsTab) subAdminsTab.style.display = 'none';
+
+                    // Hide "Add Branch" button for sub-admins (only admin / super-admin may create branches)
+                    try {
+                        const addBranchBtn = document.getElementById('addBranchBtn');
+                        if (addBranchBtn) addBranchBtn.style.display = 'none';
+                    } catch(e) { console.warn('Could not hide Add Branch button:', e); }
+                } else {
+                    // Ensure Add Branch visible for admin / super-admin
+                    try {
+                        const addBranchBtn = document.getElementById('addBranchBtn');
+                        if (addBranchBtn) addBranchBtn.style.display = '';
+                    } catch(e) { /* ignore */ }
+                }
 
                     // Hide Staff tab if no permission to manage staff
                     if (!user.permissions?.canManageStaff) {

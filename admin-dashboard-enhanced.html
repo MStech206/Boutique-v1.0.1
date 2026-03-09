@@ -570,7 +570,7 @@
                 <select class="filter-select" id="statusFilter" onchange="applyFilters()">
                     <option value="">All Status</option>
                     <option value="pending">Pending</option>
-                    <option value="in-progress">In Progress</option>
+                    <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
                 </select>
             </div>
@@ -752,7 +752,7 @@
         function getStatusClass(status) {
             switch(status) {
                 case 'pending': return 'status-pending';
-                case 'in-progress': return 'status-progress';
+                case 'in_progress': return 'status-progress';
                 case 'completed': return 'status-completed';
                 default: return 'status-pending';
             }

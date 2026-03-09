@@ -1,0 +1,619 @@
+<!-- 
+SAPTHALA Boutique - Service Integration Snippets
+Copy & paste these snippets into your existing HTML files
+-->
+
+<!-- 1. SCRIPT INCLUSION SNIPPET -->
+<!-- Add this at the end of <body> tag, AFTER your existing scripts -->
+<script src="/database-service.js"></script>
+<script src="/auth-service.js"></script>
+<script src="/staff-service.js"></script>
+<script src="/order-service.js"></script>
+
+<!-- 2. LOGIN PAGE INTEGRATION -->
+<script>
+async function handleAdminLoginWithServices(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const loginBtn = event.target.querySelector('button[type="submit"]');
+    
+    if (!username || !password) {
+        showLoginError('Please enter username and password');
+        return;
+    }
+
+    try {
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+        
+        // Use auth service
+        const result = await auth.adminLogin(username, password);
+        
+        console.log('✅ Login successful');
+        
+        // Hide login page, show app
+        document.getElementById('loginPage').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        
+        // Load dashboard
+        await loadDashboard();
+        
+    } catch (error) {
+        showLoginError(error.message);
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Login';
+    }
+}
+
+function showLoginError(message) {
+    const errorDiv = document.getElementById('loginErrorMsg') || document.createElement('div');
+    errorDiv.id = 'loginErrorMsg';
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    errorDiv.style.cssText = `
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+    `;
+    
+    const form = document.querySelector('.login-form');
+    form.parentNode.insertBefore(errorDiv, form);
+    
+    setTimeout(() => errorDiv.remove(), 5000);
+}
+</script>
+
+<!-- 3. STAFF LOGIN SNIPPET -->
+<script>
+async function handleStaffLogin(event) {
+    event.preventDefault();
+    
+    const staffId = document.getElementById('staffId').value.trim();
+    const pin = document.getElementById('pin').value.trim();
+    const loginBtn = event.target.querySelector('button[type="submit"]');
+    
+    try {
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+        
+        // Use auth service - staff role
+        const result = await auth.staffLogin(staffId, pin);
+        
+        console.log('✅ Staff login successful:', result.data.user.name);
+        
+        // Hide login, show app
+        document.getElementById('loginPage').classList.add('hidden');
+        document.getElementById('staffApp').classList.remove('hidden');
+        
+        // Load staff dashboard
+        await loadStaffDashboard(staffId);
+        
+    } catch (error) {
+        alert('Login failed: ' + error.message);
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Login';
+    }
+}
+</script>
+
+<!-- 4. CREATE ORDER SNIPPET -->
+<script>
+async function createOrderFromForm(formElement) {
+    try {
+        // Validate form
+        if (!formElement.checkValidity()) {
+            throw new Error('Please fill all required fields');
+        }
+
+        // Get form data
+        const formData = new FormData(formElement);
+        
+        // Build order object
+        const orderData = {
+            customerId: formData.get('phone'),
+            customerName: formData.get('name'),
+            customerPhone: formData.get('phone'),
+            customerEmail: formData.get('email') || null,
+            branch: auth.getBranch(),
+            items: JSON.parse(formData.get('items') || '[]'),
+            measurements: JSON.parse(formData.get('measurements') || '{}'),
+            designNotes: formData.get('designNotes') || '',
+            baseAmount: parseFloat(formData.get('baseAmount') || 0),
+            discounts: JSON.parse(formData.get('discounts') || '[]'),
+            taxAmount: parseFloat(formData.get('taxAmount') || 0),
+            shippingCost: parseFloat(formData.get('shipping') || 0),
+            totalAmount: parseFloat(formData.get('total')),
+            paymentMethod: formData.get('paymentMethod') || 'cash',
+            deliveryDate: formData.get('deliveryDate'),
+            notes: formData.get('notes'),
+            createdBy: auth.getUser().id
+        };
+
+        // Calculate total if not provided
+        if (!orderData.totalAmount) {
+            orderData.totalAmount = orderData.baseAmount 
+                - orderData.discounts.reduce((sum, d) => sum + (d.amount || 0), 0)
+                + orderData.taxAmount 
+                + orderData.shippingCost;
+        }
+
+        // Show loading
+        const submitBtn = formElement.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating order...';
+
+        // Create order via service
+        const order = await orders.createOrder(orderData);
+        
+        // Success
+        showSuccess('Order created successfully! Order ID: ' + order.orderId);
+        formElement.reset();
+        
+        // Redirect to order detail
+        setTimeout(() => {
+            window.location.href = '/order/' + order.orderId;
+        }, 1500);
+        
+    } catch (error) {
+        showError('Order creation failed: ' + error.message);
+        console.error('Error:', error);
+    }
+}
+</script>
+
+<!-- 5. STAFF MANAGEMENT SNIPPET -->
+<script>
+// Load staff list
+async function loadStaffList() {
+    try {
+        // Show loading
+        document.getElementById('staffList').innerHTML = '<p>Loading...</p>';
+        
+        // Get staff from service
+        const staffMembers = await staff.getAllStaff(auth.getBranch());
+        
+        if (!staffMembers || staffMembers.length === 0) {
+            document.getElementById('staffList').innerHTML = '<p>No staff members found</p>';
+            return;
+        }
+
+        // Display staff
+        const html = staffMembers.map(s => `
+            <div class="staff-item" data-staff-id="${s.id}">
+                <img src="${s.profilePhoto || 'default-avatar.png'}" alt="${s.name}">
+                <div class="staff-info">
+                    <h3>${s.name} <span class="role-badge role-${s.role}">${s.role}</span></h3>
+                    <p>${s.phone}</p>
+                    <p>Status: ${s.isAvailable ? '✅ Available' : '⏸ Busy'}</p>
+                </div>
+                <div class="staff-actions">
+                    <button onclick="editStaff('${s.id}')">Edit</button>
+                    <button onclick="deleteStaff('${s.id}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        
+        document.getElementById('staffList').innerHTML = html;
+        
+    } catch (error) {
+        showError('Failed to load staff: ' + error.message);
+    }
+}
+
+// Create staff
+async function createStaffFromForm(formElement) {
+    try {
+        const formData = new FormData(formElement);
+        
+        const staffData = {
+            name: formData.get('name'),
+            phone: formData.get('phone'),
+            email: formData.get('email') || null,
+            role: formData.get('role'),
+            branch: auth.getBranch(),
+            pin: formData.get('pin'),
+            profilePhoto: formData.get('photoUrl') || null,
+            stages: [formData.get('role')],
+            qualifications: formData.getAll('qualifications') || []
+        };
+
+        // Validate
+        staff.validateStaffData(staffData);
+
+        // Show loading
+        const submitBtn = formElement.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+
+        // Create via service
+        const newStaff = await staff.createStaff(staffData);
+        
+        showSuccess('Staff member created successfully!');
+        formElement.reset();
+        loadStaffList();  // Refresh list
+        
+    } catch (error) {
+        showError('Failed to create staff: ' + error.message);
+    }
+}
+
+// Delete staff
+async function deleteStaff(staffId) {
+    if (!confirm('Are you sure you want to delete this staff member?')) return;
+    
+    try {
+        await staff.deleteStaff(staffId);
+        showSuccess('Staff member deleted');
+        loadStaffList();  // Refresh
+    } catch (error) {
+        showError('Delete failed: ' + error.message);
+    }
+}
+</script>
+
+<!-- 6. ORDER MANAGEMENT SNIPPET -->
+<script>
+// Load orders
+async function loadOrders(filters = {}) {
+    try {
+        document.getElementById('ordersList').innerHTML = '<p>Loading...</p>';
+        
+        // Get orders from service
+        const ordersList = await orders.getAllOrders({
+            ...filters,
+            branch: auth.getBranch()
+        });
+        
+        if (!ordersList || ordersList.length === 0) {
+            document.getElementById('ordersList').innerHTML = '<p>No orders found</p>';
+            return;
+        }
+
+        // Display orders
+        const html = ordersList.map(order => `
+            <tr>
+                <td>${order.orderId}</td>
+                <td>${order.customerName}</td>
+                <td>₹${order.totalAmount}</td>
+                <td>
+                    <span class="status-badge status-${order.status}">
+                        ${order.status}
+                    </span>
+                </td>
+                <td>${new Date(order.deliveryDate).toLocaleDateString()}</td>
+                <td>
+                    <button onclick="viewOrder('${order.orderId}')">View</button>
+                    <button onclick="editOrder('${order.orderId}')">Edit</button>
+                </td>
+            </tr>
+        `).join('');
+        
+        document.getElementById('ordersList').innerHTML = html;
+        
+    } catch (error) {
+        showError('Failed to load orders: ' + error.message);
+    }
+}
+
+// View order detail
+async function viewOrder(orderId) {
+    try {
+        const order = await orders.getOrder(orderId);
+        
+        if (!order) {
+            showError('Order not found');
+            return;
+        }
+
+        // Display in modal or detailed view
+        document.getElementById('orderModal').innerHTML = `
+            <div class="modal-content">
+                <h2>Order ${order.orderId}</h2>
+                <p><strong>Customer:</strong> ${order.customerName}</p>
+                <p><strong>Amount:</strong> ₹${order.totalAmount}</p>
+                <p><strong>Status:</strong> ${order.status}</p>
+                <p><strong>Delivery:</strong> ${new Date(order.deliveryDate).toLocaleDateString()}</p>
+                
+                <h3>Stages Progress:</h3>
+                ${Object.keys(order.stages).map(stage => `
+                    <div style="margin: 10px 0;">
+                        <strong>${stage}:</strong>
+                        <span class="status-${order.stages[stage].status}">
+                            ${order.stages[stage].status}
+                        </span>
+                        ${order.stages[stage].assignedStaff ? `
+                            <span> (Assigned to: ${order.stages[stage].assignedStaff})</span>
+                        ` : ''}
+                    </div>
+                `).join('')}
+                
+                <h3>Payment Status:</h3>
+                <p>Total: ₹${order.totalAmount}</p>
+                <p>Paid: ₹${order.paidAmount}</p>
+                <p>Due: ₹${order.balanceDue}</p>
+            </div>
+        `;
+        
+        // Show modal
+        document.getElementById('orderModal').style.display = 'block';
+        
+    } catch (error) {
+        showError('Failed to load order: ' + error.message);
+    }
+}
+
+// Assign order to staff
+async function assignOrderToStaff(orderId, stageName) {
+    try {
+        // Get available staff
+        const availableStaff = await staff.getAvailableStaff(stageName);
+        
+        if (availableStaff.length === 0) {
+            showError('No available staff for this stage');
+            return;
+        }
+
+        // Show selection or use first available
+        const staffId = availableStaff[0].id;
+        
+        // Assign
+        await orders.assignStaffToStage(orderId, stageName, staffId);
+        
+        showSuccess('Task assigned to ' + availableStaff[0].name);
+        viewOrder(orderId);  // Refresh
+        
+    } catch (error) {
+        showError('Assignment failed: ' + error.message);
+    }
+}
+
+// Record payment
+async function recordPayment(orderId, amount, method) {
+    try {
+        await orders.recordPayment(orderId, amount, method);
+        
+        showSuccess('Payment recorded successfully');
+        viewOrder(orderId);  // Refresh
+        
+    } catch (error) {
+        showError('Payment failed: ' + error.message);
+    }
+}
+</script>
+
+<!-- 7. STAFF DASHBOARD SNIPPET -->
+<script>
+// Load staff tasks
+async function loadStaffTasks(staffId) {
+    try {
+        // Get pending tasks
+        const pendingTasks = await staff.getStaffTasks(staffId, 'pending');
+        const inProgressTasks = await staff.getStaffTasks(staffId, 'in_progress');
+        const completedTasks = await staff.getStaffTasks(staffId, 'completed');
+        
+        // Display pending
+        document.getElementById('pendingTasks').innerHTML = pendingTasks.map(task => `
+            <div class="task-card">
+                <h3>Order ${task.orderId}</h3>
+                <p>Stage: ${task.stage}</p>
+                <button onclick="acceptTask('${staffId}', '${task.id}')">Accept</button>
+            </div>
+        `).join('') || '<p>No pending tasks</p>';
+        
+        // Display in-progress
+        document.getElementById('inProgressTasks').innerHTML = inProgressTasks.map(task => `
+            <div class="task-card">
+                <h3>Order ${task.orderId}</h3>
+                <p>Stage: ${task.stage}</p>
+                <button onclick="openCompleteTask('${staffId}', '${task.id}')">Complete</button>
+            </div>
+        `).join('') || '<p>No in-progress tasks</p>';
+        
+        // Display completed
+        document.getElementById('completedTasks').innerHTML = completedTasks.map(task => `
+            <div class="task-card">
+                <h3>Order ${task.orderId}</h3>
+                <p>Completed: ${new Date(task.completedAt).toLocaleString()}</p>
+            </div>
+        `).join('') || '<p>No completed tasks</p>';
+        
+    } catch (error) {
+        showError('Failed to load tasks: ' + error.message);
+    }
+}
+
+// Accept task
+async function acceptTask(staffId, taskId) {
+    try {
+        await staff.acceptTask(staffId, taskId);
+        showSuccess('Task accepted!');
+        loadStaffTasks(staffId);  // Refresh
+    } catch (error) {
+        showError('Failed to accept task: ' + error.message);
+    }
+}
+
+// Complete task
+async function completeTaskFromForm(staffId, taskId, formElement) {
+    try {
+        const formData = new FormData(formElement);
+        const files = formData.getAll('images');
+        
+        const completionData = {
+            notes: formData.get('notes'),
+            images: files,
+            rating: parseFloat(formData.get('rating') || 5)
+        };
+
+        // Show loading
+        const submitBtn = formElement.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        // Complete task
+        await staff.completeTask(staffId, taskId, completionData);
+        
+        showSuccess('Task completed successfully! Great work!');
+        formElement.reset();
+        loadStaffTasks(staffId);  // Refresh
+        
+    } catch (error) {
+        showError('Failed to complete task: ' + error.message);
+    }
+}
+</script>
+
+<!-- 8. DASHBOARD STATISTICS SNIPPET -->
+<script>
+// Load dashboard
+async function loadDashboard() {
+    try {
+        // Get dashboard data
+        const dashboard = await db.getDashboard(auth.getBranch());
+        
+        // Get order stats
+        const orderStats = await orders.getOrderStats(auth.getBranch());
+        
+        // Update UI
+        document.getElementById('totalOrders').textContent = orderStats.total;
+        document.getElementById('pendingOrders').textContent = orderStats.pending;
+        document.getElementById('inProgressOrders').textContent = orderStats.inProgress;
+        document.getElementById('readyOrders').textContent = orderStats.ready;
+        document.getElementById('totalRevenue').textContent = '₹' + orderStats.totalRevenue;
+        document.getElementById('averageValue').textContent = '₹' + orderStats.averageOrderValue.toFixed(0);
+        
+        // Get top staff
+        const topStaff = await staff.getTopPerformers(auth.getBranch(), 5);
+        document.getElementById('topPerformers').innerHTML = topStaff.map(s => `
+            <div>
+                <strong>${s.name}</strong> - Rating: ${s.performance.qualityRating.toFixed(1)} ⭐
+            </div>
+        `).join('');
+        
+        // Get overdue orders
+        const overdue = await orders.getOverdueOrders(auth.getBranch());
+        if (overdue.length > 0) {
+            showWarning('⚠️ ' + overdue.length + ' orders are overdue!');
+        }
+        
+    } catch (error) {
+        console.error('Dashboard load failed:', error.message);
+    }
+}
+</script>
+
+<!-- 9. REAL-TIME UPDATES SNIPPET -->
+<script>
+// Setup real-time listeners
+function setupRealTimeUpdates(staffId) {
+    // Listen to order updates
+    orders.subscribe('update', (change) => {
+        console.log('Order updated:', change.data);
+        // Refresh relevant order in UI
+        viewOrder(change.data.orderId);
+    });
+
+    // Listen to task updates
+    staff.subscribe('task-update', (change) => {
+        console.log('Task updated:', change.data);
+        // Refresh tasks if this staff's task
+        if (change.data.staffId === staffId) {
+            loadStaffTasks(staffId);
+        }
+    });
+
+    // Listen to staff availability changes
+    staff.subscribe('availability', (change) => {
+        console.log('Staff availability changed');
+        loadStaffList();
+    });
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    // Services automatically unsubscribe on page leave
+    console.log('Cleaning up subscriptions...');
+});
+</script>
+
+<!-- 10. HELPER FUNCTIONS SNIPPET -->
+<script>
+function showSuccess(message) {
+    const notif = document.createElement('div');
+    notif.className = 'notification success';
+    notif.textContent = '✅ ' + message;
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #d1fae5;
+        color: #065f46;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+    `;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 3000);
+}
+
+function showError(message) {
+    const notif = document.createElement('div');
+    notif.className = 'notification error';
+    notif.textContent = '❌ ' + message;
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+    `;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 4000);
+}
+
+function showWarning(message) {
+    const notif = document.createElement('div');
+    notif.className = 'notification warning';
+    notif.textContent = message;
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+    `;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 5000);
+}
+
+// Ensure user is authenticated before loading page
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (!auth.isAuthenticated()) {
+            window.location.href = '/login';
+        }
+    }, 500);
+});
+</script>
+
+<!-- 
+NOTES:
+- Replace element IDs to match your HTML structure
+- Update CSS classes to match your styling
+- Test all functions before deploying
+- Check browser console for errors
+- Ensure backend API endpoints exist
+-->

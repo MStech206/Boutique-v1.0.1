@@ -1,0 +1,344 @@
+﻿
+D:\Boutique 1 issue\Boutique\admin-complete.html -> script blocks: 1
+  [0] preview:          const API_BASE = '/api';         let currentReportData = null;                  function getToken() {             return localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');         }                 ...
+
+D:\Boutique 1 issue\Boutique\admin-dashboard-enhanced.html -> script blocks: 1
+  [0] preview: 
+         const API_BASE = 'http://127.0.0.1:3000/api';
+         const TOKEN_KEY = 'sapthala_admin_token';
+ 
+         let allOrders = [];
+         let filteredOrders = [];
+ 
+         // Initialize
+         document.addEventListener('DOMCont...
+
+D:\Boutique 1 issue\Boutique\admin-panel.html -> script blocks: 1
+  [0] preview: 
+         const API_BASE = 'http://localhost:3000';
+ 
+         // ==================== AUTHENTICATION ==================== 
+         async function handleLogin(event) {
+             event.preventDefault();
+             const username = docu...
+
+D:\Boutique 1 issue\Boutique\Boutique-app\super-admin-backend\src\main\resources\static\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\Boutique-app\super-admin-backend\target\classes\static\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\Boutique-app\super-admin-panel\dist\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\Boutique-app\super-admin-panel\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\android\build\reports\problems\problems-report.html -> script blocks: 2
+  [0] preview:  function configurationCacheProblems() { return ( // begin-report-data {"diagnostics":[{"locations":[{"path":"build file 'C:\\Users\\ADMIN\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_firestore-4.17.5\\android\\build.gradle'","line":...
+  [1] preview:                  !function(n,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports["configuration-cache-report"]=t():n["configuration-cach...
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\build\reports\problems\problems-report.html -> script blocks: 2
+  [0] preview:  function configurationCacheProblems() { return ( // begin-report-data {"diagnostics":[{"locations":[{"path":"build file 'C:\\Users\\ADMIN\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_firestore-4.17.5\\android\\build.gradle'","line":...
+  [1] preview:                  !function(n,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports["configuration-cache-report"]=t():n["configuration-cach...
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\web\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\windows\flutter\ephemeral\.plugin_symlinks\cloud_firestore\example\web\index.html -> script blocks: 1
+  [0] preview:      var serviceWorkerVersion = null;     var scriptLoaded = false;     function loadMainDartJs() {       if (scriptLoaded) {         return;       }       scriptLoaded = true;       var scriptTag = document.createElement('script');       s...
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\windows\flutter\ephemeral\.plugin_symlinks\cloud_firestore\example\web\wasm_index.html -> script blocks: 2
+  [0] preview: 
+  [1] preview:      {{flutter_build_config}}     _flutter.loader.load();   
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\windows\flutter\ephemeral\.plugin_symlinks\firebase_auth\example\web\index.html -> script blocks: 1
+  [0] preview:      var serviceWorkerVersion = null;     var scriptLoaded = false;     function loadMainDartJs() {       if (scriptLoaded) {         return;       }       scriptLoaded = true;       var scriptTag = document.createElement('script');       s...
+
+D:\Boutique 1 issue\Boutique\Boutique-flutter\windows\flutter\ephemeral\.plugin_symlinks\firebase_core\example\web\index.html -> script blocks: 3
+  [0] preview:        // The value below is injected by flutter build, do not touch.       var serviceWorkerVersion = null;     
+  [1] preview: 
+  [2] preview:        document.addEventListener(         'securitypolicyviolation',         console.error.bind(console)       );        window.addEventListener('load', function (ev) {         // Download main.dart.js         _flutter.loader           .loa...
+
+D:\Boutique 1 issue\Boutique\branch-management-ui.html -> script blocks: 1
+  [0] preview:  // Branch Management Functions async function loadBranches() {     try {         const response = await fetch('/api/branches', {             headers: { 'Authorization': `Bearer ${getToken()}` }         });         const data = await respon...
+
+D:\Boutique 1 issue\Boutique\BRANCHES_INTEGRATION_SNIPPET.html -> script blocks: 2
+  [0] preview: 
+  [1] preview: 
+
+D:\Boutique 1 issue\Boutique\create-subadmin.html -> script blocks: 1
+  [0] preview:          const API_BASE = '/api';                  function getToken() {             return localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');         }                  // Load branches on page load        ...
+
+D:\Boutique 1 issue\Boutique\index.html -> script blocks: 1
+  [0] preview:          async function testAndLogin() {             const resultDiv = document.getElementById('result');             resultDiv.style.display = 'block';             resultDiv.className = '';             resultDiv.innerHTML = '≡ƒöä Testing log...
+
+D:\Boutique 1 issue\Boutique\integration-template.html -> script blocks: 5
+  [0] preview: 
+  [1] preview: 
+  [2] preview: 
+  [3] preview: 
+  [4] preview: 
+         const log = (msg) => {
+             const output = document.getElementById('testOutput');
+             const testLog = document.getElementById('testLog');
+             output.style.display = 'block';
+             testLog.textConte...
+
+D:\Boutique 1 issue\Boutique\INTEGRATION_SNIPPETS.html -> script blocks: 13
+  [0] preview: 
+  [1] preview: 
+  [2] preview: 
+  [3] preview: 
+  [4] preview: 
+ async function handleAdminLoginWithServices(event) {
+     event.preventDefault();
+     
+     const username = document.getElementById('username').value.trim();
+     const password = document.getElementById('password').value.trim();
+     c...
+  [5] preview: 
+ async function handleStaffLogin(event) {
+     event.preventDefault();
+     
+     const staffId = document.getElementById('staffId').value.trim();
+     const pin = document.getElementById('pin').value.trim();
+     const loginBtn = event.ta...
+  [6] preview: 
+ async function createOrderFromForm(formElement) {
+     try {
+         // Validate form
+         if (!formElement.checkValidity()) {
+             throw new Error('Please fill all required fields');
+         }
+ 
+         // Get form data
+  ...
+  [7] preview: 
+ // Load staff list
+ async function loadStaffList() {
+     try {
+         // Show loading
+         document.getElementById('staffList').innerHTML = '<p>Loading...</p>';
+         
+         // Get staff from service
+         const staffMembe...
+  [8] preview: 
+ // Load orders
+ async function loadOrders(filters = {}) {
+     try {
+         document.getElementById('ordersList').innerHTML = '<p>Loading...</p>';
+         
+         // Get orders from service
+         const ordersList = await orders.ge...
+  [9] preview: 
+ // Load staff tasks
+ async function loadStaffTasks(staffId) {
+     try {
+         // Get pending tasks
+         const pendingTasks = await staff.getStaffTasks(staffId, 'pending');
+         const inProgressTasks = await staff.getStaffTasks...
+  [10] preview: 
+ // Load dashboard
+ async function loadDashboard() {
+     try {
+         // Get dashboard data
+         const dashboard = await db.getDashboard(auth.getBranch());
+         
+         // Get order stats
+         const orderStats = await orde...
+  [11] preview: 
+ // Setup real-time listeners
+ function setupRealTimeUpdates(staffId) {
+     // Listen to order updates
+     orders.subscribe('update', (change) => {
+         console.log('Order updated:', change.data);
+         // Refresh relevant order i...
+  [12] preview: 
+ function showSuccess(message) {
+     const notif = document.createElement('div');
+     notif.className = 'notification success';
+     notif.textContent = 'Γ£à ' + message;
+     notif.style.cssText = `
+         position: fixed;
+         top:...
+
+D:\Boutique 1 issue\Boutique\invoice theme\christmas-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\default-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\diwali-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\ganesh-chaturthi-invoice-template.html -> script blocks: 1
+  [0] preview: 
+ function numberToWords(num) {
+   const ones = [
+     "", "One", "Two", "Three", "Four", "Five", "Six",
+     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
+     "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+     "Seventeen", "Eightee...
+
+D:\Boutique 1 issue\Boutique\invoice theme\holi-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\independence-day-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\navaratri-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\newyear-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\ramzan-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\invoice theme\sankranthi-invoice-template.html -> script blocks: 1
+  [0] preview:  function numberToWords(num) {   const ones = [     "", "One", "Two", "Three", "Four", "Five", "Six",     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",     "Thirteen", "Fourteen", "Fifteen", "Sixteen",     "Seventeen", "Eighteen", "N...
+
+D:\Boutique 1 issue\Boutique\login-test.html -> script blocks: 1
+  [0] preview:          function log(message, type = 'info') {             const results = document.getElementById('results');             results.style.display = 'block';             const logDiv = document.createElement('div');             logDiv.classN...
+
+D:\Boutique 1 issue\Boutique\public\super-admin-panel.html -> script blocks: 1
+  [0] preview:          const API_BASE = window.location.origin + '/api';         let currentToken = null;          document.getElementById('adminRole').addEventListener('change', function() {             document.getElementById('branchGroup').style.displ...
+
+D:\Boutique 1 issue\Boutique\sapthala-admin-clean.html -> script blocks: 9
+  [0] preview:  block so it runs after Chart.js and DOM load. */
+         .login-box {
+             background: white; border-radius: 24px; padding: 48px 36px 36px 36px; width: 100%; max-width: 410px;
+             box-shadow: 0 24px 64px rgba(124,24,60,0....
+  [1] preview: 
+  [2] preview: 
+  [3] preview: 
+         (function earlyPopulateBranches(){
+             try {
+                 document.addEventListener('DOMContentLoaded', async () => {
+                     try {
+                         const res = await fetch('/api/public/branches')...
+  [4] preview: 
+         // Initialize demo orders with assigned staff
+         function initializeDemoOrders() {
+             const demoOrders = [
+                 {
+                     id: 'ORD-1707492000001',
+                     orderId: 'ORD-DEMO-00...
+  [5] preview: 
+         // Minimal login handlers to keep login functional even if main script fails to parse
+         (function(){
+             if (typeof window.handleLogin === 'function') return; // main script will provide full implementation
+ 
+     ...
+  [6] preview: 
+         // Order detail modal helpers
+         let currentOpenOrderId = null;
+ 
+         async function openOrderDetail(orderId) {
+             try {
+                 currentOpenOrderId = orderId;
+                 const modal = document.g...
+  [7] preview: 
+         // API Configuration
+         const api = {
+             baseURL: window.location.origin,
+             token: localStorage.getItem('sapthala_token'),
+ 
+             async request(endpoint, options = {}) {
+                 const ur...
+  [8] preview: 
+
+D:\Boutique 1 issue\Boutique\sapthala-admin-consolidated.html -> script blocks: 2
+  [0] preview: 
+  [1] preview: 
+         const API_BASE = 'http://localhost:3000/api';
+         let chartInstances = {};
+         let currentUser = null;
+         let statusChart = null;
+         let revenueChart = null;
+ 
+         // ==================== AUTHENTICATION ...
+
+D:\Boutique 1 issue\Boutique\sapthala-admin-firestore.html -> script blocks: 4
+  [0] preview: 
+  [1] preview: 
+  [2] preview: 
+  [3] preview:          // Firebase Configuration         const firebaseConfig = {             apiKey: "AIzaSyDummy-API-Key-For-Testing",             authDomain: "boutique-staff-app.firebaseapp.com",             projectId: "boutique-staff-app",           ...
+
+D:\Boutique 1 issue\Boutique\sapthala-admin-fixed.html -> script blocks: 1
+  [0] preview:          // HTML Entity Decoder Function         function decodeHtmlEntities(text) {             if (!text || typeof text !== 'string') return text;             const textarea = document.createElement('textarea');             textarea.inner...
+
+D:\Boutique 1 issue\Boutique\sapthala-admin-simple.html -> script blocks: 1
+  [0] preview:          // Simple login function         async function handleLogin(event) {             event.preventDefault();                          const username = document.getElementById('username').value.trim();             const password = docum...
+
+D:\Boutique 1 issue\Boutique\sapthala-admin.html -> script blocks: 2
+  [0] preview: 
+  [1] preview: 
+ // ==================== GLOBAL STATE ====================
+ let currentUser = null;
+ let currentToken = null;
+ let statusChart = null;
+ let revenueChart = null;
+ 
+ // ==================== AUTHENTICATION FUNCTIONS ====================
+ asyn...
+
+D:\Boutique 1 issue\Boutique\sapthala-system\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\scripts\fixtures\order-form-test.html -> script blocks: 2
+  [0] preview: 
+  [1] preview: 
+       // Ensure fixture has a sane starting state once the canonical script initializes
+       (function waitForInit() {
+         if (window._canonicalCalculateTotal && typeof window._canonicalCalculateTotal === 'function') {
+           /...
+
+D:\Boutique 1 issue\Boutique\smoke-test.html -> script blocks: 1
+  [0] preview:          let testResults = [];         let testCount = 0;         let passCount = 0;         let failCount = 0;          function addTestResult(name, status, message) {             testResults.push({ name, status, message });             te...
+
+D:\Boutique 1 issue\Boutique\staff-portal-enhanced.html -> script blocks: 1
+  [0] preview: 
+         // Configuration
+         const API_BASE = 'http://127.0.0.1:3000/api';
+         const TOKEN_KEY = 'sapthala_token';
+         const STAFF_ID_KEY = 'sapthala_staff_id';
+ 
+         let currentStaffId = localStorage.getItem(STAFF_ID_...
+
+D:\Boutique 1 issue\Boutique\staff-portal-firebase.html -> script blocks: 4
+  [0] preview: 
+  [1] preview: 
+  [2] preview: 
+  [3] preview:          // Firebase Configuration         const firebaseConfig = {             apiKey: "AIzaSyAJeYt7PVEp0J8Y4MpDJcsw8KIXlhx5vUM",             authDomain: "boutique-staff-app.firebaseapp.com",             projectId: "boutique-staff-app",   ...
+
+D:\Boutique 1 issue\Boutique\staff-portal.html -> script blocks: 1
+  [0] preview:          // API base: prefer host's API on port 3000; support Android emulator (10.0.2.2)         let API_BASE = '';         try {             const host = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? location....
+
+D:\Boutique 1 issue\Boutique\staff-test.html -> script blocks: 2
+  [0] preview: 
+  [1] preview:          // Enhanced Staff Management Functions         async function loadStaff() {             console.log('≡ƒöì Loading staff from API...');             const staffList = document.getElementById('staffList');                          try {...
+
+D:\Boutique 1 issue\Boutique\sub-admin-login.html -> script blocks: 1
+  [0] preview:          async function handleSubAdminLogin(event) {             event.preventDefault();                          const username = document.getElementById('username').value.trim();             const password = document.getElementById('passw...
+
+D:\Boutique 1 issue\Boutique\super-admin.html -> script blocks: 1
+  [0] preview:          const API_BASE = window.location.origin + '/api';         let currentToken = null;          document.getElementById('adminRole').addEventListener('change', function() {             document.getElementById('branchGroup').style.displ...
+
+D:\Boutique 1 issue\Boutique\tailoring-system\index.html -> script blocks: 1
+  [0] preview: 
+
+D:\Boutique 1 issue\Boutique\test-login-page.html -> script blocks: 1
+  [0] preview:          const form = document.getElementById('loginForm');         const messageBox = document.getElementById('messageBox');         const resultDiv = document.getElementById('result');         const loginBtn = document.getElementById('log...
+
+D:\Boutique 1 issue\Boutique\test-login.html -> script blocks: 1
+  [0] preview:          const messageArea = document.getElementById('messageArea');         const loginForm = document.getElementById('loginForm');         const loginBtn = document.getElementById('loginBtn');          function showMessage(msg, type) {   ...
+
+D:\Boutique 1 issue\Boutique\test-mongodb-connection.html -> script blocks: 1
+  [0] preview:          const API_BASE = window.location.origin;         const results = document.getElementById('results');                  async function testDashboard() {             try {                 const token = localStorage.getItem('sapthala_t...
+
+D:\Boutique 1 issue\Boutique\test-page.html -> script blocks: 1
+  [0] preview:          async function testEndpoint(url, name) {             try {                 const res = await fetch(url);                 const isOk = res.ok && res.status === 200;                 return { name, status: res.status, ok: isOk };     ...
+
+Found 1 problem(s) in HTML scripts.

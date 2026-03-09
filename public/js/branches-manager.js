@@ -63,8 +63,8 @@ const BranchesManager = {
             <div style="display:grid;gap:20px;">
                 ${this.branches.map(branch => `
                     <div class="branch-card" style="background:white;padding:24px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:grid;grid-template-columns:80px 1fr auto;gap:20px;align-items:center;">
-                        <div class="branch-icon" style="width:70px;height:70px;border-radius:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;color:white;font-size:32px;">
-                            
+                        <div class="branch-icon" style="width:70px;height:70px;border-radius:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;color:white;font-size:32px;overflow:hidden;">
+                            ${branch.logo ? ('<img src="' + branch.logo + '" alt="' + (branch.branchName || '') + '" style="width:100%;height:100%;object-fit:cover;display:block;">') : ('<span>' + ((branch.branchName || 'B').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()) + '</span>')}
                         </div>
                         <div class="branch-info">
                             <h3 style="margin:0 0 8px 0;font-size:18px;color:#1e293b;">
@@ -84,10 +84,10 @@ const BranchesManager = {
                             <span class="badge" style="padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;text-align:center;${branch.isActive ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;'}">
                                 ${branch.isActive ? ' Active' : ' Inactive'}
                             </span>
-                            <button onclick="BranchesManager.editBranch('${branch._id}')" style="padding:8px 16px;background:#fbbf24;color:#78350f;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">
+                            <button onclick="BranchesManager.editBranch('${branch._id || branch.branchId}')" style="padding:8px 16px;background:#fbbf24;color:#78350f;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">
                                  Edit
                             </button>
-                            <button onclick="BranchesManager.deleteBranch('${branch._id}')" style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">
+                            <button onclick="BranchesManager.deleteBranch('${branch._id || branch.branchId}')" style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">
                                  Delete
                             </button>
                         </div>
@@ -122,11 +122,10 @@ const BranchesManager = {
     },
     
     // Open add branch modal
-    openAddModal() {
-        const modal = document.getElementById('branchModal');
-        if (!modal) {
-            this.createModal();
-        }
+                        openAddModal() {
+                            const existing = document.getElementById('branchModal');
+                            if (existing) existing.remove();
+                            this.createModal();
         
         document.getElementById('branchModalTitle').textContent = 'Add New Branch';
         document.getElementById('branchForm').reset();
@@ -219,10 +218,12 @@ const BranchesManager = {
     
     // Edit branch
     async editBranch(id) {
-        const branch = this.branches.find(b => b._id === id);
+                                    const branch = this.branches.find(b => b._id === id || b.branchId === id);
         if (!branch) return;
         
-        this.createModal();
+                        const existing = document.getElementById('branchModal');
+                        if (existing) existing.remove();
+                        this.createModal();
         document.getElementById('branchModalTitle').textContent = 'Edit Branch';
         document.getElementById('branchId').value = branch._id;
         document.getElementById('branchName').value = branch.branchName;

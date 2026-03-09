@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Boutique Admin Panel - Firestore</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; }
+        
+        .login-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        
+        .login-box {
+            background: white; border-radius: 24px; padding: 48px 36px 36px 36px; width: 100%; max-width: 410px;
+            box-shadow: 0 24px 64px rgba(124,24,60,0.18); text-align: center;
+            animation: slideUp 0.6s cubic-bezier(.23,1.01,.32,1);
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .login-logo {
+            width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 22px;
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; color: white;
+            box-shadow: 0 4px 16px rgba(124,24,60,0.12);
+        }
+        
+        .login-title {
+            font-size: 30px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        
+        .login-subtitle {
+            color: #b22234; margin-bottom: 32px; font-size: 16px; font-weight: 500;
+        }
+        
+        .login-form { display: flex; flex-direction: column; gap: 22px; }
+        
+        .login-input {
+            padding: 16px 22px; border: 2px solid #e2e8f0; border-radius: 14px;
+            font-size: 17px; transition: all 0.3s; background: #f9fafb;
+        }
+        
+        .login-input:focus {
+            outline: none; border-color: #b22234; box-shadow: 0 0 0 3px rgba(124,24,60,0.08);
+        }
+        
+        .login-btn {
+            padding: 16px; background: linear-gradient(135deg, #b22234 0%, #7c183c 100%);
+            color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: bold;
+            cursor: pointer; transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(124,24,60,0.10);
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px); box-shadow: 0 12px 28px rgba(124,24,60,0.18);
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+        }
+        
+        .login-footer {
+            margin-top: 28px; color: #7c183c; font-size: 14px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+        }
+        
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header-logo { width: 95px; height: 95px; border-radius: 50%; }
+        
+        .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        
+        .stat-card {
+            padding: 25px; border-radius: 16px; color: white; text-align: center;
+            transition: all 0.4s; cursor: pointer;
+        }
+        
+        .stat-card:hover { transform: translateY(-8px) scale(1.05); }
+        .stat-card.blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+        .stat-card.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .stat-card.yellow { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .stat-card.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        
+        .stat-value { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
+        .stat-label { font-size: 16px; opacity: 0.9; }
+        
+        .hidden { display: none !important; }
+        
+        .sidebar-tab {
+            background: none; border: none; color: #fff; font-size: 17px; font-weight: 500; 
+            padding: 18px 0 18px 36px; text-align: left; cursor: pointer; outline: none; 
+            transition: background 0.2s, color 0.2s; display: flex; align-items: center; 
+            gap: 12px; border-radius: 0 18px 18px 0; width: 100%;
+        }
+        
+        .sidebar-tab.active, .sidebar-tab:hover {
+            background: rgba(255,255,255,0.13); color: #ffe066;
+        }
+        
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        
+        .btn-primary {
+            padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold;
+            font-size: 16px; cursor: pointer; transition: all 0.3s;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;
+        }
+        
+        .btn-primary:hover { 
+            background: linear-gradient(135deg, #059669 0%, #047857 100%); 
+            transform: translateY(-2px); 
+        }
+        
+        .btn-secondary {
+            padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold;
+            font-size: 16px; cursor: pointer; transition: all 0.3s;
+            background: #f3f4f6; color: #374151; border: 2px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover { background: #e5e7eb; }
+    </style>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <div class="login-logo">🏠</div>
+            <h1 class="login-title">SAPTHALA</h1>
+            <p class="login-subtitle">Firestore Admin Portal</p>
+            
+            <form class="login-form" onsubmit="handleLogin(event)">
+                <input type="text" id="username" class="login-input" placeholder="👤 Username" required>
+                <input type="password" id="password" class="login-input" placeholder="🔒 Password" required>
+                <button type="submit" class="login-btn">🚀 Login to Dashboard</button>
+                <button type="button" class="login-btn" style="margin-top:12px; background: linear-gradient(135deg,#10b981 0%, #059669 100%);" onclick="bypassLogin()">⚠️ Skip to Dashboard (Bypass)</button>
+            </form>
+            
+            <div class="login-footer">
+                <p>📞 Contact: 7794021608 | 📧 sapthalaredddydesigns@gmail.com</p>
+                <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">Default: admin / sapthala@2029</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="hidden">
+        <div class="header">
+            <div class="header-left">
+                <img src="img/sapthala logo.png" alt="Sapthala Logo" class="header-logo">
+                <div>
+                    <h1>SAPTHALA</h1>
+                    <p>Firestore Admin Portal</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <span id="firestoreStatus" style="padding:6px 10px;border-radius:8px;background:#d1fae5;color:#065f46;font-weight:700;margin-left:8px;font-size:13px;">Firestore: Connected</span>
+                <button class="btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div style="display: flex; min-height: 80vh;">
+            <!-- Sidebar -->
+            <nav id="sidebar" style="width: 230px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; display: flex; flex-direction: column; align-items: stretch; padding: 0; box-shadow: 2px 0 16px rgba(102,126,234,0.08); border-radius: 18px; margin: 18px 18px 18px 0;">
+                <div style="padding: 32px 0 18px 0; text-align: center; border-bottom: 1px solid #7c3aed33;"></div>
+                <button class="sidebar-tab active" onclick="showTab('dashboard')"><span>📊</span> Dashboard</button>
+                <button class="sidebar-tab" onclick="showTab('orders')"><span>📦</span> Orders</button>
+                <button class="sidebar-tab" onclick="showTab('customers')"><span>👥</span> Customers</button>
+                <button class="sidebar-tab" onclick="showTab('staff')"><span>🧑🔧</span> Staff</button>
+                <div style="flex:1"></div>
+                <div style="padding: 18px; border-top: 1px solid #7c3aed33; text-align: center; font-size: 13px; color: #e0e7ff;">
+                    <span id="sidebarUserInfo">Firestore Mode</span>
+                </div>
+            </nav>
+            
+            <div class="container" style="flex:1;">
+                <!-- Dashboard Tab -->
+                <div id="dashboard" class="tab-panel active">
+                    <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">Dashboard</h2>
+                    <div id="dashboardStatus" style="margin-bottom:12px;display:inline-block;padding:6px 10px;border-radius:999px;background:#d1fae5;color:#065f46;font-size:13px;font-weight:700;">Status: Firestore Connected</div>
+                    
+                    <div class="dashboard-grid">
+                        <div class="stat-card blue">
+                            <div class="stat-value" id="totalOrders">0</div>
+                            <div class="stat-label">Total Orders</div>
+                        </div>
+                        <div class="stat-card green">
+                            <div class="stat-value" id="totalRevenue">₹0</div>
+                            <div class="stat-label">Total Revenue</div>
+                        </div>
+                        <div class="stat-card yellow">
+                            <div class="stat-value" id="advanceCollected">₹0</div>
+                            <div class="stat-label">Advance Collected</div>
+                        </div>
+                        <div class="stat-card red">
+                            <div class="stat-value" id="pendingOrders">0</div>
+                            <div class="stat-label">Pending Orders</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Orders Tab -->
+                <div id="orders" class="tab-panel">
+                    <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1e293b;">📦 Orders Management</h2>
+                    <div id="ordersList"></div>
+                </div>
+
+                <!-- Customers Tab -->
+                <div id="customers" class="tab-panel">
+                    <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1e293b;">👥 Customer Management</h2>
+                    <div id="customersList"></div>
+                </div>
+
+                <!-- Staff Tab -->
+                <div id="staff" class="tab-panel">
+                    <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1e293b;">👷 Staff Management</h2>
+                    <div id="staffList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummy-API-Key-For-Testing",
+            authDomain: "boutique-staff-app.firebaseapp.com",
+            projectId: "boutique-staff-app",
+            storageBucket: "boutique-staff-app.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:dummy-app-id"
+        };
+
+        // Initialize Firebase
+        let db;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            console.log('✅ Firebase initialized successfully');
+            updateFirestoreStatus('Connected');
+        } catch (error) {
+            console.error('❌ Firebase initialization failed:', error);
+            updateFirestoreStatus('Failed');
+        }
+
+        function updateFirestoreStatus(status) {
+            const statusEl = document.getElementById('firestoreStatus');
+            const dashboardStatusEl = document.getElementById('dashboardStatus');
+            
+            if (status === 'Connected') {
+                statusEl.style.background = '#d1fae5';
+                statusEl.style.color = '#065f46';
+                statusEl.textContent = 'Firestore: Connected';
+                if (dashboardStatusEl) {
+                    dashboardStatusEl.style.background = '#d1fae5';
+                    dashboardStatusEl.style.color = '#065f46';
+                    dashboardStatusEl.textContent = 'Status: Firestore Connected';
+                }
+            } else {
+                statusEl.style.background = '#fef2f2';
+                statusEl.style.color = '#dc2626';
+                statusEl.textContent = 'Firestore: ' + status;
+                if (dashboardStatusEl) {
+                    dashboardStatusEl.style.background = '#fef2f2';
+                    dashboardStatusEl.style.color = '#dc2626';
+                    dashboardStatusEl.textContent = 'Status: Firestore ' + status;
+                }
+            }
+        }
+
+        // Authentication Functions
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) {
+                alert('Please enter both username and password');
+                return;
+            }
+
+            // Simple authentication check
+            if (username === 'admin' && password === 'sapthala@2029') {
+                localStorage.setItem('sapthala_logged_in', 'true');
+                localStorage.setItem('sapthala_user', JSON.stringify({
+                    username: 'admin',
+                    role: 'admin'
+                }));
+                
+                showMainApp();
+            } else {
+                alert('Invalid credentials. Use admin / sapthala@2029');
+            }
+        }
+
+        function bypassLogin() {
+            localStorage.setItem('sapthala_logged_in', 'true');
+            localStorage.setItem('sapthala_user', JSON.stringify({
+                username: 'admin',
+                role: 'admin'
+            }));
+            showMainApp();
+        }
+
+        function showMainApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            updateDashboardStats();
+        }
+
+        function logout() {
+            localStorage.removeItem('sapthala_logged_in');
+            localStorage.removeItem('sapthala_user');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+        }
+
+        function checkAuthStatus() {
+            const isLoggedIn = localStorage.getItem('sapthala_logged_in');
+            if (isLoggedIn === 'true') {
+                showMainApp();
+            }
+        }
+
+        // Tab Functions
+        function showTab(tabName) {
+            // Hide all tab panels
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.style.display = 'none');
+            // Remove active from all sidebar tabs
+            document.querySelectorAll('.sidebar-tab').forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab
+            const panel = document.getElementById(tabName);
+            if (panel) panel.style.display = 'block';
+            
+            // Set active on sidebar
+            const sidebarBtn = Array.from(document.querySelectorAll('.sidebar-tab')).find(btn => {
+                return btn.textContent.toLowerCase().includes(tabName.toLowerCase());
+            });
+            if (sidebarBtn) sidebarBtn.classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabName === 'dashboard') {
+                updateDashboardStats();
+            } else if (tabName === 'orders') {
+                loadOrders();
+            } else if (tabName === 'customers') {
+                loadCustomers();
+            } else if (tabName === 'staff') {
+                loadStaff();
+            }
+        }
+
+        // Firestore Data Functions
+        async function updateDashboardStats() {
+            try {
+                if (!db) {
+                    console.warn('Firestore not initialized');
+                    return;
+                }
+
+                // Get orders from Firestore via API
+                const response = await fetch('/api/firestore/orders');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const orders = data.orders;
+                    const totalOrders = orders.length;
+                    const totalRevenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+                    const advanceCollected = orders.reduce((sum, order) => sum + (order.advanceAmount || 0), 0);
+                    const pendingOrders = orders.filter(order => order.status === 'pending' || order.status === 'in_progress').length;
+
+                    document.getElementById('totalOrders').textContent = totalOrders;
+                    document.getElementById('totalRevenue').textContent = '₹' + totalRevenue.toLocaleString();
+                    document.getElementById('advanceCollected').textContent = '₹' + advanceCollected.toLocaleString();
+                    document.getElementById('pendingOrders').textContent = pendingOrders;
+
+                    console.log('✅ Dashboard stats updated from Firestore');
+                } else {
+                    console.error('Failed to fetch orders:', data.error);
+                    updateFirestoreStatus('Error');
+                }
+            } catch (error) {
+                console.error('❌ Error updating dashboard stats:', error);
+                updateFirestoreStatus('Error');
+            }
+        }
+
+        async function loadOrders() {
+            try {
+                const response = await fetch('/api/firestore/orders');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const orders = data.orders;
+                    let html = '<div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">';
+                    
+                    if (orders.length === 0) {
+                        html += '<div style="padding: 40px; text-align: center; color: #6b7280;">No orders found in Firestore</div>';
+                    } else {
+                        orders.forEach(order => {
+                            html += `
+                                <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 20px; align-items: center;">
+                                    <div>
+                                        <strong>${order.orderId || order.id}</strong><br>
+                                        <small style="color: #6b7280;">${order.customerName || 'Unknown'}</small>
+                                    </div>
+                                    <div>
+                                        ${order.garmentType || 'N/A'}<br>
+                                        <small style="color: #6b7280;">${order.branch || 'N/A'}</small>
+                                    </div>
+                                    <div>
+                                        <strong>₹${(order.totalAmount || 0).toLocaleString()}</strong><br>
+                                        <small style="color: #6b7280;">${order.status || 'pending'}</small>
+                                    </div>
+                                    <div>
+                                        <button class="btn-primary" style="padding: 8px 16px; font-size: 14px;">View</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    html += '</div>';
+                    document.getElementById('ordersList').innerHTML = html;
+                    
+                    console.log(`✅ Loaded ${orders.length} orders from Firestore`);
+                } else {
+                    document.getElementById('ordersList').innerHTML = '<div style="color: red; padding: 20px;">Error loading orders from Firestore: ' + data.error + '</div>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading orders:', error);
+                document.getElementById('ordersList').innerHTML = '<div style="color: red; padding: 20px;">Error loading orders from Firestore</div>';
+            }
+        }
+
+        async function loadCustomers() {
+            try {
+                const response = await fetch('/api/firestore/customers');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const customers = data.customers;
+                    let html = '<div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">';
+                    
+                    if (customers.length === 0) {
+                        html += '<div style="padding: 40px; text-align: center; color: #6b7280;">No customers found in Firestore</div>';
+                    } else {
+                        customers.forEach(customer => {
+                            html += `
+                                <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 20px; align-items: center;">
+                                    <div>
+                                        <strong>${customer.name || 'Unknown'}</strong><br>
+                                        <small style="color: #6b7280;">${customer.phone || 'N/A'}</small>
+                                    </div>
+                                    <div>
+                                        ${customer.email || 'N/A'}<br>
+                                        <small style="color: #6b7280;">${customer.address || 'N/A'}</small>
+                                    </div>
+                                    <div>
+                                        <strong>${customer.totalOrders || 0} orders</strong><br>
+                                        <small style="color: #6b7280;">₹${(customer.totalSpent || 0).toLocaleString()}</small>
+                                    </div>
+                                    <div>
+                                        <button class="btn-primary" style="padding: 8px 16px; font-size: 14px;">View</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    html += '</div>';
+                    document.getElementById('customersList').innerHTML = html;
+                    
+                    console.log(`✅ Loaded ${customers.length} customers from Firestore`);
+                } else {
+                    document.getElementById('customersList').innerHTML = '<div style="color: red; padding: 20px;">Error loading customers from Firestore: ' + data.error + '</div>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading customers:', error);
+                document.getElementById('customersList').innerHTML = '<div style="color: red; padding: 20px;">Error loading customers from Firestore</div>';
+            }
+        }
+
+        async function loadStaff() {
+            try {
+                const response = await fetch('/api/firestore/staff');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const staff = data.staff;
+                    let html = '<div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">';
+                    
+                    if (staff.length === 0) {
+                        html += '<div style="padding: 40px; text-align: center; color: #6b7280;">No staff found in Firestore</div>';
+                    } else {
+                        staff.forEach(member => {
+                            html += `
+                                <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 20px; align-items: center;">
+                                    <div>
+                                        <strong>${member.name || 'Unknown'}</strong><br>
+                                        <small style="color: #6b7280;">${member.staffId || member.id}</small>
+                                    </div>
+                                    <div>
+                                        ${member.role || 'N/A'}<br>
+                                        <small style="color: #6b7280;">${member.phone || 'N/A'}</small>
+                                    </div>
+                                    <div>
+                                        <strong>${member.branch || 'N/A'}</strong><br>
+                                        <small style="color: #6b7280;">${member.isAvailable ? 'Available' : 'Busy'}</small>
+                                    </div>
+                                    <div>
+                                        <button class="btn-primary" style="padding: 8px 16px; font-size: 14px;">View</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    html += '</div>';
+                    document.getElementById('staffList').innerHTML = html;
+                    
+                    console.log(`✅ Loaded ${staff.length} staff from Firestore`);
+                } else {
+                    document.getElementById('staffList').innerHTML = '<div style="color: red; padding: 20px;">Error loading staff from Firestore: ' + data.error + '</div>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading staff:', error);
+                document.getElementById('staffList').innerHTML = '<div style="color: red; padding: 20px;">Error loading staff from Firestore</div>';
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+        });
+    </script>
+</body>
+</html>

@@ -706,6 +706,14 @@
     </div>
 
     <script>
+        // Early global error catcher for admin UI
+        (function(){
+            function showBanner(msg){ try { var el=document.getElementById('sapthala-error-banner'); if(el) return; el=document.createElement('div'); el.id='sapthala-error-banner'; el.style='position:fixed;top:0;left:0;right:0;background:#fff4e6;color:#92400e;padding:10px 12px;z-index:99999;text-align:center;font-weight:700;border-bottom:2px solid #fecaca;'; el.innerHTML='⚠️ Admin UI error detected — <span style="font-weight:600">check browser console</span>. <a href="/sapthala-admin-fixed.html" style="color:#92400e;text-decoration:underline;margin-left:8px;">Open fallback admin</a>' + (msg ? (' — '+msg) : ''); if (document.body) document.body.insertAdjacentElement('afterbegin', el);} catch(e){}
+            }
+            window.addEventListener('error', function(e){ try { console.error('Global error:', e.message, e.filename, e.lineno, e.colno); showBanner(e.message || 'Script error'); } catch(err){} }, true);
+            window.addEventListener('unhandledrejection', function(ev){ try { console.warn('Unhandled rejection', ev.reason); showBanner('Unhandled promise rejection'); } catch(err){} });
+        })();
+    </script>
         const API_BASE = 'http://localhost:3000';
 
         // ==================== AUTHENTICATION ==================== 

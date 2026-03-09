@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MongoDB Connection Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .test { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        .success { border-left: 4px solid #10b981; }
+        .error { border-left: 4px solid #ef4444; }
+        button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; margin: 5px; }
+        pre { background: #f8fafc; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔌 MongoDB Connection Test</h1>
+    
+    <button onclick="testDashboard()">Test Dashboard API</button>
+    <button onclick="testBranches()">Test Branches API</button>
+    <button onclick="testReports()">Test Reports API</button>
+    <button onclick="testStaff()">Test Staff API</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        const results = document.getElementById('results');
+        
+        async function testDashboard() {
+            try {
+                const token = localStorage.getItem('sapthala_token');
+                const res = await fetch(`${API_BASE}/api/dashboard`, {
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
+                const data = await res.json();
+                
+                results.innerHTML += `<div class="test success">
+                    <h3>✅ Dashboard API</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>`;
+            } catch (e) {
+                results.innerHTML += `<div class="test error">
+                    <h3>❌ Dashboard API Failed</h3>
+                    <pre>${e.message}</pre>
+                </div>`;
+            }
+        }
+        
+        async function testBranches() {
+            try {
+                const res = await fetch(`${API_BASE}/api/public/branches`);
+                const data = await res.json();
+                
+                results.innerHTML += `<div class="test success">
+                    <h3>✅ Branches API (${data.length} branches)</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>`;
+            } catch (e) {
+                results.innerHTML += `<div class="test error">
+                    <h3>❌ Branches API Failed</h3>
+                    <pre>${e.message}</pre>
+                </div>`;
+            }
+        }
+        
+        async function testReports() {
+            try {
+                const token = localStorage.getItem('sapthala_token');
+                const res = await fetch(`${API_BASE}/api/reports/orders`, {
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
+                const data = await res.json();
+                
+                results.innerHTML += `<div class="test success">
+                    <h3>✅ Reports API (${data.orders?.length || 0} orders)</h3>
+                    <pre>${JSON.stringify(data.orders?.slice(0, 3), null, 2)}</pre>
+                </div>`;
+            } catch (e) {
+                results.innerHTML += `<div class="test error">
+                    <h3>❌ Reports API Failed</h3>
+                    <pre>${e.message}</pre>
+                </div>`;
+            }
+        }
+        
+        async function testStaff() {
+            try {
+                const res = await fetch(`${API_BASE}/api/staff`);
+                const data = await res.json();
+                
+                results.innerHTML += `<div class="test success">
+                    <h3>✅ Staff API (${data.length} staff)</h3>
+                    <pre>${JSON.stringify(data.slice(0, 3), null, 2)}</pre>
+                </div>`;
+            } catch (e) {
+                results.innerHTML += `<div class="test error">
+                    <h3>❌ Staff API Failed</h3>
+                    <pre>${e.message}</pre>
+                </div>`;
+            }
+        }
+        
+        // Auto-run all tests on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testBranches();
+                setTimeout(() => testStaff(), 500);
+                setTimeout(() => testDashboard(), 1000);
+                setTimeout(() => testReports(), 1500);
+            }, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,84 +1,77 @@
 @echo off
-title SAPTHALA System Test
-color 0E
-
-echo ========================================
-echo    SAPTHALA SYSTEM - COMPLETE TEST
-echo ========================================
+echo.
+echo ============================================================
+echo   SAPTHALA - QUICK SYSTEM TEST
+echo ============================================================
 echo.
 
-REM Test 1: Backend
-echo [TEST 1/5] Backend Server (localhost:3000)
-curl -s http://localhost:3000/api/settings >nul 2>&1
-if %errorlevel% equ 0 (
-    echo     [PASS] Backend is responding
-    curl -s http://localhost:3000 | findstr "SAPTHALA" >nul
-    if %errorlevel% equ 0 (
-        echo     [PASS] Admin panel HTML is being served
-    ) else (
-        echo     [FAIL] Admin panel HTML not found
-    )
-) else (
-    echo     [FAIL] Backend not responding
-    echo     Fix: Run "node server.js"
+echo Testing Node.js...
+node --version
+if errorlevel 1 (
+    echo X Node.js not found!
+    pause
+    exit /b 1
 )
+echo OK Node.js installed
 echo.
 
-REM Test 2: Admin Panel in Browser
-echo [TEST 2/5] Opening Admin Panel in Browser
-start http://localhost:3000
-echo     [INFO] Admin panel opened in browser
-echo     Check if page loads correctly
-timeout /t 3 >nul
-echo.
-
-REM Test 3: Super Admin
-echo [TEST 3/5] Super Admin Panel (localhost:5173)
-curl -s http://localhost:5173 >nul 2>&1
-if %errorlevel% equ 0 (
-    echo     [PASS] Super Admin is running
-    start http://localhost:5173
-    echo     [INFO] Super Admin opened in browser
-) else (
-    echo     [FAIL] Super Admin not running
-    echo     Fix: cd Boutique-app\super-admin-panel && npm run dev
+echo Testing npm...
+npm --version
+if errorlevel 1 (
+    echo X npm not found!
+    pause
+    exit /b 1
 )
+echo OK npm installed
 echo.
 
-REM Test 4: Flutter/Java Setup
-echo [TEST 4/5] Flutter Environment
-where flutter >nul 2>&1
-if %errorlevel% equ 0 (
-    echo     [PASS] Flutter is installed
+echo Checking files...
+if exist "server.js" (
+    echo OK server.js found
 ) else (
-    echo     [FAIL] Flutter not found
+    echo X server.js missing!
 )
 
-if exist "C:\Program Files\Java\jdk-25\bin\java.exe" (
-    echo     [PASS] Java JDK-25 found
+if exist "database.js" (
+    echo OK database.js found
 ) else (
-    echo     [FAIL] Java JDK-25 not found
+    echo X database.js missing!
 )
-echo.
 
-REM Test 5: Emulator
-echo [TEST 5/5] Android Emulator
-adb devices | findstr "emulator" >nul
-if %errorlevel% equ 0 (
-    echo     [PASS] Emulator is running
+if exist "package.json" (
+    echo OK package.json found
 ) else (
-    echo     [FAIL] Emulator not running
-    echo     Fix: Start from Android Studio
+    echo X package.json missing!
 )
-echo.
 
-echo ========================================
-echo    TEST SUMMARY
-echo ========================================
+if exist "firebase-integration-service.js" (
+    echo OK firebase-integration-service.js found
+) else (
+    echo ! firebase-integration-service.js missing
+)
+
+if exist "firebase-credentials.json" (
+    echo OK Firebase credentials found
+) else (
+    echo ! Firebase credentials not configured (optional)
+)
+
 echo.
-echo Next Steps:
-echo 1. If admin panel blank: Press Ctrl+F5 in browser
-echo 2. If Flutter fails: Run START_FLUTTER_FIXED.bat
-echo 3. If super admin fails: cd Boutique-app\super-admin-panel && npm run dev
+echo Checking dependencies...
+if exist "node_modules" (
+    echo OK node_modules found
+) else (
+    echo ! node_modules missing - run: npm install
+)
+
+echo.
+echo ============================================================
+echo   TEST COMPLETE
+echo ============================================================
+echo.
+echo If you see any X marks above, please fix those issues.
+echo ! marks are warnings (optional features).
+echo.
+echo To start the system, run: LAUNCH_SYSTEM.bat
 echo.
 pause

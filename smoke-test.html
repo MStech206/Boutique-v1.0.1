@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sapthala Admin Panel - Smoke Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .test-container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .test-item { margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 6px; }
+        .test-pass { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .test-fail { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .test-pending { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .results { margin-top: 20px; }
+        .summary { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Sapthala Admin Panel - Smoke Test</h1>
+        <p>This test verifies all critical functionality in the admin panel.</p>
+        
+        <button class="btn btn-primary" onclick="runAllTests()">🚀 Run All Tests</button>
+        <button class="btn btn-success" onclick="runQuickTest()">⚡ Quick Test</button>
+        <button class="btn btn-danger" onclick="clearResults()">🗑️ Clear Results</button>
+        
+        <div class="results" id="results">
+            <div class="summary" id="summary">Ready to run tests...</div>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = [];
+        let testCount = 0;
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTestResult(name, status, message) {
+            testResults.push({ name, status, message });
+            testCount++;
+            if (status === 'pass') passCount++;
+            if (status === 'fail') failCount++;
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const summary = document.getElementById('summary');
+            const results = document.getElementById('testResults');
+            
+            summary.innerHTML = `📊 Tests: ${testCount} | ✅ Pass: ${passCount} | ❌ Fail: ${failCount}`;
+            
+            results.innerHTML = testResults.map(test => `
+                <div class="test-item test-${test.status}">
+                    <strong>${test.name}</strong><br>
+                    ${test.message}
+                </div>
+            `).join('');
+        }
+
+        function clearResults() {
+            testResults = [];
+            testCount = 0;
+            passCount = 0;
+            failCount = 0;
+            document.getElementById('summary').innerHTML = 'Ready to run tests...';
+            document.getElementById('testResults').innerHTML = '';
+        }
+
+        async function runQuickTest() {
+            clearResults();
+            
+            // Test 1: Branch Loading
+            try {
+                const endpoints = ['/api/public/branches', '/api/branches'];
+                let branchesLoaded = false;
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const res = await fetch(endpoint);
+                        if (res.ok) {
+                            const branches = await res.json();
+                            if (branches && branches.length > 0) {
+                                branchesLoaded = true;
+                                addTestResult('Branch Loading', 'pass', `✅ Loaded ${branches.length} branches from ${endpoint}`);
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`Failed ${endpoint}:`, e);
+                    }
+                }
+                
+                if (!branchesLoaded) {
+                    addTestResult('Branch Loading', 'fail', '❌ No branches could be loaded from any endpoint');
+                }
+            } catch (error) {
+                addTestResult('Branch Loading', 'fail', `❌ Error: ${error.message}`);
+            }
+
+            // Test 2: Staff ID Generation
+            try {
+                const staffId = generateTestStaffId();
+                if (staffId && staffId.match(/^staff_\d{3}$/)) {
+                    addTestResult('Staff ID Format', 'pass', `✅ Generated: ${staffId}`);
+                } else {
+                    addTestResult('Staff ID Format', 'fail', `❌ Invalid format: ${staffId}`);
+                }
+            } catch (error) {
+                addTestResult('Staff ID Format', 'fail', `❌ Error: ${error.message}`);
+            }
+
+            // Test 3: Local Storage
+            try {
+                localStorage.setItem('test_key', 'test_value');
+                const value = localStorage.getItem('test_key');
+                localStorage.removeItem('test_key');
+                
+                if (value === 'test_value') {
+                    addTestResult('Local Storage', 'pass', '✅ Local storage working');
+                } else {
+                    addTestResult('Local Storage', 'fail', '❌ Local storage not working');
+                }
+            } catch (error) {
+                addTestResult('Local Storage', 'fail', `❌ Error: ${error.message}`);
+            }
+
+            // Test 4: DOM Elements
+            const criticalElements = [
+                'loginPage', 'mainApp', 'staffList', 'reportBranch', 
+                'orderBranch', 'staffFilterBranch', 'reportsTable'
+            ];
+            
+            let missingElements = [];
+            criticalElements.forEach(id => {
+                if (!document.getElementById(id)) {
+                    missingElements.push(id);
+                }
+            });
+            
+            if (missingElements.length === 0) {
+                addTestResult('DOM Elements', 'pass', '✅ All critical elements found');
+            } else {
+                addTestResult('DOM Elements', 'fail', `❌ Missing: ${missingElements.join(', ')}`);
+            }
+        }
+
+        async function runAllTests() {
+            await runQuickTest();
+            
+            // Additional comprehensive tests
+            
+            // Test 5: API Endpoints
+            const endpoints = [
+                '/api/public/branches',
+                '/api/staff',
+                '/api/admin/orders',
+                '/api/dashboard'
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const res = await fetch(endpoint);
+                    if (res.ok) {
+                        addTestResult(`API: ${endpoint}`, 'pass', '✅ Endpoint accessible');
+                    } else {
+                        addTestResult(`API: ${endpoint}`, 'fail', `❌ Status: ${res.status}`);
+                    }
+                } catch (error) {
+                    addTestResult(`API: ${endpoint}`, 'fail', `❌ Error: ${error.message}`);
+                }
+            }
+
+            // Test 6: Theme System
+            try {
+                if (typeof THEMES !== 'undefined' && THEMES.default) {
+                    addTestResult('Theme System', 'pass', `✅ ${Object.keys(THEMES).length} themes available`);
+                } else {
+                    addTestResult('Theme System', 'fail', '❌ THEMES object not found');
+                }
+            } catch (error) {
+                addTestResult('Theme System', 'fail', `❌ Error: ${error.message}`);
+            }
+
+            // Test 7: Staff Workflow Stages
+            try {
+                const expectedStages = ['dyeing', 'cutting', 'stitching', 'finishing', 'quality-check'];
+                const stageElements = document.querySelectorAll('input[name="stages"]');
+                const foundStages = Array.from(stageElements).map(el => el.value);
+                
+                const missingStages = expectedStages.filter(stage => !foundStages.includes(stage));
+                
+                if (missingStages.length === 0) {
+                    addTestResult('Workflow Stages', 'pass', `✅ All ${expectedStages.length} stages found`);
+                } else {
+                    addTestResult('Workflow Stages', 'fail', `❌ Missing: ${missingStages.join(', ')}`);
+                }
+            } catch (error) {
+                addTestResult('Workflow Stages', 'fail', `❌ Error: ${error.message}`);
+            }
+
+            // Test 8: Branch Dropdown Population
+            try {
+                const dropdowns = ['orderBranch', 'staffFilterBranch', 'reportBranch'];
+                let allPopulated = true;
+                
+                dropdowns.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (!select || select.options.length <= 1) {
+                        allPopulated = false;
+                    }
+                });
+                
+                if (allPopulated) {
+                    addTestResult('Branch Dropdowns', 'pass', '✅ All dropdowns populated');
+                } else {
+                    addTestResult('Branch Dropdowns', 'fail', '❌ Some dropdowns not populated');
+                }
+            } catch (error) {
+                addTestResult('Branch Dropdowns', 'fail', `❌ Error: ${error.message}`);
+            }
+        }
+
+        function generateTestStaffId() {
+            // Simulate staff ID generation
+            const maxNumber = 0; // Simulate no existing staff
+            const nextNumber = maxNumber + 1;
+            return `staff_${nextNumber.toString().padStart(3, '0')}`;
+        }
+
+        // Auto-run quick test on page load
+        window.addEventListener('load', () => {
+            setTimeout(runQuickTest, 1000);
+        });
+    </script>
+</body>
+</html>

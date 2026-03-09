@@ -96,17 +96,25 @@ class NotificationService {
         };
 
         const greeting = themes[festivalTheme] || themes.default;
-        
+
+        // Normalize fields with safe fallbacks to avoid 'undefined' or NaN in messages
+        const customerName = order.customerName || (order.customer && order.customer.name) || 'Customer';
+        const garmentType = order.garmentType || order.category || 'Item';
+        const totalAmount = Number(order.totalAmount ?? order.pricing?.total ?? 0);
+        const advanceAmount = Number(order.advanceAmount ?? order.advancePayment ?? 0);
+        const balanceAmount = totalAmount - advanceAmount;
+        const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'TBD';
+
         return `${greeting}\n\n` +
-            `Dear ${order.customerName},\n\n` +
+            `Dear ${customerName},\n\n` +
             `Thank you for choosing SAPTHALA Designer Workshop! 🎨\n\n` +
             `📋 ORDER CONFIRMATION\n` +
-            `Order ID: ${order.orderId}\n` +
-            `Garment: ${order.garmentType}\n` +
-            `Total Amount: ₹${order.totalAmount}\n` +
-            `Advance Paid: ₹${order.advanceAmount}\n` +
-            `Balance: ₹${order.totalAmount - order.advanceAmount}\n` +
-            `Delivery Date: ${new Date(order.deliveryDate).toLocaleDateString()}\n\n` +
+            `Order ID: ${order.orderId || '—'}\n` +
+            `Garment: ${garmentType}\n` +
+            `Total Amount: ₹${totalAmount.toLocaleString()}\n` +
+            `Advance Paid: ₹${advanceAmount.toLocaleString()}\n` +
+            `Balance: ₹${balanceAmount.toLocaleString()}\n` +
+            `Delivery Date: ${deliveryDate}\n\n` +
             `Your order is confirmed and will be ready on time! 👗\n\n` +
             `For any queries, call: 7794021608\n\n` +
             `Best Regards,\n` +

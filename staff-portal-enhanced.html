@@ -648,6 +648,8 @@
                 }
 
                 const tasks = await response.json();
+                // keep last-loaded tasks for modal lookup
+                window._enhanced_staff_tasks = tasks || [];
                 renderTasks(tasks);
                 updateStats(tasks);
                 updateConnectionStatus(true);
@@ -772,6 +774,7 @@
 
                     <!-- Action Buttons -->
                     <div class="action-buttons">
+                        <button class="btn btn-view" onclick="viewTaskDetailsEnhanced('${task.orderId}','${task.stageId}')">View details</button>
                         ${task.status === 'assigned' ? `
                             <button class="btn btn-start" onclick="updateTaskStatus('${task._id}', 'started')">Start Task</button>
                             <button class="btn btn-pause" onclick="updateTaskStatus('${task._id}', 'paused')">Mark Pause</button>
@@ -819,6 +822,41 @@
                 console.error('Error updating task:', error);
                 showNotification('Error updating task', 'error');
             }
+        }
+
+        // Show task details in modal (enhanced)
+        function viewTaskDetailsEnhanced(orderId, stageId) {
+            try {
+                const tasks = window._enhanced_staff_tasks || [];
+                const t = tasks.find(x => x.orderId === orderId && (x.stageId === stageId || !stageId));
+                if (!t) { alert('Task details not available. Refreshing...'); loadTasks(); return; }
+
+                // build modal content
+                const modalBody = document.createElement('div');
+                const escapeHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const designNotes = t.orderDetails?.designNotes || t.designNotes || '';
+
+                modalBody.innerHTML = `
+                    <div style="font-weight:700;margin-bottom:6px">${t.stageName || 'Task'} — ${t.orderId}</div>
+                    <div><strong>Customer:</strong> ${t.orderDetails?.customerName || t.customerName || '-'}</div>
+                    <div style="margin-top:6px"><strong>Garment:</strong> ${t.orderDetails?.garmentType || t.garmentType || '-'}</div>
+
+                    <div class="section-title" style="margin-top:12px">🎨 Design Information</div>
+                    <div style="margin-top:6px;color:#374151;white-space:pre-wrap">${designNotes ? escapeHtml(designNotes) : '<span style="color:#6b7280">No design notes</span>'}</div>
+
+                    <div class="section-title" style="margin-top:12px">📏 Measurements</div>
+                    <div class="measurement-list">${Object.entries(t.orderDetails?.measurements || t.measurements || {}).map(([k,v])=>`<div style="background:#f3f4f6;padding:8px;border-radius:8px"><div style="font-size:12px;color:#6b7280">${k}</div><div style="font-weight:700">${v}</div></div>`).join('') || '<div style="color:#6b7280">No measurements</div>'}</div>
+                    <div class="section-title" style="margin-top:12px">📸 Photos</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">${(t.designImages || t.images || []).map(src=>`<img src="${src}" class="photo-thumb" onclick="window.open('${src}','_blank')" onerror="this.style.opacity=0.5">`).join('') || '<div style="color:#6b7280">No photos</div>'}</div>
+                `;
+
+                // show modal
+                const backdrop = document.getElementById('enhancedTaskBackdrop');
+                const card = document.getElementById('enhancedTaskModalCard');
+                card.querySelector('.modal-content-body').innerHTML = '';
+                card.querySelector('.modal-content-body').appendChild(modalBody);
+                backdrop.classList.add('show');
+            } catch (err) { console.error('viewTaskDetailsEnhanced failed', err); alert('Unable to open details'); }
         }
 
         // Update Stats

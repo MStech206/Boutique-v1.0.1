@@ -54,8 +54,13 @@ class WorkflowService {
       
       if (!currentStage) return;
 
-      const nextStage = settings.workflowStages.find(s => s.order === currentStage.order + 1);
-      
+      // Use only the stages actually selected for this order
+      const orderStageIds = (order.workflowTasks || []).map(t => t.stageId);
+      const orderStages = settings.workflowStages.filter(s => orderStageIds.includes(s.id))
+          .sort((a, b) => a.order - b.order);
+      const currentIdx = orderStages.findIndex(s => s.id === completedStageId);
+      const nextStage = orderStages[currentIdx + 1] || null;
+            
       if (!nextStage) {
         // All stages completed
         order.status = 'completed';

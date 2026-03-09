@@ -334,8 +334,10 @@
         <!-- Login Screen -->
         <div id="loginScreen" class="card">
 
-            <div class="logo" id="loginLogo" style="width:120px;height:120px;font-size:64px;"></div>
-            <h1 style="font-size:32px;">SAPTHALA</h1>
+            <div style="text-align:center;margin-bottom:20px;">
+                <img src="img/ap logo.jpg" alt="BOUTHIQUE Logo" style="width:120px;height:120px;object-fit:contain;">
+            </div>
+            <h1 style="font-size:32px;">BOUTHIQUE</h1>
             <p class="subtitle">Designer Workshop - Staff Portal</p>
 
             <div id="errorMessage" class="error"></div>

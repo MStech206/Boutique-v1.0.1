@@ -260,6 +260,21 @@
             opacity: 0.8;
         }
 
+        /* Task details modal (mobile-friendly) */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 99999; }
+        .modal-backdrop.show { display: flex; }
+        .modal-card { background: white; border-radius: 12px; width: 94%; max-width: 760px; max-height: 92vh; overflow-y: auto; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+        .modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
+        .modal-title { font-size:18px; font-weight:700; color:#111827; }
+        .modal-body { font-size:14px; color:#374151; }
+        .measurement-list { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin:12px 0; }
+        .measurement-item { background:#f3f4f6; padding:8px 10px; border-radius:8px; font-weight:600; }
+        .photo-grid { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+        .photo-thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; }
+        .modal-close { background:transparent;border:none;font-size:20px;cursor:pointer;color:#6b7280; }
+        .modal-actions { margin-top:14px; display:flex; gap:8px; }
+        @media (min-width:760px){ .measurement-list{grid-template-columns:repeat(3,1fr);} .photo-thumb{width:96px;height:96px;} }
+
         .btn-start { background: #4caf50; color: white; }
         .btn-pause { background: #ff9800; color: white; }
         .btn-resume { background: #2196f3; color: white; }
@@ -334,8 +349,10 @@
         <!-- Login Screen -->
         <div id="loginScreen" class="card">
 
-            <div class="logo" id="loginLogo" style="width:120px;height:120px;font-size:64px;"></div>
-            <h1 style="font-size:32px;">SAPTHALA</h1>
+            <div style="text-align:center;margin-bottom:20px;">
+                <img src="img/ap logo.jpg" alt="BOUTHIQUE Logo" style="width:120px;height:120px;object-fit:contain;">
+            </div>
+            <h1 style="font-size:32px;">BOUTHIQUE</h1>
             <p class="subtitle">Designer Workshop - Staff Portal</p>
 
             <div id="errorMessage" class="error"></div>
@@ -409,66 +426,116 @@
 
     <script>
         // API base: prefer host's API on port 3000; support Android emulator (10.0.2.2)
-        let API_BASE = '';
-        try {
-            const host = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? location.hostname : (location.hostname === '10.0.2.2' ? '10.0.2.2' : location.hostname);
-            API_BASE = `http://${host}:3000/api`;
-        } catch (e) {
-            API_BASE = 'http://localhost:3000/api';
-        }
+       let API_BASE = '';
+                    try {
+                        const host = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? location.hostname : (location.hostname === '10.0.2.2' ? '10.0.2.2' : location.hostname);
+                        API_BASE = `http://${host}:3000/api`;
+                    } catch (e) {
+                        API_BASE = 'http://localhost:3000/api';
+                    }
+
+                    // Resolve adminId from URL: /staff?adminId=sapthala-designer-workshop
+                    
+                        let ADMIN_ID = '';
+                        (function resolveAdminId() {
+                            // 1. Server-injected at render time (most reliable — set by Express when serving /staff?adminId=xxx)
+                            if (window.__SAPTHALA_ADMIN_ID) {
+                                ADMIN_ID = window.__SAPTHALA_ADMIN_ID;
+                                sessionStorage.setItem('sapthala_admin_id', ADMIN_ID);
+                                return;
+                            }
+                            // 2. URL query param fallback
+                            const params = new URLSearchParams(location.search);
+                            if (params.get('adminId')) {
+                                ADMIN_ID = params.get('adminId');
+                                sessionStorage.setItem('sapthala_admin_id', ADMIN_ID);
+                                return;
+                            }
+                            // 3. Subdomain fallback: sapthala-designer-workshop.yourdomain.com
+                            const parts = location.hostname.split('.');
+                            if (parts.length >= 3) {
+                                ADMIN_ID = parts[0];
+                                return;
+                            }
+                            // 4. sessionStorage from previous visit
+                            ADMIN_ID = sessionStorage.getItem('sapthala_admin_id') || '';
+                        })();
         // Load branches and staff list for dropdown
-        async function loadBranches() {
-            const bselect = document.getElementById('branchSelect');
-            bselect.innerHTML = '<option value="">Loading branches...</option>';
-            try {
-                const res = await fetch(window.location.origin + '/api/public/branches');
-                if (!res.ok) throw new Error('Failed to fetch branches');
-                const list = await res.json();
-                bselect.innerHTML = '<option value="">Choose branch...</option>' +
-                    list.map(b => `<option value="${b.branchId}">${b.branchName} (${b.branchId})</option>`).join('');
-                // when branch changes, load staff for branch
-                bselect.addEventListener('change', () => {
-                    const br = bselect.value;
-                    loadStaffDropdown(br);
-                });
-                // auto-select first branch if none selected
-                if (!bselect.value && list.length > 0) {
-                    bselect.value = list[0].branchId;
+       async function loadBranches() {
+                    const bselect = document.getElementById('branchSelect');
+                    bselect.innerHTML = '<option value="">Loading branches...</option>';
+
+                    if (!ADMIN_ID) {
+                        bselect.innerHTML = '<option value="">No boutique ID in URL — use ?adminId=your-id</option>';
+ 
+                    console.error('❌ adminId not resolved. Share portal link as: /staff?adminId=your-boutique-id');                        return;
+                    }
+
+                    try {
+                        const res = await fetch(`${window.location.origin}/api/public/branches?adminId=${encodeURIComponent(ADMIN_ID)}`);
+                        if (!res.ok) throw new Error('Failed to fetch branches');
+                        const list = await res.json();
+
+                        // Store adminId from response for safety (already resolved above)
+                        if (list.length > 0 && list[0].adminId) {
+                            ADMIN_ID = list[0].adminId;
+                            sessionStorage.setItem('sapthala_admin_id', ADMIN_ID);
+                        }
+
+                        bselect.innerHTML = '<option value="">Choose branch...</option>' +
+                            list.map(b => `<option value="${b.branchId}">${b.branchName} (${b.branchId})</option>`).join('');
+
+                        bselect.addEventListener('change', () => loadStaffDropdown(bselect.value));
+
+                        if (!bselect.value && list.length > 0) bselect.value = list[0].branchId;
+                        loadStaffDropdown(bselect.value || '');
+                    } catch (e) {
+                        console.error('Branches load error', e);
+                        bselect.innerHTML = '<option value="">Failed to load branches</option>';
+                        loadStaffDropdown('');
+                    }
                 }
-                // load staff for selected branch
-                loadStaffDropdown(bselect.value || '');
-            } catch (e) {
-                console.error('Branches load error', e);
-                bselect.innerHTML = '<option value="">Failed to load branches</option>';
-                // fallback: load all staff
-                loadStaffDropdown('');
-            }
-        }
 
         // Dynamically load staff list for dropdown, optionally filtered by branchId
-        async function loadStaffDropdown(branchId = '') {
-            const select = document.getElementById('staffSelect');
-            select.innerHTML = '<option value="">Loading staff list...</option>';
-            try {
-                const url = branchId ? `${API_BASE}/staff?branch=${encodeURIComponent(branchId)}` : `${API_BASE}/staff`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('Failed to fetch staff');
-                const staffList = await res.json();
-                if (!Array.isArray(staffList) || staffList.length === 0) {
-                    select.innerHTML = '<option value="">No staff available for this branch</option>';
-                    return;
+       async function loadStaffDropdown(branchId = '') {
+                    const select = document.getElementById('staffSelect');
+                    select.innerHTML = '<option value="">Loading staff list...</option>';
+                    try {
+                        let url = `${API_BASE}/staff?adminId=${encodeURIComponent(ADMIN_ID)}`;
+                        if (branchId) url += `&branch=${encodeURIComponent(branchId)}`;
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error('Failed to fetch staff');
+                        const staffList = await res.json();
+                        if (!Array.isArray(staffList) || staffList.length === 0) {
+                            select.innerHTML = '<option value="">No staff available for this branch</option>';
+                            return;
+                        }
+                        select.innerHTML = '<option value="">Choose your name...</option>' +
+                            staffList.map(s => `<option value="${s.staffId}">${s.name} - ${s.role} (${s.branchName || s.branch})</option>`).join('');
+                    } catch (err) {
+                        console.error('Staff load error', err);
+                        select.innerHTML = '<option value="">Failed to load staff</option>';
+                    }
                 }
-                select.innerHTML = '<option value="">Choose your name...</option>' +
-                    staffList.map(s => `<option value="${s.staffId}">${s.name} - ${s.role} (${s.branchName || s.branch})</option>`).join('');
-            } catch (err) {
-                console.error('Staff load error', err);
-                select.innerHTML = '<option value="">Failed to load staff</option>';
-            }
-        }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadBranches();
-        });
+       
+                document.addEventListener('DOMContentLoaded', () => {
+                    // Restore session from previous visit — avoids logout on refresh
+                    try {
+                        const saved = sessionStorage.getItem('sapthala_staff_session');
+                        if (saved) {
+                            const { staff, token } = JSON.parse(saved);
+                            if (staff && token) {
+                                currentStaff = staff;
+                                currentToken = token;
+                                showDashboard();
+                                loadTasks( true); // force refresh to get latest tasks on page load
+                                return; // skip login screen entirely
+                            }
+                        }
+                    } catch(e){}
+                    loadBranches();
+                });
         let currentStaff = null;
         let currentToken = null;
         let isOnline = true;
@@ -491,6 +558,7 @@
             e.preventDefault();
             const staffId = document.getElementById('staffSelect').value;
             const pin = document.getElementById('pinInput').value;
+            const branch = document.getElementById('branchSelect').value || '';
             const errorDiv = document.getElementById('errorMessage');
             const loginBtn = document.getElementById('loginBtn');
 
@@ -499,17 +567,24 @@
             loginBtn.textContent = 'Logging in...';
 
             try {
+                // include selected branch so server can resolve staff uniquely
                 const response = await fetch(`${API_BASE}/staff/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ staffId, pin })
+                    body: JSON.stringify({ staffId, pin, branch, adminId: ADMIN_ID })
                 });
 
                 const data = await response.json();
 
+              
                 if (response.ok) {
                     currentStaff = data.staff;
                     currentToken = data.token;
+                    // Persist session so page refresh keeps staff logged in
+                    try {
+                        sessionStorage.setItem('sapthala_staff_session', JSON.stringify({ staff: data.staff, token: data.token }));
+                        localStorage.setItem('sapthala_staff_branch', currentStaff.branch || branch || '');
+                    } catch(e){}
                     updateConnectionStatus(true);
                     showDashboard();
                     loadTasks();
@@ -539,15 +614,17 @@
             if (logo) logo.style.display = 'none';
         }
 
-        function logout() {
-            currentStaff = null;
-            currentToken = null;
-            document.getElementById('loginScreen').style.display = 'block';
-            document.getElementById('dashboardScreen').classList.remove('show');
-            document.getElementById('loginForm').reset();
-        }
+     
+            function logout() {
+                currentStaff = null;
+                currentToken = null;
+                try { sessionStorage.removeItem('sapthala_staff_session'); } catch(e){}
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('dashboardScreen').classList.remove('show');
+                document.getElementById('loginForm').reset();
+            }
 
-        async function loadTasks() {
+        async function loadTasks(forceRefresh = false) {
             if (!currentStaff) return;
             
             // Show loading state
@@ -557,27 +634,44 @@
             try {
                 console.log(` Loading tasks for ${currentStaff.name} (${currentStaff.staffId})...`);
                 
+               
+                const aid = encodeURIComponent(ADMIN_ID);
+                 const authHeaders = { 'Authorization': `Bearer ${currentToken}` };
                 const [myTasksRes, availableTasksRes, performanceRes] = await Promise.all([
-                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/tasks`),
-                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/available-tasks`),
-                    fetch(`${API_BASE}/reports/staff/${currentStaff.staffId}`)
+                   fetch(`${API_BASE}/staff/${currentStaff.staffId}/tasks?adminId=${aid}${forceRefresh ? '&nocache=1' : ''}`, { headers: authHeaders }),
+                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/available-tasks?adminId=${aid}${forceRefresh ? '&nocache=1' : ''}`, { headers: authHeaders }),
+                    fetch(`${API_BASE}/reports/staff/${currentStaff.staffId}?adminId=${aid}`, { headers: authHeaders })
                 ]);
-
                 // Parse responses with fallback to empty arrays
                 let myTasks = [];
                 let availableTasks = [];
                 let performance = null;
                 
                 try {
-                    const myTasksData = await myTasksRes.json();
-                    myTasks = Array.isArray(myTasksData) ? myTasksData : (myTasksData.myTasks || []);
+                  const myTasksData = await myTasksRes.json();
+                    const rawMyTasks = Array.isArray(myTasksData) ? myTasksData : (myTasksData.myTasks || []);
+                    // Flatten orderDetails into task so customerName/deliveryDate are top-level
+                    myTasks = rawMyTasks.map(t => ({
+                        ...t,
+                        customerName: t.customerName || t.orderDetails?.customerName || '',
+                        garmentType: t.garmentType || t.orderDetails?.garmentType || '',
+                        deliveryDate: t.deliveryDate || t.orderDetails?.deliveryDate || null,
+                        customerPhone: t.customerPhone || t.orderDetails?.customerPhone || '',
+                        measurements: t.measurements || t.orderDetails?.measurements || {}
+                    }));
                 } catch (e) {
                     console.warn('Failed to parse myTasks:', e);
                 }
                 
                 try {
                     const availableTasksData = await availableTasksRes.json();
-                    availableTasks = Array.isArray(availableTasksData) ? availableTasksData : (availableTasksData.availableTasks || []);
+                const rawAvailable = Array.isArray(availableTasksData) ? availableTasksData : (availableTasksData.availableTasks || []);
+                availableTasks = rawAvailable.map(t => ({
+                    ...t,
+                    customerName: t.customerName || t.orderDetails?.customerName || '',
+                    garmentType: t.garmentType || t.orderDetails?.garmentType || '',
+                    deliveryDate: t.deliveryDate || t.orderDetails?.deliveryDate || null
+                }));
                 } catch (e) {
                     console.warn('Failed to parse availableTasks:', e);
                 }
@@ -589,6 +683,10 @@
                         console.warn('Failed to parse performance:', e);
                     }
                 }
+
+                // keep a copy for fast lookup from the details modal
+                window._staff_myTasks = myTasks || [];
+                window._staff_availableTasks = availableTasks || [];
 
                 displayMyTasks(myTasks);
                 displayAvailableTasks(availableTasks);
@@ -619,9 +717,10 @@
                             <span class="task-title">${task.stageIcon} ${task.stageName} - #${task.orderId}</span>
                             <span class="task-status status-${task.status}">${task.status}</span>
                         </div>
-                        <div class="task-info"> ${task.customerName}</div>
-                        <div class="task-info"> ${task.garmentType}</div>
-                        <div class="task-info"> ${new Date(task.deliveryDate).toLocaleDateString()}</div>
+                     
+                        <div class="task-info"> ${task.customerName || task.orderDetails?.customerName || 'Customer'}</div>
+                        <div class="task-info"> ${task.garmentType || task.orderDetails?.garmentType || 'Garment'}</div>
+                        <div class="task-info"> ${toJsDate(task.deliveryDate) ? toJsDate(task.deliveryDate).toLocaleDateString() : 'No delivery date'}</div>
                         ${timeInfo ? `<div class="task-info" style="color:#059669;font-weight:bold;"> ${timeInfo}</div>` : ''}
                         <div class="task-actions">
                             ${getTaskActions(task)}
@@ -631,17 +730,29 @@
             }).join('');
         }
         
+        function toJsDate(v) {
+            if (!v) return null;
+            if (v.seconds !== undefined) return new Date(v.seconds * 1000); // Firestore Timestamp
+            if (typeof v.toDate === 'function') return v.toDate();
+            const d = new Date(v);
+            return isNaN(d) ? null : d;
+        }
         function getTimeInfo(task) {
             if (task.status === 'started' && task.startedAt) {
-                const elapsed = Math.round((new Date() - new Date(task.startedAt)) / (1000 * 60));
-                return `Running: ${elapsed}min`;
+                const start = toJsDate(task.startedAt);
+                if (!start) return null;
+                const elapsed = Math.round((Date.now() - start.getTime()) / 60000);
+                return `⏱ Running: ${elapsed}min`;
             }
             if (task.status === 'completed' && task.timeSpent) {
-                return `Completed in: ${task.timeSpent}min`;
+                return `✅ Completed in: ${task.timeSpent}min`;
             }
             if (task.status === 'paused' && task.startedAt && task.pausedAt) {
-                const elapsed = Math.round((new Date(task.pausedAt) - new Date(task.startedAt)) / (1000 * 60));
-                return `Paused at: ${elapsed}min`;
+                const start = toJsDate(task.startedAt);
+                const paused = toJsDate(task.pausedAt);
+                if (!start || !paused) return null;
+                const elapsed = Math.round((paused.getTime() - start.getTime()) / 60000);
+                return `⏸ Paused at: ${elapsed}min`;
             }
             return null;
         }
@@ -659,10 +770,12 @@
                         <span class="task-title">${task.stageIcon} ${task.stageName} - #${task.orderId}</span>
                         <span class="task-status status-pending">Available</span>
                     </div>
-                    <div class="task-info"> ${task.customerName}</div>
-                    <div class="task-info"> ${task.garmentType}</div>
-                    <div class="task-info"> ${new Date(task.deliveryDate).toLocaleDateString()}</div>
-                    <div class="task-actions">
+                    
+                        <div class="task-info"> ${task.customerName || task.orderDetails?.customerName || 'Customer'}</div>
+                        <div class="task-info"> ${task.garmentType || task.orderDetails?.garmentType || 'Garment'}</div>
+ 
+                        <div class="task-info"> ${toJsDate(task.deliveryDate) ? toJsDate(task.deliveryDate).toLocaleDateString() : 'No delivery date'}</div>
+                        <button class="task-btn btn-view" onclick="viewTaskDetails('${task.orderId}','${task.stageId}')">View details</button>
                         <button class="task-btn btn-accept" onclick="acceptTask('${task.orderId}', '${task.stageId}')">Accept Task</button>
                     </div>
                 </div>
@@ -670,20 +783,92 @@
         }
 
         function getTaskActions(task) {
+            // always expose View details (mobile-first modal)
+            const viewBtn = `<button class="task-btn btn-view" onclick="viewTaskDetails('${task.orderId}','${task.stageId}')">View details</button>`;
             switch (task.status) {
                 case 'assigned':
-                    return `<button class="task-btn btn-start" onclick="updateTask('${task.orderId}', '${task.stageId}', 'started')">Start</button>`;
+                    return `${viewBtn}<button class="task-btn btn-start" onclick="updateTask('${task.orderId}', '${task.stageId}', 'started')">Start</button>`;
                 case 'started':
                 case 'resumed':
-                    return `
+                    return `${viewBtn}
                         <button class="task-btn btn-pause" onclick="updateTask('${task.orderId}', '${task.stageId}', 'paused')">Pause</button>
                         <button class="task-btn btn-complete" onclick="completeTask('${task.orderId}', '${task.stageId}')">Complete</button>
                     `;
                 case 'paused':
-                    return `<button class="task-btn btn-resume" onclick="updateTask('${task.orderId}', '${task.stageId}', 'resumed')">Resume</button>`;
+                    return `${viewBtn}<button class="task-btn btn-resume" onclick="updateTask('${task.orderId}', '${task.stageId}', 'resumed')">Resume</button>`;
                 default:
-                    return '';
+                    return viewBtn;
             }
+        }
+
+        // Show a modal with order details, measurements, design information and photos
+        function viewTaskDetails(orderId, stageId) {
+            try {
+                const all = (window._staff_myTasks || []).concat(window._staff_availableTasks || []);
+                const task = all.find(t => t.orderId === orderId && (t.stageId === stageId || t.stageId === (stageId || t.stageId)));
+                if (!task) {
+                    alert('Task details not available locally. Refreshing tasks...');
+                    loadTasks();
+                    return;
+                }
+
+                const modal = document.getElementById('taskDetailsModal');
+                const title = modal.querySelector('.modal-title');
+                const body = modal.querySelector('.modal-body');
+
+                title.textContent = `${task.stageName || 'Task'} — ${task.orderId || ''}`;
+
+                // small sanitizer for notes to avoid accidental HTML rendering
+                const escapeHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const designNotes = task.orderDetails?.designNotes || task.designNotes || '';
+
+                // Build measurements HTML
+                let measHtml = '<div class="section-title">📏 Measurements</div>';
+                const m = task.orderDetails?.measurements || task.measurements || {};
+                if (Object.keys(m).length === 0) {
+                    measHtml += '<div style="margin-top:8px;color:#6b7280;">No measurements available</div>';
+                } else {
+                    measHtml += '<div class="measurement-list">';
+                    Object.entries(m).forEach(([k,v]) => { measHtml += `<div class="measurement-item"><div style="font-size:12px;color:#6b7280;margin-bottom:6px">${k}</div><div>${v}</div></div>`; });
+                    measHtml += '</div>';
+                }
+
+                // Photos
+                let photos = task.images || task.orderDetails?.images || task.designImages || [];
+                let photosHtml = '<div class="section-title">📸 Photos</div>';
+                if (!photos || photos.length === 0) {
+                    photosHtml += '<div style="margin-top:8px;color:#6b7280;">No photos available</div>';
+                } else {
+                    photosHtml += '<div class="photo-grid">';
+                    photos.forEach((src, idx) => {
+                        photosHtml += `<img class="photo-thumb" src="${src}" alt="photo-${idx}" onclick="openLargePhoto('${src}')" onerror="this.style.opacity=0.6;this.title='failed to load'">`;
+                    });
+                    photosHtml += '</div>';
+                }
+
+                // Compose body (includes Design Notes)
+                body.innerHTML = `
+                    <div><strong>Customer:</strong> ${task.orderDetails?.customerName || task.customerName || '-'}<br><strong>Phone:</strong> ${task.orderDetails?.customerPhone || task.customerPhone || '-'}</div>
+                    <div style="margin-top:8px"><strong>Garment:</strong> ${task.orderDetails?.garmentType || task.garmentType || '-'}</div>
+
+                    <div class="section-title" style="margin-top:10px">🎨 Design Information</div>
+                    <div style="margin-top:6px;color:#374151;white-space:pre-wrap">${designNotes ? escapeHtml(designNotes) : '<span style="color:#6b7280">No design notes available</span>'}</div>
+
+                    ${measHtml}
+                    ${photosHtml}
+                `;
+
+                document.getElementById('taskDetailsBackdrop').classList.add('show');
+                document.getElementById('taskDetailsModal').classList.add('show');
+            } catch (err) {
+                console.warn('viewTaskDetails failed', err);
+                alert('Unable to show task details');
+            }
+        }
+
+        function openLargePhoto(src) {
+            const imgWin = window.open('', '_blank');
+            if (!imgWin) return; imgWin.document.write(`<img src="${src}" style="max-width:100%;height:auto;display:block;margin:0 auto;">`);
         }
 
         function updateStats(myTasks, availableTasks, performance) {
@@ -701,13 +886,12 @@
             try {
                 const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/accept-task`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
                     body: JSON.stringify({ orderId, stageId })
                 });
-
                 if (response.ok) {
                     alert(' Task accepted successfully!');
-                    loadTasks();
+                    loadTasks(true);
                 } else {
                     alert(' Failed to accept task');
                 }
@@ -720,11 +904,11 @@
             try {
                 const notes = status === 'paused' ? prompt('Reason for pause (optional):') : null;
                 
-                const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/update-task`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ orderId, stageId, status, notes })
-                });
+               const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/update-task`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+                body: JSON.stringify({ orderId, stageId, status, notes })
+            });
 
                 if (response.ok) {
                     const result = await response.json();
@@ -739,7 +923,7 @@
                     }
                     
                     alert(message);
-                    loadTasks();
+                    loadTasks(true);
                 } else {
                     alert(' Failed to update task');
                 }
@@ -753,21 +937,18 @@
             const rating = prompt('Quality rating (1-5):', '5');
 
             try {
-                const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/update-task`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        orderId, 
-                        stageId, 
-                        status: 'completed',
-                        notes,
-                        qualityRating: parseInt(rating) || 5
-                    })
-                });
+              
+            const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/update-task`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+                body: JSON.stringify({ 
+                    orderId, stageId, status: 'completed', notes, qualityRating: parseInt(rating) || 5
+                })
+            });
 
                 if (response.ok) {
                     alert(' Task completed! Next stage will be notified.');
-                    loadTasks();
+                    loadTasks(true);
                 } else {
                     alert(' Failed to complete task');
                 }
@@ -776,12 +957,36 @@
             }
         }
 
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            if (currentStaff) {
-                loadTasks();
+        // // Auto-refresh every 30 seconds
+        // setInterval(() => {
+        //     if (currentStaff) {
+        //         loadTasks();
+        //     }
+        // }, 30000);
+    </script>
+
+    <!-- Task Details Modal -->
+    <div id="taskDetailsBackdrop" class="modal-backdrop" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');"></div>
+    <div id="taskDetailsModal" class="modal-card" style="display:none;">
+        <div class="modal-header">
+            <div class="modal-title">Task Details</div>
+            <button class="modal-close" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">✕</button>
+        </div>
+        <div class="modal-body">Loading...</div>
+        <div class="modal-actions">
+            <button class="task-btn" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // small helper to toggle modal-card visibility (keeps markup outside main script)
+        (function(){
+            const m = document.getElementById('taskDetailsModal');
+            if (m) {
+                const observer = new MutationObserver(()=>{ m.style.display = m.classList.contains('show') ? 'block' : 'none'; });
+                observer.observe(m, { attributes: true });
             }
-        }, 30000);
+        })();
     </script>
 </body>
 </html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Order Form Pricing Test Fixture</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; padding: 20px; }
+      .price { font-weight: bold; margin: 6px 0; }
+      input[type=number] { width: 120px; padding: 6px; }
+    </style>
+  </head>
+  <body>
+    <h3>Order Form Pricing Test Fixture</h3>
+
+    <div id="pricingSection">
+      <div>Base price: <span id="basePrice">₹0</span></div>
+      <div>Addon price: <span id="addonPrice">₹0</span></div>
+      <div>Subtotal: <span id="subtotal">₹0</span></div>
+      <div>Total: <span id="totalAmount">₹0</span></div>
+      <div>Balance: <span id="balanceDue">₹0</span></div>
+      <div id="discountDisplay" class="hidden">Discount: <span id="discountValue">₹0</span></div>
+    </div>
+
+    <hr />
+
+    <label>Other expenses: <input type="number" id="otherExpenses" value="0" min="0"></label>
+    <br /><br />
+    <label><input type="checkbox" data-addon="other" id="addonOtherCheck" onchange="toggleOtherAddon()"> Other addon</label>
+    <label> Price: <input type="number" id="addonOtherPrice" value="0" min="0" disabled oninput="updateOtherAddon()"></label>
+    <br /><br />
+    <label>Advance payment: <input type="number" id="advancePayment" value="0" min="0"></label>
+
+    <!-- load canonical order form JS (relative path from this fixture) -->
+    <script src="../../public/js/order-form-fixed.js"></script>
+
+    <script>
+      // Ensure fixture has a sane starting state once the canonical script initializes
+      (function waitForInit() {
+        if (window._canonicalCalculateTotal && typeof window._canonicalCalculateTotal === 'function') {
+          // Set a visible base price and run a first calculation
+          window.currentOrder = window.currentOrder || { pricing: {} };
+          window.currentOrder.pricing.basePrice = 1000;
+          // Enable addon inputs so canonical scripts bind correctly
+          const addonCheck = document.getElementById('addonOtherCheck');
+          const addonPrice = document.getElementById('addonOtherPrice');
+          addonCheck.checked = false;
+          addonPrice.disabled = true;
+
+          // Perform initial calculation
+          window._canonicalCalculateTotal();
+          return;
+        }
+        setTimeout(waitForInit, 50);
+      })();
+    </script>
+  </body>
+</html>

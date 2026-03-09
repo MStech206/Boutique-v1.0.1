@@ -42,10 +42,10 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
                 Icon(Icons.receipt_long, color: Colors.deepPurple, size: 24),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   'Order Information',
                   style: TextStyle(
@@ -71,7 +71,7 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
 
   Widget _buildMeasurementsCard() {
     final measurements = task['measurements'];
-    
+
     if (measurements == null || measurements is! Map || measurements.isEmpty) {
       return Card(
         elevation: 2,
@@ -79,7 +79,7 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.straighten, color: Colors.grey, size: 24),
+              const Icon(Icons.straighten, color: Colors.grey, size: 24),
               const SizedBox(width: 8),
               Text(
                 'No measurements available',
@@ -135,7 +135,7 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
               final label = measurementLabels[entry.key] ?? entry.key;
               final value = entry.value.toString();
               final unit = entry.key == 'SIZE' ? '' : '"';
-              
+
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -170,7 +170,7 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -179,7 +179,7 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
 
   Widget _buildDesignNotesCard() {
     final designNotes = task['designNotes'] ?? task['designDescription'];
-    
+
     if (designNotes == null || designNotes.toString().trim().isEmpty) {
       return const SizedBox.shrink();
     }
@@ -195,7 +195,8 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.design_services, color: Colors.blue.shade700, size: 24),
+                Icon(Icons.design_services,
+                    color: Colors.blue.shade700, size: 24),
                 const SizedBox(width: 8),
                 Text(
                   'Design Notes',
@@ -232,10 +233,8 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
 
   Widget _buildDesignImagesCard() {
     final designImages = task['designImages'];
-    
-    if (designImages == null || 
-        designImages is! List || 
-        designImages.isEmpty) {
+
+    if (designImages == null || designImages is! List || designImages.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -249,7 +248,8 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.photo_library, color: Colors.green.shade700, size: 24),
+                Icon(Icons.photo_library,
+                    color: Colors.green.shade700, size: 24),
                 const SizedBox(width: 8),
                 Text(
                   'Design Images',
@@ -287,9 +287,8 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.broken_image, 
-                                   size: 48, 
-                                   color: Colors.grey.shade400),
+                              Icon(Icons.broken_image,
+                                  size: 48, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
                               Text(
                                 'Image unavailable',
@@ -379,9 +378,8 @@ class EnhancedTaskDetailScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, 
-                             size: 64, 
-                             color: Colors.white),
+                        Icon(Icons.error_outline,
+                            size: 64, color: Colors.white),
                         SizedBox(height: 16),
                         Text(
                           'Failed to load image',

@@ -1,15 +1,63 @@
 const mongoose = require('mongoose');
 
-// MongoDB connection
+// Improve Mongoose buffering behaviour during transient network issues
+mongoose.set('bufferTimeoutMS', 20000); // increase default buffering timeout to 20s
+
+// MongoDB connection with retry logic (exponential backoff)
 const connectDB = async () => {
-  try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sapthala_boutique';
-    await mongoose.connect(mongoURI);
-    console.log('✅ MongoDB Connected Successfully to sapthala_boutique');
-  } catch (error) {
-    console.error('❌ MongoDB Connection Error:', error);
-    process.exit(1);
+  const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sapthala_boutique';
+  const maxRetries = 5; // increased retries for stability in flaky environments
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Connecting to MongoDB (attempt ${attempt}/${maxRetries})...`);
+      
+      await mongoose.connect(mongoURI, {
+        connectTimeoutMS: 20000,
+        serverSelectionTimeoutMS: 20000,
+        socketTimeoutMS: 60000,
+        maxPoolSize: 10,
+        minPoolSize: 2,
+        // disable buffering for critical flows if desired (leave enabled by default)
+        // bufferCommands: true
+      });
+      
+      console.log('✅ MongoDB Connected Successfully to sapthala_boutique');
+      console.log(`📊 Connection state: ${mongoose.connection.readyState} (1 = connected)`);
+      
+      // Set up connection event handlers
+      mongoose.connection.on('disconnected', () => {
+        console.warn('⚠️ MongoDB disconnected');
+      });
+      
+      mongoose.connection.on('error', (err) => {
+        console.error('❌ MongoDB connection error:', err);
+      });
+      
+      mongoose.connection.on('reconnected', () => {
+        console.log('✅ MongoDB reconnected');
+      });
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ MongoDB connection attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries) {
+        console.error('\n❌ CRITICAL: MongoDB connection failed after all retries');
+        console.error('   Please ensure MongoDB is running: net start MongoDB');
+        console.error('   Or check connection string in .env file\n');
+        // Throw so callers can decide whether to exit or continue in degraded mode
+        throw new Error('MongoDB connection failed after all retries');
+      }
+      
+      // Exponential backoff before next retry
+      const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+      console.log(`⏳ Waiting ${backoffMs}ms before next MongoDB connection attempt...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
   }
+  
+  return false;
 };
 
 // Staff Schema
@@ -121,7 +169,7 @@ const settingsSchema = new mongoose.Schema({
   address: String,
   phone: String,
   email: String,
-  logoPath: { type: String, default: '/img/sapthala logo.png' },
+  logoPath: { type: String, default: 'img/sapthala logo.png' },
   // Festival dates stored as { key: { month: Number, day: Number } }
   festivalDates: { type: mongoose.Schema.Types.Mixed, default: {
     independence: { month: 8, day: 15 },
@@ -177,10 +225,20 @@ const branchSchema = new mongoose.Schema({
   location: { type: String, required: true },
   phone: String,
   email: String,
+  // Optional logo URL for branch avatar / icon in admin UI
+  logo: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+});
+
+// Vendor Schema (simple Mongo-backed vendor collection for Super Admin panel)
+const vendorSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: String,
+  status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+  createdAt: { type: Date, default: Date.now }
 });
 
 // Create models
@@ -192,13 +250,20 @@ const Settings = mongoose.model('Settings', settingsSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 const LoginAttempt = mongoose.model('LoginAttempt', loginAttemptSchema);
 const Branch = mongoose.model('Branch', branchSchema);
+const Vendor = mongoose.model('Vendor', vendorSchema);
 
 // Initialize default data
 const initializeDefaultData = async () => {
   try {
+    // Skip initialization if MongoDB is not connected
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⏭️ Skipping data initialization (MongoDB not connected)');
+      return;
+    }
+
     console.log('🔄 Initializing default data...');
 
-    // Create default super-admin user
+    // Create default super-admin user (username-based)
     const superAdminExists = await User.findOne({ username: 'superadmin' });
     if (!superAdminExists) {
       const bcrypt = require('bcryptjs');
@@ -219,6 +284,32 @@ const initializeDefaultData = async () => {
       console.log('✅ Default super-admin user created');
     }
 
+    // Ensure Firebase-based super-admin (user provided) exists so Firebase login maps to server role
+    const firebaseSuperAdminEmail = 'mstechno2323@gmail.com';
+    const firebaseSuperAdmin = await User.findOne({ email: firebaseSuperAdminEmail });
+    if (!firebaseSuperAdmin) {
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash('superadmin@123', 10);
+      await User.create({
+        username: 'firebase_superadmin',
+        email: firebaseSuperAdminEmail,
+        password: hashedPassword,
+        role: 'super-admin',
+        permissions: {
+          canEdit: true,
+          canDelete: true,
+          canViewReports: true,
+          canManageStaff: true,
+          canManageAdmins: true
+        }
+      });
+      console.log('✅ Firebase super-admin user created (email mapped)');
+    } else if (firebaseSuperAdmin.role !== 'super-admin') {
+      firebaseSuperAdmin.role = 'super-admin';
+      await firebaseSuperAdmin.save();
+      console.log('✅ Updated existing user to super-admin for Firebase email mapping');
+    }
+
     // Create default admin user
     const adminExists = await User.findOne({ username: 'admin' });
     if (!adminExists) {
@@ -233,24 +324,7 @@ const initializeDefaultData = async () => {
       console.log('✅ Default admin user created');
     }
 
-    // Create default staff members
-    const staffCount = await Staff.countDocuments();
-    if (staffCount === 0) {
-      const defaultStaff = [
-        { staffId: 'staff_002', name: 'Priya Sharma', phone: '9876543211', role: 'Dyeing Specialist', branch: 'SAPTHALA.MAIN', workflowStages: ['dyeing'], skills: ['Dyeing'] },
-        { staffId: 'staff_003', name: 'Amit Patel', phone: '9876543212', role: 'Master Cutter', branch: 'SAPTHALA.MAIN', workflowStages: ['cutting'], skills: ['Cutting'] },
-        { staffId: 'staff_004', name: 'Sneha Desai', phone: '9876543213', role: 'Senior Tailor', branch: 'SAPTHALA.MAIN', workflowStages: ['stitching'], skills: ['Stitching'] },
-        { staffId: 'staff_005', name: 'Vikram Singh', phone: '9876543214', role: 'Khakha Expert', branch: 'SAPTHALA.MAIN', workflowStages: ['khakha'], skills: ['Khakha'] },
-        { staffId: 'staff_006', name: 'Kavya Reddy', phone: '9876543215', role: 'Maggam Artist', branch: 'SAPTHALA.MAIN', workflowStages: ['maggam'], skills: ['Maggam'] },
-        { staffId: 'staff_007', name: 'Ravi Kumar', phone: '9876543216', role: 'Painting Artist', branch: 'SAPTHALA.MAIN', workflowStages: ['painting'], skills: ['Painting'] },
-        { staffId: 'staff_008', name: 'Meera Nair', phone: '9876543217', role: 'Finishing Expert', branch: 'SAPTHALA.MAIN', workflowStages: ['finishing'], skills: ['Finishing'] },
-        { staffId: 'staff_009', name: 'Suresh Babu', phone: '9876543218', role: 'Quality Controller', branch: 'SAPTHALA.MAIN', workflowStages: ['quality-check'], skills: ['Quality Check'] },
-        { staffId: 'staff_010', name: 'Asha Verma', phone: '9876543219', role: 'Delivery Executive', branch: 'SAPTHALA.MAIN', workflowStages: ['ready-to-deliver'], skills: ['Delivery'] }
-      ];
-      
-      await Staff.insertMany(defaultStaff);
-      console.log('✅ Default staff members created');
-    }
+    // Skip default staff creation - will be created per branch below
 
     // Create default settings
     const settingsExists = await Settings.findOne();
@@ -271,23 +345,27 @@ const initializeDefaultData = async () => {
       console.log('✅ Default settings created');
     }
 
-    // Create default branches if none exist
+    // Create default branches if none exist (prevent duplicates)
     try {
-      const branchCount = await Branch.countDocuments();
-      if (branchCount === 0) {
-        const defaultBranches = [
-          { branchId: 'SAPTHALA.MAIN', branchName: 'Main', location: 'Head Office', phone: '7794021608', email: 'sapthalaredddydesigns@gmail.com' },
-          { branchId: 'SAPTHALA.JNTU', branchName: 'JNTU', location: 'JNTU Branch', phone: '7794021610', email: 'jntu@sapthala.com' },
-          { branchId: 'SAPTHALA.KHNB', branchName: 'KHNB', location: 'KHNB Branch', phone: '7794021611', email: 'khnb@sapthala.com' }
-        ];
-        await Branch.insertMany(defaultBranches);
-        console.log('✅ Default branches created');
+      const defaultBranches = [
+        { branchId: 'SAPTHALA.MAIN', branchName: 'Main', location: 'Head Office', phone: '7794021608', email: 'sapthalaredddydesigns@gmail.com' },
+        { branchId: 'SAPTHALA.JNTU', branchName: 'JNTU', location: 'JNTU Branch', phone: '7794021610', email: 'jntu@sapthala.com' },
+        { branchId: 'SAPTHALA.KPHB', branchName: 'KPHB', location: 'KPHB Branch', phone: '7794021611', email: 'kphb@sapthala.com' },
+        { branchId: 'SAPTHALA.ECIL', branchName: 'ECIL', location: 'ECIL Branch', phone: '7794021612', email: 'ecil@sapthala.com' }
+      ];
+      
+      for (const br of defaultBranches) {
+        const exists = await Branch.findOne({ branchId: br.branchId });
+        if (!exists) {
+          await Branch.create(br);
+          console.log(`✅ Created branch: ${br.branchId}`);
+        }
       }
     } catch (err) {
       console.error('Error creating default branches:', err);
     }
 
-    // Ensure each branch has staff for each workflow stage (idempotent)
+    // Ensure each branch has ONE staff member for each workflow stage
     try {
       const allBranches = await Branch.find();
       const settings = await Settings.findOne();
@@ -296,9 +374,10 @@ const initializeDefaultData = async () => {
       for (const br of allBranches) {
         for (const st of stages) {
           const stageId = st.id || st.name.replace(/\s+/g, '-').toLowerCase();
-          const existing = await Staff.findOne({ branch: br.branchId, workflowStages: stageId });
+          const staffId = `${br.branchId.replace(/\./g, '_')}_${stageId}`;
+          
+          const existing = await Staff.findOne({ staffId });
           if (!existing) {
-            const staffId = `${br.branchId.replace(/\s+/g, '')}_${stageId}`;
             const staffName = `${st.name} (${br.branchName})`;
             await Staff.create({
               staffId,
@@ -312,7 +391,7 @@ const initializeDefaultData = async () => {
               skills: st.requiredSkills || [],
               isAvailable: true
             });
-            console.log(`✅ Created staff ${staffId} for branch ${br.branchId} stage ${stageId}`);
+            console.log(`✅ Created staff ${staffId}`);
           }
         }
       }
@@ -327,9 +406,19 @@ const initializeDefaultData = async () => {
   }
 };
 
+// Helper: returns true when Mongoose is connected to MongoDB (readyState === 1)
+const isMongoConnected = () => {
+  try {
+    return mongoose && mongoose.connection && mongoose.connection.readyState === 1;
+  } catch (e) {
+    return false;
+  }
+};
+
 module.exports = {
   connectDB,
   initializeDefaultData,
+  isMongoConnected,
   Staff,
   Order,
   Customer,
@@ -337,5 +426,6 @@ module.exports = {
   Settings,
   Notification,
   LoginAttempt,
-  Branch
+  Branch,
+  Vendor
 };

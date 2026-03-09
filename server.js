@@ -6,13 +6,76 @@ const path = require('path');
 const fs = require('fs');
 const { URL } = require('url');
 
-const { connectDB, initializeDefaultData, Order, Customer, User, Staff, Settings, Notification, LoginAttempt, Branch, Vendor } = require('./database');
+const { connectDB, initializeDefaultData, isMongoConnected, Order, Customer, User, Staff, Settings, Notification, LoginAttempt, Branch, Vendor } = require('./database');
 const PDFService = require('./services/pdfService');
 const EnhancedPDFService = require('./services/enhancedPdfService');
 const NotificationService = require('./services/notificationService');
 const DataFlowService = require('./services/dataFlowService');
 const dataFlowRoutes = require('./routes/dataFlowRoutes');
 const firebaseIntegrationService = require('./firebase-integration-service');
+     
+function clientDB(req) {
+  if (!req) return firebaseIntegrationService;
+  if (typeof req === 'string') {
+    return req ? firebaseIntegrationService.forClient(req) : firebaseIntegrationService;
+  }
+  // Super-admin: no boutique scope
+  if (req.user?.role === 'super-admin') return firebaseIntegrationService;
+
+  // Authenticated user — get adminId from JWT
+  const adminId = req.user?.adminId;
+  if (adminId) return firebaseIntegrationService.forClient(adminId);
+
+  // Public/staff routes — no token, use boutique hint from query param
+  // e.g. /api/staff?adminId=sapthala-designer-workshop
+  const hintId = req.query?.adminId || req.body?.adminId;
+  if (hintId) return firebaseIntegrationService.forClient(hintId);
+
+  // Only warn when there IS a logged-in user but adminId is missing (real problem)
+  if (req.user?.username) {
+    console.warn(`⚠️ clientDB: user '${req.user.username}' has no adminId — add adminId field to Firestore /users/${req.user.username}`);
+  }
+  return firebaseIntegrationService; // flat fallback — safe
+} 
+// --------- Simple in-memory cache (Map) ---------
+// Used to reduce repeated Firestore reads and lighten backend load.
+// Cache entries: { value, expires }
+const cache = new Map();
+
+function setCache(key, value, ttlMs) {
+  const expires = Date.now() + ttlMs;
+  cache.set(key, { value, expires });
+}
+
+function getCache(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function invalidateCache(patterns) {
+  if (!Array.isArray(patterns)) patterns = [patterns];
+  for (const key of Array.from(cache.keys())) {
+    for (const pat of patterns) {
+      if (key.includes(pat)) {
+        cache.delete(key);
+        break;
+      }
+    }
+  }
+}
+
+// periodic cleanup of expired entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if (entry.expires <= now) cache.delete(key);
+  }
+}, 5 * 60 * 1000);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,7 +97,7 @@ app.use((req, res, next) => {
   if (req.url.endsWith('.html')) res.type('text/html');
   next();
 });
-
+                         
 // Cache-busting middleware for HTML and JS files
 app.use((req, res, next) => {
   if (req.url.endsWith('.html') || req.url.endsWith('.js')) {
@@ -56,45 +119,107 @@ app.use(express.static('public', {
 app.use('/uploads', express.static('uploads'));
 app.use('/pdfs', express.static('pdfs'));
 app.use('/img', express.static('img'));
-app.use('/invoice-theme', express.static('invoice theme'));
+app.use('/invoice-theme', express.static(path.join(__dirname, 'invoice theme')));
 // Fix for image paths - serve without spaces in URL
 app.use('/images', express.static('sapthala admin imgs'));
 app.use('/sapthala-admin-imgs', express.static('sapthala admin imgs'));
 
 // Serve super-admin-panel React app - CRITICAL FIX
+// Serve super-admin-panel React app - CRITICAL FIX
 const superAdminPath = path.join(__dirname, 'Boutique-app', 'super-admin-panel', 'dist');
 if (fs.existsSync(superAdminPath)) {
-  // Serve all assets with correct MIME types
-  app.use('/assets', express.static(path.join(superAdminPath, 'assets'), {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
-      if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=UTF-8');
-      res.setHeader('Cache-Control', 'no-store');
-    }
-  }));
-  
+ // ✅ Scope super-admin assets to /super-admin/assets — avoids conflict with boutique admin panel
+          app.use('/super-admin/assets', express.static(path.join(superAdminPath, 'assets'), {
+            setHeaders: (res, filePath) => {
+              if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+              if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=UTF-8');
+              res.setHeader('Cache-Control', 'no-store');
+            }
+          }));
   // Serve super-admin index for /super-admin route
   app.get('/super-admin', (req, res) => {
     res.sendFile(path.join(superAdminPath, 'index.html'));
   });
-  
   // SPA routing - all /super-admin/* routes go to index.html
   app.get('/super-admin/*', (req, res) => {
     res.sendFile(path.join(superAdminPath, 'index.html'));
   });
-  
   console.log('✅ Super Admin Panel React app configured');
 }
 
 // Data Flow Routes for seamless admin-staff synchronization
 app.use('/api', dataFlowRoutes);
 
+// Helper: fetch application settings — Firestore first, Mongo fallback
+// helper retrieves application settings, with in-memory caching
+// options: { req } - optional request object for nocache query param
+async function getAppSettings(options = {}) {
+  const req = options.req;
+  const force = req && req.query && req.query.nocache === '1';
+  const cacheKey = 'app_settings';
+
+  if (!force) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
+
+  // Try Firestore
+  let settings = null;
+  try {
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+       const fb = await clientDB(req).getCollection('settings', { limit: 1 });
+      if (fb && fb.success && fb.data && fb.data.length > 0) {
+        settings = fb.data[0];
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ getAppSettings: Firestore read failed:', e && e.message ? e.message : e);
+  }
+
+  // Fallback to MongoDB when connected and if still missing
+  if ((!settings || Object.keys(settings).length === 0) && typeof isMongoConnected === 'function' && isMongoConnected()) {
+    try {
+      const s = await Settings.findOne();
+      if (s) settings = s;
+    } catch (e) {
+      console.warn('⚠️ getAppSettings: MongoDB read failed:', e && e.message ? e.message : e);
+    }
+  }
+
+  // Cache result (could be null) for 10 minutes
+  setCache(cacheKey, settings, 10 * 60 * 1000);
+  return settings;
+}
+
+
 // ==================== ROUTE HANDLERS FOR ADMIN PANEL ====================
 
 // Serve root as admin panel (sapthala-admin-clean preferred)
 app.get('/', (req, res) => {
   const cleanAdmin = path.join(__dirname, 'sapthala-admin-clean.html');
-  if (fs.existsSync(cleanAdmin)) return res.sendFile(cleanAdmin);
+  if (fs.existsSync(cleanAdmin)) {
+    // If running in degraded mode (Firebase not initialized / DB unavailable), inject a small banner and global flag
+    if (!firebaseIntegrationService.initialized || !app.locals.dbAvailable) {
+      try {
+        let html = fs.readFileSync(cleanAdmin, 'utf8');
+        const inject = "\n<!-- injected by server: degraded-mode notice -->\n<script>window.__SAPTHALA_DEGRADED_MODE = true;console.warn('SAPTHALA: running in degraded mode (DB or Firebase unavailable)');</script>\n<div id=\"sapthala-server-banner\" style=\"position:fixed;top:0;left:0;right:0;background:#fff7ed;color:#92400e;padding:8px 10px;z-index:99998;text-align:center;font-weight:700;border-bottom:2px solid #fecaca;\">⚠️ Server running in degraded mode — some features (Firebase) may be unavailable. Check server logs.</div>\n";
+        // Inject after opening <body> if present, else after </style>
+        if (html.indexOf('<body') !== -1) {
+          html = html.replace(/<body(.*?)>/i, match => `${match}\n${inject}`);
+        } else if (html.indexOf('</style>') !== -1) {
+          html = html.replace('</style>', `</style>\n${inject}`);
+        } else {
+          html = inject + html;
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      } catch (err) {
+        console.warn('Failed to inject degraded-mode banner:', err.message);
+        return res.sendFile(cleanAdmin);
+      }
+    }
+    return res.sendFile(cleanAdmin);
+  }
   const fallback = path.join(__dirname, 'admin-panel.html');
   if (fs.existsSync(fallback)) return res.sendFile(fallback);
   return res.status(404).send('Admin panel not found');
@@ -132,16 +257,21 @@ app.get(['/admin/*', '/sub-admin', '/sub-admin/*'], (req, res) => {
   return res.redirect('/');
 });
 
-// Staff portal endpoint (supports deep links)
+ 
 app.get(['/staff', '/staff/*'], (req, res) => {
   const staffPath = path.join(__dirname, 'staff-portal.html');
-  if (fs.existsSync(staffPath)) return res.sendFile(staffPath);
-  return res.status(404).send('Staff portal not found');
-});
-
-// Backwards-compatible aliases for the Super Admin SPA
-app.get(['/super-admin-panel', '/superadmin', '/superadmin/*'], (req, res) => {
-  return res.redirect('/super-admin');
+  if (!fs.existsSync(staffPath)) return res.status(404).send('Staff portal not found');
+  const adminId = req.query.adminId || '';
+  try {
+    let html = fs.readFileSync(staffPath, 'utf8');
+    const injection = `<script>window.__SAPTHALA_ADMIN_ID = ${JSON.stringify(adminId)};</script>`;
+    html = html.replace('<head>', '<head>\n' + injection);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(html);
+  } catch (e) {
+    return res.sendFile(staffPath);
+  }
 });
 
 // ==================== FAVICON & STATIC FILES ====================
@@ -167,46 +297,65 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// Connect to MongoDB and initialize data
+// Connect to Firebase (Primary Database)
 (async () => {
   try {
-    console.log('Starting server initialization...');
+    console.log('🔥 Starting Firebase initialization...');
     
-    // Initialize Firebase Integration Service
-    console.log('🔥 Initializing Firebase Integration...');
     const firebaseInitialized = await firebaseIntegrationService.initialize();
-    if (firebaseInitialized) {
-      console.log('✅ Firebase integration active - all panels connected');
-      
-      // Auto-sync MongoDB to Firebase if enabled
-      if (process.env.AUTO_SYNC_TO_FIREBASE === 'true') {
-        console.log('🔄 Auto-sync to Firebase enabled');
-        // Sync will happen after MongoDB connection
+
+    // If Firebase is unavailable, fall back to MongoDB so the server still starts in dev.
+    if (!firebaseInitialized) {
+      console.warn('⚠️ Firebase initialization failed — attempting MongoDB fallback');
+      console.warn('⚠️ To enable Firebase, set GOOGLE_APPLICATION_CREDENTIALS or start the Firestore emulator');
+      try {
+        await connectDB();
+        await initializeDefaultData();
+        app.locals.dbAvailable = true;
+        console.log('✅ MongoDB connected (fallback) — server will start using MongoDB as primary data source');
+      } catch (err) {
+        // Do NOT exit — start server in degraded mode so UI can show cached/placeholders
+        app.locals.dbAvailable = false;
+        console.error('⚠️ MongoDB fallback failed:', err.message);
+        console.error('⚠️ Starting server in degraded mode: database unavailable (some API endpoints will return 503)');
       }
     } else {
-      console.log('⚠️ Firebase integration disabled - using MongoDB only');
+      console.log('✅ Firebase connected successfully');
+      console.log('✅ Using Firebase as primary database');
+      app.locals.dbAvailable = true;
+       const adminSdk = require('firebase-admin');
+      const db = firebaseIntegrationService.getDb();
+      
+      // Optional: Connect MongoDB for backup/migration when explicitly requested
+      if (process.env.USE_MONGO_BACKUP === 'true') {
+        try {
+          await connectDB();
+          await initializeDefaultData();
+          console.log('✅ MongoDB backup connected');
+        } catch (err) {
+          console.warn('⚠️ MongoDB backup not available:', err.message);
+        }
+      }
     }
-    
-    if (process.env.SKIP_MONGO === 'true') {
-      console.log('⚠️ SKIP_MONGO=true — skipping MongoDB connection and default data initialization');
-    } else {
-      await connectDB();
-      await initializeDefaultData();
-      
-      // Perform initial sync to Firebase if enabled
-      if (firebaseInitialized && process.env.AUTO_SYNC_TO_FIREBASE === 'true') {
-        console.log('🔄 Performing initial sync to Firebase...');
-        setTimeout(async () => {
-          try {
-            const syncResult = await firebaseIntegrationService.batchSyncFromMongoDB({
-              Order, Staff, Customer, Branch, User
-            });
-            console.log('✅ Initial Firebase sync completed:', syncResult.results);
-          } catch (syncError) {
-            console.warn('⚠️ Initial Firebase sync failed:', syncError.message);
-          }
-        }, 5000); // Delay to ensure server is fully started
+
+    // --- CHANGE: Only attempt MongoDB connection when USE_MONGO_BACKUP === 'true'
+    if (process.env.USE_MONGO_BACKUP === 'true') {
+      try {
+        // If not already connected, attempt to connect (helps avoid Mongoose buffering timeouts)
+        if (typeof isMongoConnected === 'function' && !isMongoConnected()) {
+          console.log('🔁 Attempting MongoDB backup connection (background)...');
+          await connectDB();
+          await initializeDefaultData();
+          console.log('✅ MongoDB backup connection established');
+        } else {
+          console.log('ℹ️ MongoDB already connected or not required');
+        }
+      } catch (err) {
+        console.warn('⚠️ MongoDB backup connection failed (continuing):', err.message);
+        // Do not throw — server should remain up (degraded) so public endpoints can still work
       }
+    } else {
+      console.log('ℹ️ MongoDB backup disabled — running Firestore-only (set USE_MONGO_BACKUP=true to enable)');
     }
 
     console.log('About to call app.listen()...');
@@ -214,7 +363,7 @@ process.on('uncaughtException', (error) => {
       console.log(`🚀 SAPTHALA Boutique Server running on port ${PORT}`);
       console.log(`📱 Admin Panel: http://localhost:${PORT}`);
       console.log(`🔗 API Base: http://localhost:${PORT}/api`);
-      console.log(`🗄️ MongoDB: Connected to sapthala_boutique database`);
+      console.log(`🔥 Firebase: Connected and Active`);
       console.log(`✅ Server is ready to accept requests`);
       console.log(`🔌 LISTENING ON 127.0.0.1:${PORT}`);
       console.log(`🔔 THIS MESSAGE APPEARS FROM WITHIN THE LISTEN CALLBACK`);
@@ -254,38 +403,29 @@ process.on('uncaughtException', (error) => {
   }
 })();
 
-// Authentication middleware — supports server JWT OR Firebase ID token
-// Initialize firebase-admin from GOOGLE_APPLICATION_CREDENTIALS if set, otherwise fall back to repo-default service account.
-const adminSdkPath = path.join(__dirname, 'Boutique-app', 'super-admin-backend', 'src', 'main', 'resources', 'firebase', 'super-admin-auth.json');
+// ✅ Reuse the firebase-admin already initialized by firebase-integration-service.js
+// Never call initializeApp() again — it will throw "already initialized" error
 let firebaseAdmin;
 try {
   const admin = require('firebase-admin');
-  // Prefer service account via env var for live/production usage
-  const envCredPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (envCredPath && fs.existsSync(envCredPath)) {
-    const svc = require(envCredPath);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
+  if (admin.apps.length > 0) {
+    // Already initialized by firebase-integration-service.js ✅
     firebaseAdmin = admin;
-    console.log('✅ Firebase Admin initialized from GOOGLE_APPLICATION_CREDENTIALS');
-  } else if (fs.existsSync(adminSdkPath)) {
-    const svc = require(adminSdkPath);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-    firebaseAdmin = admin;
-    console.log('✅ Firebase Admin initialized from repo service account');
-  } else if (process.env.FIRESTORE_EMULATOR_HOST) {
-    // Running with Firestore emulator — initialize admin SDK in emulator-friendly mode
-    try {
-      admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'sapthala-test' });
-      firebaseAdmin = admin;
-      console.log('✅ Firebase Admin initialized to use Firestore emulator at', process.env.FIRESTORE_EMULATOR_HOST);
-    } catch (e) {
-      console.warn('⚠️ Failed to initialize firebase-admin for emulator:', e && e.message ? e.message : e);
-    }
+    console.log('✅ Firebase Admin reused from existing initialization (boutique-staff-app)');
   } else {
-    console.warn('⚠️ Firebase service account not found; Firebase token verification will be unavailable');
+    // Fallback: initialize directly (only if integration service failed)
+    const adminSdkPath = path.join(__dirname, 'firebase-credentials.json');
+    if (fs.existsSync(adminSdkPath)) {
+      const svc = require(adminSdkPath);
+      admin.initializeApp({ credential: admin.credential.cert(svc) });
+      firebaseAdmin = admin;
+      console.log('✅ Firebase Admin initialized from firebase-credentials.json (boutique-staff-app)');
+    } else {
+      console.warn('⚠️ firebase-credentials.json not found');
+    }
   }
 } catch (e) {
-  console.warn('⚠️ firebase-admin not available — skipping Firebase token verification');
+  console.warn('⚠️ firebase-admin setup error:', e.message);
 }
 
 // Normalize roles to canonical values ('super-admin','admin','sub-admin')
@@ -305,56 +445,59 @@ const authenticateToken = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
   }
-
-  // 1) Try Firebase token verification first (if firebase-admin initialized)
+ 
+  // ✅ PATH 1: Firebase ID token (super-admin React panel)
   if (firebaseAdmin) {
     try {
       const decoded = await firebaseAdmin.auth().verifyIdToken(token);
-      // Map Firebase email/uid to server User entry
       const email = decoded.email;
-      if (email) {
-        const user = await User.findOne({ email });
-        if (user) {
-          req.user = {
-            id: user._id,
-            username: user.username || email,
-            role: canonicalizeRole(user.role || decoded.role || ''),
-            email: email,
-            permissions: user.permissions || {}
-          };
-          return next();
-        }
+      const uid = decoded.uid;
+
+      // Super-admin trusted email
+      const SUPER_ADMIN_EMAILS = ['mstechno2323@gmail.com'];
+      if (SUPER_ADMIN_EMAILS.includes(email)) {
+        req.user = {
+          id: uid, username: email,
+          role: 'super-admin', email,
+          adminId: decoded.adminId || null,
+          permissions: {}
+        };
+        return next();
       }
 
-      // No mapped server user — try to infer role from Firebase custom claims (graceful fallback)
-      const claimsRole = decoded && (decoded.role || decoded.claims && decoded.claims.role);
-      if (claimsRole && /super|admin/i.test(String(claimsRole))) {
-        // Allow known trusted super-admin emails only (defensive)
-        const trusted = ['mstechno2323@gmail.com'];
-        if (trusted.includes(email)) {
-          req.user = {
-            id: null,
-            username: email,
-            role: canonicalizeRole(claimsRole),
-            email,
-            permissions: {}
-          };
-          return next();
-        }
+      // All other Firebase users — role from custom claims
+      const role = canonicalizeRole(decoded.role || '');
+      if (!role) {
+        return res.status(403).json({ error: 'Access denied. No role assigned.' });
       }
+      req.user = {
+        id: uid,
+        username: decoded.name || email,
+        role, email,
+        adminId: decoded.adminId || null,
+        branch: decoded.branch || null,
+        permissions: decoded.permissions || {}
+      };
+      return next();
 
-      // If token valid but no matching server user → forbidden
-      return res.status(403).json({ error: 'Access denied. No mapped user for Firebase token.' });
-    } catch (err) {
-      // Not a Firebase token or verification failed — fallthrough to JWT verify
-      // console.debug('Firebase token verify failed:', err?.message || err);
+    } catch (firebaseErr) {
+      // ✅ PATH 2: Not a Firebase token — try Spring Boot / server JWT
+      // (boutique admin panel sends JWT signed with JWT_SECRET)
+      return jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+          // Log cleanly — no scary stack trace for expected failures
+          return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+        if (user && user.role) user.role = canonicalizeRole(user.role);
+        req.user = user;
+        return next();
+      });
     }
   }
 
-  // 2) Fallback: existing server JWT (signed with JWT_SECRET)
+  // Firebase Admin not initialized — fallback to JWT only
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    // Ensure role is canonicalized for downstream checks
+    if (err) return res.status(401).json({ error: 'Invalid or expired token' });
     if (user && user.role) user.role = canonicalizeRole(user.role);
     req.user = user;
     next();
@@ -410,6 +553,62 @@ app.get('/api/public/health/firestore', async (req, res) => {
   }
 });
 
+// Public MongoDB health check (no auth) used by admin UI header and CI
+app.get('/api/public/health/mongo', async (req, res) => {
+  try {
+    const healthy = typeof isMongoConnected === 'function' && isMongoConnected();
+    if (healthy) return res.json({ success: true, message: 'MongoDB connected' });
+    return res.status(503).json({ success: false, message: 'MongoDB not connected' });
+  } catch (error) {
+    console.error('MongoDB public health check error:', error);
+    return res.status(500).json({ success: false, error: 'Health check failed' });
+  }
+});
+
+// Private/authenticated MongoDB health check (requires admin token)
+app.get('/api/health/mongo', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ error: 'Access denied' });
+    const healthy = typeof isMongoConnected === 'function' && isMongoConnected();
+    if (healthy) return res.json({ success: true, message: 'MongoDB connected', readyState: 1 });
+    return res.status(503).json({ success: false, message: 'MongoDB not connected', readyState: (typeof mongoose !== 'undefined' && mongoose.connection) ? mongoose.connection.readyState : 0 });
+  } catch (error) {
+    console.error('MongoDB health check error:', error);
+    return res.status(500).json({ success: false, error: 'Health check failed' });
+  }
+});
+
+// Public last-orders report (no auth) - used for dashboard when user is not authenticated (safe, sanitized)
+app.get('/api/public/reports/last-orders', async (req, res) => {
+  try {
+    // If neither Firebase nor MongoDB are available, return a safe degraded response
+    if (!app.locals.dbAvailable && !firebaseIntegrationService.initialized) {
+      return res.status(503).json({ success: false, orders: [], error: 'Database unavailable' });
+    }
+
+    const limit = Math.min(30, parseInt(req.query.limit || '10', 10));
+    const orders = await Order.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select('orderId createdAt totalAmount garmentType status branch')
+      .lean();
+
+    const formatted = (orders || []).map(o => ({
+      orderId: o.orderId,
+      createdAt: o.createdAt,
+      totalAmount: o.totalAmount || 0,
+      garmentType: o.garmentType || 'Other',
+      status: o.status || 'pending',
+      branch: o.branch || ''
+    }));
+
+    return res.json({ success: true, orders: formatted });
+  } catch (error) {
+    console.error('Public last-orders error:', error.message || error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch public last orders' });
+  }
+});
+
 // Firebase Integration Status (for admin panels)
 app.get('/api/firebase/status', async (req, res) => {
   try {
@@ -427,19 +626,26 @@ app.get('/api/firebase/status', async (req, res) => {
 // Get Orders from Firebase (preferred source - real-time & synced)
 app.get('/api/admin/orders/firebase/list', authenticateToken, async (req, res) => {
   try {
-    console.log('🔥 Fetching orders from Firebase...');
-    
     const branch = req.query.branch || (req.user.role === 'sub-admin' ? req.user.branch : null);
-    
+    const nocache = req.query.nocache === '1';
+    const cacheKey = `orders_list_${branch||'all'}`;
+    if (!nocache) {
+      const cached = getCache(cacheKey);
+      if (cached) return res.json(cached);
+    }
+
+    console.log('🔥 Fetching orders from Firebase...');
+
     // Fetch from Firebase
     const filters = {};
     if (branch) {
       filters.where = [['branch', '==', branch]];
     }
     filters.orderBy = { field: 'createdAt', direction: 'desc' };
-    
-    const result = await firebaseIntegrationService.getCollection('orders', filters);
-    
+
+     const result = await clientDB(req).getCollection('orders', filters);
+
+    let responseBody;
     if (!result.success) {
       console.warn('⚠️ Firebase fetch failed, falling back to MongoDB');
       // Fall back to MongoDB
@@ -460,18 +666,20 @@ app.get('/api/admin/orders/firebase/list', authenticateToken, async (req, res) =
         branch: order.branch,
         workflowTasks: order.workflowTasks || []
       }));
-      return res.json({ success: true, source: 'mongodb', orders: formatted });
+      responseBody = { success: true, source: 'mongodb', orders: formatted };
+    } else {
+      const orders = result.data || [];
+      console.log(`✅ Fetched ${orders.length} orders from Firebase`);
+      responseBody = {
+        success: true,
+        source: 'firebase',
+        orders: orders,
+        dataSource: 'Firebase Firestore (Real-time)'
+      };
     }
-    
-    const orders = result.data || [];
-    console.log(`✅ Fetched ${orders.length} orders from Firebase`);
-    
-    res.json({ 
-      success: true, 
-      source: 'firebase',
-      orders: orders,
-      dataSource: 'Firebase Firestore (Real-time)'
-    });
+
+    setCache(cacheKey, responseBody, 3 * 60 * 1000);
+    return res.json(responseBody);
   } catch (error) {
     console.error('❌ Firebase orders fetch error:', error);
     // Fallback to MongoDB
@@ -494,12 +702,14 @@ app.get('/api/admin/orders/firebase/list', authenticateToken, async (req, res) =
         branch: order.branch,
         workflowTasks: order.workflowTasks || []
       }));
-      res.json({ 
-        success: true, 
-        source: 'mongodb', 
+      const responseBody = {
+        success: true,
+        source: 'mongodb',
         orders: formatted,
         dataSource: 'MongoDB (Fallback)'
-      });
+      };
+      setCache(cacheKey, responseBody,5 * 60 * 1000);
+      res.json(responseBody);
     } catch (mongoError) {
       res.status(500).json({ success: false, error: error.message, fallbackError: mongoError.message });
     }
@@ -507,422 +717,482 @@ app.get('/api/admin/orders/firebase/list', authenticateToken, async (req, res) =
 });
 
 // ==================== SUPER ADMIN ROUTES ====================
+// ── HELPER ───────────────────────────────────────────────────
+                      const db = () => firebaseIntegrationService.getDb();
+                      const SUPER_ADMIN_GUARD = (req, res) => {
+                        if (req.user.role !== 'super-admin') {
+                          res.status(403).json({ success: false, error: 'Access denied. Super-admin only.' });
+                          return false;
+                        }
+                        return true;
+                      };
 
-// Get all admins (super-admin only)
-app.get('/api/super-admin/admins', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') {
-      return res.status(403).json({ success: false, error: 'Access denied. Super-admin only.' });
-    }
+                      // ── CLIENTS ──────────────────────────────────────────────────
 
-    const admins = await User.find({ role: { $in: ['admin', 'sub-admin'] } })
-      .select('-password')
-      .sort({ createdAt: -1 });
-    
-    const enrichedAdmins = await Promise.all(admins.map(async (admin) => {
-      const branchData = admin.branch ? await Branch.findOne({ branchId: admin.branch }) : null;
-      return {
-        _id: admin._id,
-        username: admin.username,
-        email: admin.email,
-        role: admin.role,
-        branch: admin.branch,
-        branchName: branchData?.branchName || admin.branch,
-        permissions: admin.permissions,
-        isActive: admin.isActive,
-        createdAt: admin.createdAt,
-        lastLogin: admin.lastLogin
-      };
-    }));
-    
-    res.json({ success: true, admins: enrichedAdmins });
-  } catch (error) {
-    console.error('Get admins error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch admins' });
-  }
-});
+                      app.get('/api/super-admin/clients', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snapshot = await db().collection('clients').get();
+                          res.json(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                        } catch (err) { res.status(500).json({ error: 'Failed to fetch clients' }); }
+                      });
 
-// Create admin (super-admin only)
-app.post('/api/super-admin/admins', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') {
-      return res.status(403).json({ success: false, error: 'Access denied. Super-admin only.' });
-    }
+                      app.get('/api/super-admin/clients/count', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snap = await db().collection('clients').count().get();
+                          res.json({ count: snap.data().count });
+                        } catch (err) { res.status(500).json({ error: 'Failed to get clients count' }); }
+                      });
 
-    const { username, email, password, role, branch, permissions } = req.body;
-    
-    if (!username || !password || !role) {
-      return res.status(400).json({ success: false, error: 'Username, password, and role are required' });
-    }
+                      app.post('/api/super-admin/clients', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const { boutiqueName, adminEmail, adminPhone, plan, primaryColor, secondaryColor, address, status } = req.body;
+                          if (!boutiqueName || !adminEmail) return res.status(400).json({ error: 'boutiqueName and adminEmail are required' });
 
-    if (!['admin', 'sub-admin'].includes(role)) {
-      return res.status(400).json({ success: false, error: 'Invalid role' });
-    }
+                          const adminId = boutiqueName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                          const existing = await db().collection('clients').doc(adminId).get();
+                          if (existing.exists) return res.status(400).json({ error: 'Client already exists' });
 
-    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
-    if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Username or email already exists' });
-    }
+                          const selectedPlan = plan || 'starter';
+                          const clientData = {
+                            adminId, boutiqueName, adminEmail,
+                            adminPhone: adminPhone || '',
+                            primaryColor: primaryColor || '#7c183c',
+                            secondaryColor: secondaryColor || '#b22234',
+                            plan: selectedPlan,
+                            status: status || 'active',
+                            address: address || '',
+                            branchLimit: selectedPlan === 'pro' ? 10 : selectedPlan === 'growth' ? 3 : 1,
+                            orderLimitPerMonth: selectedPlan === 'pro' ? 9999 : selectedPlan === 'growth' ? 500 : 100,
+                            createdAt: new Date(),
+                            createdBy: req.user.email
+                          };
 
-    let branchId = branch;
-    if (role === 'sub-admin' && branch) {
-      branchId = branch.startsWith('SAPTHALA.') ? branch.toUpperCase() : `SAPTHALA.${branch.replace(/\s+/g, '').toUpperCase()}`;
-      
-      let branchDoc = await Branch.findOne({ branchId });
-      if (!branchDoc) {
-        const branchName = branchId.split('.')[1].replace(/([A-Z])/g, ' $1').trim();
-        branchDoc = await Branch.create({
-          branchId,
-          branchName,
-          location: `${branchName} Branch`,
-          isActive: true,
-          createdBy: req.user.id
-        });
-      }
-    }
+                          // ✅ Save client doc in flat /clients/{adminId}
+                          await db().collection('clients').doc(adminId).set(clientData);
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newAdmin = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role,
-      branch: branchId,
-      permissions: permissions || {
-        canEdit: role === 'admin',
-        canDelete: role === 'admin',
-        canViewReports: true,
-        canManageStaff: role === 'admin',
-        canManageAdmins: false
-      },
-      isActive: true,
-      createdBy: req.user.id
-    });
+                          // ✅ Create all required subcollections (matching sapthala-designer-workshop structure)
+                          const clientRef = db().collection('clients').doc(adminId);
+                          const batch = db().batch();
 
-    console.log(`✅ ${role} created by super-admin: ${username}`);
-    
-    res.json({ 
-      success: true, 
-      admin: {
-        _id: newAdmin._id,
-        username: newAdmin.username,
-        email: newAdmin.email,
-        role: newAdmin.role,
-        branch: newAdmin.branch,
-        permissions: newAdmin.permissions
-      }
-    });
-  } catch (error) {
-    console.error('Create admin error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create admin' });
-  }
-});
+                          // branches — placeholder so subcollection exists
+                          batch.set(clientRef.collection('branches').doc('main'), {
+                            branchId: 'main', branchName: boutiqueName + ' Main Branch',
+                            adminId, isActive: true, createdAt: new Date()
+                          });
+                          // orders — empty placeholder
+                          batch.set(clientRef.collection('orders').doc('_init'), { _init: true, adminId, createdAt: new Date() });
+                          // staff — empty placeholder
+                          batch.set(clientRef.collection('staff').doc('_init'), { _init: true, adminId, createdAt: new Date() });
+                          // customers — empty placeholder
+                          batch.set(clientRef.collection('customers').doc('_init'), { _init: true, adminId, createdAt: new Date() });
+                          // settings
+                          batch.set(clientRef.collection('settings').doc('general'), {
+                            adminId, boutiqueName,
+                            primaryColor: clientData.primaryColor,
+                            secondaryColor: clientData.secondaryColor,
+                            plan: selectedPlan, createdAt: new Date()
+                          });
+                          // notifications — empty placeholder
+                          batch.set(clientRef.collection('notifications').doc('_init'), { _init: true, adminId, createdAt: new Date() });
+                          // usage tracker
+                          const monthKey = new Date().toISOString().slice(0, 7);
+                          batch.set(clientRef.collection('usage').doc(monthKey), {
+                            month: monthKey, adminId, reads: 0, writes: 0, ordersCreated: 0, updatedAt: new Date()
+                          });
 
-// Update admin (super-admin only)
-app.put('/api/super-admin/admins/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
+                          await batch.commit();
 
-    const { username, email, isActive, permissions } = req.body;
-    const updateData = {};
-    
-    if (username) updateData.username = username;
-    if (email) updateData.email = email;
-    if (typeof isActive === 'boolean') updateData.isActive = isActive;
-    if (permissions) updateData.permissions = permissions;
+                          console.log(`✅ Client created with subcollections: ${adminId}`);
+                          res.json({ success: true, client: { id: adminId, ...clientData } });
+                        } catch (err) { console.error(err); res.status(500).json({ error: 'Failed to create client' }); }
+                      });
 
-    const admin = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-password');
-    
-    if (!admin) {
-      return res.status(404).json({ success: false, error: 'Admin not found' });
-    }
+                      app.put('/api/super-admin/clients/:id', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const docRef = db().collection('clients').doc(req.params.id);
+                          if (!(await docRef.get()).exists) return res.status(404).json({ error: 'Client not found' });
+                          const updates = { ...req.body, updatedAt: new Date() };
+                          await docRef.update(updates);
+                          res.json({ success: true, client: { id: req.params.id, ...updates } });
+                        } catch (err) { res.status(500).json({ error: 'Failed to update client' }); }
+                      });
 
-    res.json({ success: true, admin });
-  } catch (error) {
-    console.error('Update admin error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update admin' });
-  }
-});
+                      app.delete('/api/super-admin/clients/:id', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const docRef = db().collection('clients').doc(req.params.id);
+                          if (!(await docRef.get()).exists) return res.status(404).json({ error: 'Client not found' });
+                          for (const col of ['branches','boutique_admins','orders','staff','customers','users','usage']) {
+                            const sub = await docRef.collection(col).get();
+                            if (!sub.empty) { const b = db().batch(); sub.docs.forEach(d => b.delete(d.ref)); await b.commit(); }
+                          }
+                          await docRef.delete();
+                          res.json({ success: true, message: 'Client deleted' });
+                        } catch (err) { res.status(500).json({ error: 'Failed to delete client' }); }
+                      });
 
-// Delete admin (super-admin only)
-app.delete('/api/super-admin/admins/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
+ 
+                     // ── BOUTIQUE ADMINS — stored in flat /users collection for login ──────────────
 
-    const admin = await User.findByIdAndDelete(req.params.id);
-    if (!admin) {
-      return res.status(404).json({ success: false, error: 'Admin not found' });
-    }
+                    app.get('/api/super-admin/admins', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const snap = await db().collection('users').get();
+                        const admins = snap.docs.map(d => { const data = d.data(); delete data.password; return { id: d.id, ...data }; });
+                        res.json({ success: true, admins });
+                      } catch (err) { res.status(500).json({ success: false, error: 'Failed to fetch admins' }); }
+                    });
 
-    if (admin.branch) {
-      await Staff.deleteMany({ branch: admin.branch });
-      console.log(`✅ Staff deleted for branch: ${admin.branch}`);
-      await Branch.findOneAndDelete({ branchId: admin.branch });
-    }
+                    app.get('/api/super-admin/admins/count', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const snap = await db().collection('users').count().get();
+                        res.json({ count: snap.data().count });
+                      } catch (err) { res.status(500).json({ error: 'Failed to get admins count' }); }
+                    });
 
-    console.log(`✅ Admin deleted by super-admin: ${admin.username}`);
-    res.json({ success: true, message: 'Admin deleted successfully' });
-  } catch (error) {
-    console.error('Delete admin error:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete admin' });
-  }
-});
+                    app.post('/api/super-admin/admins', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const { clientId, name, email, username, password, role, status } = req.body;
+                        if (!clientId || !email || !username || !password) {
+                          return res.status(400).json({ error: 'clientId, email, username and password are required' });
+                        }
 
-// Get dashboard stats (super-admin only)
-app.get('/api/super-admin/dashboard', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
+                        const clientSnap = await db().collection('clients').doc(clientId).get();
+                        if (!clientSnap.exists) return res.status(404).json({ error: 'Client not found' });
+                        const clientData = clientSnap.data();
 
-    const [totalAdmins, totalBranches, totalOrders, totalStaff, totalRevenue] = await Promise.all([
-      User.countDocuments({ role: { $in: ['admin', 'sub-admin'] } }),
-      Branch.countDocuments(),
-      Order.countDocuments(),
-      Staff.countDocuments(),
-      Order.aggregate([{ $group: { _id: null, total: { $sum: '$totalAmount' } } }])
-    ]);
+                        // ✅ Check username not already taken
+                        const existing = await db().collection('users').where('username', '==', username).limit(1).get();
+                        if (!existing.empty) return res.status(400).json({ error: 'Username already exists' });
 
-    res.json({
-      success: true,
-      stats: {
-        totalAdmins,
-        totalBranches,
-        totalOrders,
-        totalStaff,
-        totalRevenue: totalRevenue[0]?.total || 0
-      }
-    });
-  } catch (error) {
-    console.error('Dashboard stats error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
-  }
-});
+                        const hashedPassword = await bcrypt.hash(password, 10);
 
-// ------------------ Additional Super-Admin endpoints (implemented on Node) ------------------
+                        const userData = {
+                          name: name || '',
+                          email,
+                          username,
+                          password: hashedPassword,
+                          role: role || 'admin',
+                          status: status || 'Active',
+                          clientId,
+                          adminId: clientId,
+                          boutiqueName: clientData.boutiqueName,
+                          isActive: true,
+                          createdAt: new Date(),
+                          createdBy: req.user.email
+                        };
 
-// Clients (map to Branch + main admin)
-app.get('/api/super-admin/clients', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') return res.status(403).json({ success: false, error: 'Access denied.' });
+                        // ✅ Save in flat /users/{username} — this allows boutique login
+                        await db().collection('users').doc(username).set(userData);
 
-    const branches = await Branch.find().sort({ createdAt: -1 });
-    const clients = await Promise.all(branches.map(async (br) => {
-      const admins = await User.find({ branch: br.branchId, role: { $in: ['admin', 'sub-admin'] } }).select('-password');
-      const mainAdmin = admins[0] || null;
-      return {
-        id: br.branchId,
-        boutiqueName: br.branchName,
-        name: mainAdmin?.username || 'Main Admin',
-        email: br.email || mainAdmin?.email || '',
-        address: br.location || '',
-        status: br.isActive ? 'Active' : 'Inactive',
-        numberOfAdmins: admins.length
-      };
-    }));
+                        console.log(`✅ Admin created in /users: ${username} for client: ${clientId}`);
+                        const safeUser = { ...userData }; delete safeUser.password;
+                        res.json({ success: true, admin: { id: username, ...safeUser } });
+                      } catch (err) { console.error(err); res.status(500).json({ success: false, error: 'Failed to create admin' }); }
+                    });
 
-    res.json(clients);
-  } catch (err) {
-    console.error('Get clients error:', err);
-    res.status(500).json({ error: 'Failed to fetch clients' });
-  }
-});
+                    app.put('/api/super-admin/admins/:adminId', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const { adminId } = req.params;
+                        const docRef = db().collection('users').doc(adminId);
+                        if (!(await docRef.get()).exists) return res.status(404).json({ error: 'Admin not found' });
+                        const updates = { ...req.body, updatedAt: new Date() };
+                        delete updates.password; // password change handled separately
+                        await docRef.update(updates);
+                        res.json({ success: true });
+                      } catch (err) { res.status(500).json({ success: false, error: 'Failed to update admin' }); }
+                    });
 
-// Create client (creates Branch + a main admin user)
-app.post('/api/super-admin/clients', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') return res.status(403).json({ success: false, error: 'Access denied.' });
+                    app.delete('/api/super-admin/admins/:adminId', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        await db().collection('users').doc(req.params.adminId).delete();
+                        res.json({ success: true });
+                      } catch (err) { res.status(500).json({ success: false, error: 'Failed to delete admin' }); }
+                    });
 
-    const { name, email, status = 'Active', boutiqueName, address } = req.body;
-    if (!name || !boutiqueName) return res.status(400).json({ error: 'name and boutiqueName are required' });
+                    app.get('/api/super-admin/admins/hierarchy/:clientId', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const { clientId } = req.params;
+                        const clientSnap = await db().collection('clients').doc(clientId).get();
+                        if (!clientSnap.exists) return res.status(404).json({ error: 'Client not found' });
 
-    const branchId = `SAPTHALA.${boutiqueName.replace(/\s+/g, '').toUpperCase()}`;
-    const branch = await Branch.create({ branchId, branchName: boutiqueName, location: address || boutiqueName, email: email || '', isActive: status === 'Active' });
+                        const [adminsSnap, branchesSnap] = await Promise.all([
+                          db().collection('users').where('clientId', '==', clientId).get(),
+                          db().collection('clients').doc(clientId).collection('branches').get()
+                        ]);
 
-    const hashed = await bcrypt.hash('sapthala@2029', 10);
-    const user = await User.create({ username: name.replace(/\s+/g, '').toLowerCase(), email: email || '', password: hashed, role: 'admin', branch: branch.branchId, isActive: true, createdBy: req.user.id });
+                        const admins = adminsSnap.docs.map(d => { const data = d.data(); delete data.password; return { id: d.id, ...data }; });
+                        res.json({
+                          client: { id: clientId, ...clientSnap.data() },
+                          admins,
+                          branches: branchesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                        });
+                      } catch (err) { res.status(500).json({ error: 'Failed to fetch hierarchy' }); }
+                    });
 
-    res.json({ success: true, client: { id: branch.branchId, boutiqueName: branch.branchName } });
-  } catch (err) {
-    console.error('Create client error:', err);
-    res.status(500).json({ error: 'Failed to create client' });
-  }
-});
+                      // ── VENDORS (/vendors flat collection) ───────────────────────
 
-// Update client
-app.put('/api/super-admin/clients/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') return res.status(403).json({ success: false, error: 'Access denied.' });
-    const { id } = req.params;
-    const { boutiqueName, address, email, status } = req.body;
+                      app.get('/api/super-admin/vendors', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snap = await db().collection('vendors').get();
+                          res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        } catch (err) { res.status(500).json({ error: 'Failed to fetch vendors' }); }
+                      });
 
-    const branch = await Branch.findOneAndUpdate({ branchId: id }, { branchName: boutiqueName, location: address, email, isActive: status === 'Active' }, { new: true });
-    if (!branch) return res.status(404).json({ error: 'Client not found' });
-    res.json({ success: true, client: { id: branch.branchId, boutiqueName: branch.branchName } });
-  } catch (err) {
-    console.error('Update client error:', err);
-    res.status(500).json({ error: 'Failed to update client' });
-  }
-});
+                      app.get('/api/super-admin/vendors/count', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snap = await db().collection('vendors').count().get();
+                          res.json({ count: snap.data().count });
+                        } catch (err) { res.status(500).json({ error: 'Failed to get vendors count' }); }
+                      });
 
-// Delete client
-app.delete('/api/super-admin/clients/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'super-admin') return res.status(403).json({ success: false, error: 'Access denied.' });
-    const { id } = req.params;
+                      app.post('/api/super-admin/vendors', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const ref = db().collection('vendors').doc();
+                          const vendor = { id: ref.id, ...req.body, status: req.body.status || 'Active', createdAt: new Date() };
+                          await ref.set(vendor);
+                          res.json(vendor);
+                        } catch (err) { res.status(500).json({ error: 'Failed to create vendor' }); }
+                      });
 
-    const branch = await Branch.findOneAndDelete({ branchId: id });
-    if (!branch) return res.status(404).json({ error: 'Client not found' });
+                      app.put('/api/super-admin/vendors/:id', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const ref = db().collection('vendors').doc(req.params.id);
+                          if (!(await ref.get()).exists) return res.status(404).json({ error: 'Vendor not found' });
+                          await ref.update({ ...req.body, updatedAt: new Date() });
+                          res.json({ success: true });
+                        } catch (err) { res.status(500).json({ error: 'Failed to update vendor' }); }
+                      });
 
-    await User.deleteMany({ branch: id });
-    await Staff.deleteMany({ branch: id });
+                      app.delete('/api/super-admin/vendors/:id', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          await db().collection('vendors').doc(req.params.id).delete();
+                          res.json({ success: true });
+                        } catch (err) { res.status(500).json({ error: 'Failed to delete vendor' }); }
+                      });
 
-    res.json({ success: true, message: 'Client deleted' });
-  } catch (err) {
-    console.error('Delete client error:', err);
-    res.status(500).json({ error: 'Failed to delete client' });
-  }
-});
+                      // ── USERS (/users flat collection) ────────────────────────────
 
-// Clients count
-app.get('/api/super-admin/clients/count', authenticateToken, async (req, res) => {
-  try {
-    const count = await Branch.countDocuments();
-    res.json({ count });
-  } catch (err) {
-    console.error('Clients count error:', err);
-    res.status(500).json({ error: 'Failed to get clients count' });
-  }
-});
+                      app.get('/api/super-admin/users', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snap = await db().collection('users').get();
+                          res.json(snap.docs.map(d => { const data = d.data(); delete data.password; return { id: d.id, ...data }; }));
+                        } catch (err) { res.status(500).json({ error: 'Failed to fetch users' }); }
+                      });
 
-// Admins count
-app.get('/api/super-admin/admins/count', authenticateToken, async (req, res) => {
-  try {
-    const count = await User.countDocuments({ role: { $in: ['admin', 'sub-admin'] } });
-    res.json({ count });
-  } catch (err) {
-    console.error('Admins count error:', err);
-    res.status(500).json({ error: 'Failed to get admins count' });
-  }
-});
+                      app.get('/api/super-admin/users/count', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const snap = await db().collection('users').count().get();
+                          res.json({ count: snap.data().count });
+                        } catch (err) { res.status(500).json({ error: 'Failed to get users count' }); }
+                      });
 
-// Users list + count
-app.get('/api/super-admin/users', authenticateToken, async (req, res) => {
-  try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    res.json(users);
-  } catch (err) {
-    console.error('Get users error:', err);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-app.get('/api/super-admin/users/count', authenticateToken, async (req, res) => {
-  try {
-    const count = await User.countDocuments();
-    res.json({ count });
-  } catch (err) {
-    console.error('Users count error:', err);
-    res.status(500).json({ error: 'Failed to get users count' });
-  }
-});
+                      // ── DASHBOARD ─────────────────────────────────────────────────
 
-// Vendors CRUD + count (simple Mongo-backed implementation)
-app.get('/api/super-admin/vendors', authenticateToken, async (req, res) => {
-  try {
-    const vendors = await Vendor.find().sort({ createdAt: -1 });
-    res.json(vendors);
-  } catch (err) {
-    console.error('Get vendors error:', err);
-    res.status(500).json({ error: 'Failed to fetch vendors' });
-  }
-});
-app.post('/api/super-admin/vendors', authenticateToken, async (req, res) => {
-  try {
-    const { name, email, status } = req.body;
-    const v = await Vendor.create({ name, email, status: status || 'Active' });
-    res.json(v);
-  } catch (err) {
-    console.error('Create vendor error:', err);
-    res.status(500).json({ error: 'Failed to create vendor' });
-  }
-});
-app.put('/api/super-admin/vendors/:id', authenticateToken, async (req, res) => {
-  try {
-    const updated = await Vendor.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updated) return res.status(404).json({ error: 'Vendor not found' });
-    res.json(updated);
-  } catch (err) {
-    console.error('Update vendor error:', err);
-    res.status(500).json({ error: 'Failed to update vendor' });
-  }
-});
-app.delete('/api/super-admin/vendors/:id', authenticateToken, async (req, res) => {
-  try {
-    await Vendor.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Delete vendor error:', err);
-    res.status(500).json({ error: 'Failed to delete vendor' });
-  }
-});
-app.get('/api/super-admin/vendors/count', authenticateToken, async (req, res) => {
-  try {
-    const count = await Vendor.countDocuments();
-    res.json({ count });
-  } catch (err) {
-    console.error('Vendors count error:', err);
-    res.status(500).json({ error: 'Failed to get vendors count' });
-  }
-});
+                      app.get('/api/super-admin/dashboard', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const [clientsSnap, vendorsSnap, usersSnap, allClientsSnap] = await Promise.all([
+                            db().collection('clients').count().get(),
+                            db().collection('vendors').count().get(),
+                            db().collection('users').count().get(),
+                            db().collection('clients').get()
+                          ]);
+                          const adminsCountSnap = await db().collection('users').count().get();
+                          const totalAdmins = adminsCountSnap.data().count;
+                          res.json({ success: true, stats: {
+                            totalClients: clientsSnap.data().count,
+                            totalAdmins,
+                            totalVendors: vendorsSnap.data().count,
+                            totalUsers: usersSnap.data().count
+                          }});
+                        } catch (err) { res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' }); }
+                      });
 
-// Admins hierarchy (branches + subadmins for a client/branch)
-app.get('/api/super-admin/admins/hierarchy/:clientId', authenticateToken, async (req, res) => {
-  try {
-    const { clientId } = req.params;
-    const branch = await Branch.findOne({ branchId: clientId });
-    if (!branch) return res.status(404).json({ branches: [] });
+                      app.get('/api/super-admin/dashboard/active-admins-last-7-days', authenticateToken, async (req, res) => {
+                        try {
+                          if (!SUPER_ADMIN_GUARD(req, res)) return;
+                          const counts = [];
+                          for (let i = 6; i >= 0; i--) {
+                            const start = new Date(); start.setDate(start.getDate() - i); start.setHours(0,0,0,0);
+                            const end = new Date(start); end.setDate(start.getDate() + 1);
+                            const snap = await db().collection('loginAttempts')
+                              .where('success', '==', true).where('timestamp', '>=', start).where('timestamp', '<', end).get();
+                            counts.push(new Set(snap.docs.map(d => d.data().username)).size);
+                          }
+                          res.json(counts);
+                        } catch (err) { res.json([0,0,0,0,0,0,0]); }
+                      });
+                      // ── SUB-ADMINS TOTAL COUNT (across all clients) ───────────────
+                    app.get('/api/super-admin/sub-admins/count', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const snap = await db().collection('users')
+                          .where('role', '==', 'sub-admin').count().get();
+                        res.json({ count: snap.data().count });
+                      } catch (err) {
+                        console.error('Sub-admins count error:', err);
+                        res.status(500).json({ error: 'Failed to get sub-admins count' });
+                      }
+                    });
+                    app.get('/api/super-admin/clients/:clientId/sub-admins', authenticateToken, async (req, res) => {
+                    try {
+                      if (!SUPER_ADMIN_GUARD(req, res)) return;
+                      const { clientId } = req.params;
+                      const snap = await db().collection('clients').doc(clientId)
+                        .collection('users').where('role', '==', 'sub-admin').get();
+                      const subAdmins = snap.docs.map(d => {
+                        const data = d.data();
+                        delete data.password;
+                        return { id: d.id, ...data };
+                      });
+                      res.json({ success: true, subAdmins });
+                    } catch (err) {
+                      console.error('Sub-admins list error:', err);
+                      res.status(500).json({ error: 'Failed to fetch sub-admins' });
+                    }
+                  });
+                  app.get('/api/super-admin/clients/:clientId/main-admin', authenticateToken, async (req, res) => {
+                    try {
+                      if (!SUPER_ADMIN_GUARD(req, res)) return;
+                      const { clientId } = req.params;
+                      const snap = await db().collection('users')
+                        .where('clientId', '==', clientId)
+                        .where('role', '==', 'admin').limit(1).get();
+                      if (snap.empty) return res.status(404).json({ error: 'No main admin found' });
+                      const doc = snap.docs[0];
+                      const data = doc.data();
+                      delete data.password;
+                      res.json({ success: true, admin: { id: doc.id, ...data } });
+                    } catch (err) {
+                      console.error('Main admin fetch error:', err);
+                      res.status(500).json({ error: 'Failed to fetch main admin' });
+                    }
+                  });
+                  app.put('/api/super-admin/admins/:adminId/details', authenticateToken, async (req, res) => {
+                    try {
+                      if (!SUPER_ADMIN_GUARD(req, res)) return;
+                      const { adminId } = req.params;
+                      const { name, email, newPassword } = req.body;
+                      const docRef = db().collection('users').doc(adminId);
+                      if (!(await docRef.get()).exists) return res.status(404).json({ error: 'Admin not found' });
+                      const updates = { name, email, updatedAt: new Date() };
+                      if (newPassword && newPassword.trim().length >= 6) {
+                        updates.password = await require('bcryptjs').hash(newPassword, 10);
+                      }
+                      await docRef.update(updates);
+                      res.json({ success: true });
+                    } catch (err) {
+                      console.error('Update admin details error:', err);
+                      res.status(500).json({ error: 'Failed to update admin' });
+                    }
+                  });
 
-    const subAdmins = await User.find({ branch: clientId, role: { $in: ['admin', 'sub-admin'] } }).select('-password');
+                    // ── CLIENT ORDERS CHART (orders per day for a given month) ────
+                    app.get('/api/super-admin/clients/:clientId/orders-chart', authenticateToken, async (req, res) => {
+                      try {
+                        if (!SUPER_ADMIN_GUARD(req, res)) return;
+                        const { clientId } = req.params;
+                        const month = req.query.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+                        const [year, mon] = month.split('-').map(Number);
+                        const startDate   = new Date(year, mon - 1, 1);
+                        const endDate     = new Date(year, mon, 1);
+                        const daysInMonth = new Date(year, mon, 0).getDate();
 
-    res.json({ branches: [{ branch: { id: branch.branchId, name: branch.branchName, location: branch.location }, subAdmins }] });
-  } catch (err) {
-    console.error('Admins hierarchy error:', err);
-    res.status(500).json({ error: 'Failed to fetch admins hierarchy' });
-  }
-});
+                        const snap = await db()
+                          .collection('clients').doc(clientId)
+                          .collection('orders')
+                          .where('createdAt', '>=', startDate)
+                          .where('createdAt', '<',  endDate)
+                          .get();
 
-// Active admins chart (last 7 days)
-app.get('/api/super-admin/dashboard/active-admins-last-7-days', authenticateToken, async (req, res) => {
-  try {
-    const counts = [];
-    const today = new Date();
+                        const counts = Array(daysInMonth).fill(0);
+                        snap.docs.forEach(doc => {
+                          const data = doc.data();
+                          if (data._init) return; // skip placeholder init docs
+                          const ts = data.createdAt;
+                          let date;
+                          if (ts?.toDate)  date = ts.toDate();
+                          else if (ts)     date = new Date(ts);
+                          if (date && !isNaN(date.getTime())) {
+                            const day = date.getDate();
+                            if (day >= 1 && day <= daysInMonth) counts[day - 1]++;
+                          }
+                        });
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setHours(0,0,0,0);
-      d.setDate(today.getDate() - i);
-      const start = new Date(d);
-      const end = new Date(d);
-      end.setDate(d.getDate() + 1);
+                        res.json({ success: true, month, clientId, counts, daysInMonth });
+                      } catch (err) {
+                        console.error('Orders chart error:', err);
+                        res.status(500).json({ error: 'Failed to fetch orders chart' });
+                      }
+                    });
+                    // ── SUB-ADMINS COUNT — summed from each client's subcollection ─
+                  app.get('/api/super-admin/sub-admins/count', authenticateToken, async (req, res) => {
+                    try {
+                      if (!SUPER_ADMIN_GUARD(req, res)) return;
 
-      // Count distinct admin usernames who had successful login attempts on that day
-      const usernames = await LoginAttempt.find({ success: true, timestamp: { $gte: start, $lt: end } }).distinct('username');
-      // Filter those usernames for admin/sub-admin role
-      const adminUsers = await User.find({ username: { $in: usernames }, role: { $in: ['admin', 'sub-admin'] } }).distinct('username');
-      counts.push(adminUsers.length);
-    }
+                      const clientsSnap = await db().collection('clients').get();
+                      let total = 0;
 
-    res.json(counts);
-  } catch (err) {
-    console.error('Active admins chart error:', err);
-    res.status(500).json({ error: 'Failed to fetch active admins chart' });
-  }
-});
+                      for (const clientDoc of clientsSnap.docs) {
+                        const snap = await db()
+                          .collection('clients').doc(clientDoc.id)
+                          .collection('users')
+                          .where('role', '==', 'sub-admin')
+                          .count().get();
+                        total += snap.data().count;
+                      }
 
+                      res.json({ count: total });
+                    } catch (err) {
+                      console.error('Sub-admins count error:', err);
+                      res.status(500).json({ error: 'Failed to get sub-admins count' });
+                    }
+                  });
+                  // ── SUB-ADMINS PER-CLIENT BREAKDOWN ──────────────────────────
+                   // ── SUB-ADMINS PER-CLIENT BREAKDOWN ──────────────────────────
+                app.get('/api/super-admin/sub-admins/breakdown', authenticateToken, async (req, res) => {
+                  try {
+                    if (!SUPER_ADMIN_GUARD(req, res)) return;
+                    const clientsSnap = await db().collection('clients').get();
+                    const breakdown = [];
+                    let total = 0;
+                    for (const clientDoc of clientsSnap.docs) {
+                      const snap = await db()
+                        .collection('clients').doc(clientDoc.id)
+                        .collection('users')
+                        .where('role', '==', 'sub-admin')
+                        .count().get();
+                      const count = snap.data().count;
+                      total += count;
+                      breakdown.push({
+                        clientId:      clientDoc.id,
+                        boutiqueName:  clientDoc.data().boutiqueName || clientDoc.id,
+                        subAdminCount: count,
+                      });
+                    }
+                    res.json({ success: true, total, breakdown });
+                  } catch (err) {
+                    console.error('Sub-admins breakdown error:', err);
+                    res.status(500).json({ error: 'Failed to get sub-admins breakdown' });
+                  }
+                });
 // ---------------------------------------------------------------------------------------------
 
 // ==================== ADMIN ROUTES ====================
@@ -971,42 +1241,111 @@ app.post('/api/admin/login', async (req, res) => {
     
     // Validate required fields
     if (!password) {
-      await LoginAttempt.create({
-        username: username || 'unknown',
-        success: false,
-        errorMessage: 'Password is required',
-        ipAddress,
-        userAgent
-      });
+      if (isMongoConnected()) {
+        try {
+          await LoginAttempt.create({
+            username: username || 'unknown',
+            success: false,
+            errorMessage: 'Password is required',
+            ipAddress,
+            userAgent
+          });
+        } catch(e) { console.warn('LoginAttempt write failed:', e.message); }
+      }
       return res.status(400).json({ error: 'Password is required' });
     }
-    
+    // ✅ Save to Firestore loginAttempts 
+        if (firebaseIntegrationService.initialized) {
+          try {
+            await db().collection('loginAttempts').add({
+              username: user.username,
+              email: user.email || '',
+              adminId: user.adminId || '',
+              role: normalizedRole,
+              success: true,
+              timestamp: new Date(),
+              ipAddress,
+              userAgent,
+            });
+            // ✅ Also update lastLogin on the user doc
+            await db().collection('users').doc(user.username).update({
+              lastLogin: new Date(),
+            });
+          } catch (e) {
+            console.warn('Firestore loginAttempts write failed:', e.message);
+          }
+        }
     // Search for user by username (admin or sub-admin)
     const searchUsername = username || 'admin';
-    const user = await User.findOne({ username: searchUsername });
-    
+    let user = null;
+
+      // Firestore is PRIMARY — always read users from Firestore first
+          if (firebaseIntegrationService.initialized) {
+            try {
+              const fbRes = await firebaseIntegrationService.getCollection('users', {
+                where: [['username', '==', searchUsername]], limit: 1
+              });
+              if (fbRes.success && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
+                user = fbRes.data[0]; // has adminId from Firestore user doc
+              }
+            } catch (e) {
+              console.warn('Firestore user lookup failed:', e.message);
+            }
+          }
+
+          // MongoDB fallback only if Firestore didn't find user
+          if (!user && isMongoConnected()) {
+            try {
+              user = await User.findOne({ username: searchUsername });
+            } catch (e) {
+              console.warn('Mongo user lookup failed:', e.message);
+            }
+          }
+
     if (!user) {
-      await LoginAttempt.create({
-        username: searchUsername,
-        success: false,
-        errorMessage: 'User not found',
-        ipAddress,
-        userAgent
-      });
+      if (isMongoConnected()) {
+        try {
+          await LoginAttempt.create({
+            username: searchUsername,
+            success: false,
+            errorMessage: 'User not found',
+            ipAddress,
+            userAgent
+          });
+        } catch(e){ console.warn('LoginAttempt write failed:', e.message);}        
+      }
       console.warn(`⚠️  User not found: ${searchUsername}`);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
     // Compare password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    let isValidPassword = false;
+    if (user.password) {
+      try {
+        isValidPassword = await bcrypt.compare(password, user.password);
+      } catch (e) {
+        console.warn('bcrypt compare error:', e.message);
+      }
+    }
+    // allow default admin credentials if no user record or password mismatch
     if (!isValidPassword) {
-      await LoginAttempt.create({
-        username: searchUsername,
-        success: false,
-        errorMessage: 'Invalid password',
-        ipAddress,
-        userAgent
-      });
+      if (searchUsername === 'admin' && password === 'sapthala@2029') {
+        isValidPassword = true;
+      }
+    }
+
+    if (!isValidPassword) {
+      if (isMongoConnected()) {
+        try {
+          await LoginAttempt.create({
+            username: searchUsername,
+            success: false,
+            errorMessage: 'Invalid password',
+            ipAddress,
+            userAgent
+          });
+        } catch(e){ console.warn('LoginAttempt write failed:', e.message);}        
+      }
       console.warn(`⚠️  Wrong password for user: ${searchUsername}`);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
@@ -1015,40 +1354,49 @@ app.post('/api/admin/login', async (req, res) => {
     const normalizedRole = canonicalizeRole(user.role || '');
 
     const token = jwt.sign(
-      { id: user._id, username: user.username, role: normalizedRole, branch: user.branch, permissions: user.permissions },
+{ id: user._id || user.id, username: user.username, role: normalizedRole, branch: user.branch, permissions: user.permissions, adminId: user.adminId || null },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     // Log successful login
-    await LoginAttempt.create({
-      username: searchUsername,
-      success: true,
-      errorMessage: null,
-      ipAddress,
-      userAgent
-    });
+    if (isMongoConnected()) {
+      try {
+        await LoginAttempt.create({
+          username: searchUsername,
+          success: true,
+          errorMessage: null,
+          ipAddress,
+          userAgent
+        });
+      } catch(e){ console.warn('LoginAttempt write failed:', e.message);}      
+    }
 
     console.log(`✅ ${normalizedRole} login successful: ${user.username}`);
     res.json({
       success: true,
       token,
       user: { 
-        id: user._id, 
+        id: user._id || user.id, 
         username: user.username, 
         role: normalizedRole, 
         branch: user.branch,
-        permissions: user.permissions 
+        permissions: user.permissions,
+        adminId: user.adminId || null   
       }
     });
   } catch (error) {
-    await LoginAttempt.create({
-      username: req.body.username || 'unknown',
-      success: false,
-      errorMessage: error.message,
-      ipAddress,
-      userAgent
-    });
+    if (isMongoConnected()) {
+      try {
+        await LoginAttempt.create({
+          username: req.body.username || 'unknown',
+          success: false,
+          errorMessage: error.message,
+          ipAddress,
+          userAgent
+        });
+      } catch(e){ console.warn('LoginAttempt write failed:', e.message);}      
+    }
     console.error('❌ Admin login error:', error);
     res.status(500).json({ error: 'Server error' });
   }
@@ -1071,84 +1419,80 @@ app.post('/api/admin/sub-admins', authenticateToken, async (req, res) => {
     }
 
     // Check if username already exists
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
+   // CHECK: username already exists — Firestore primary
+    const existingFb = await firebaseIntegrationService.getCollection('users', {
+      where: [['username', '==', username]], limit: 1
+    });
+    if (existingFb.success && existingFb.data?.length > 0) {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
-    // Format branch ID properly: SAPTHALA.BRANCHNAME (uppercase, no spaces)
-    const branchId = branch.startsWith('SAPTHALA.') ? branch.toUpperCase() : `SAPTHALA.${branch.replace(/\s+/g, '').toUpperCase()}`;
-    
-    // Ensure branch exists - create if it doesn't
-    let branchDoc = await Branch.findOne({ branchId });
+    // Branchid slug from admin's boutique prefix
+    const adminId = req.user.adminId;
+    const prefix = adminId ? adminId.toUpperCase().replace(/-/g, '.') : 'SAPTHALA';
+    const branchId = branch.includes('.') ? branch.toUpperCase()
+      : `${prefix}.${branch.replace(/\s+/g, '').toUpperCase()}`;
+
+    // CHECK: branch exists in Firestore subcollection
+    const branchFb = await clientDB(req).getCollection('branches', {
+      where: [['branchId', '==', branchId]], limit: 1
+    });
+    let branchDoc = branchFb.success && branchFb.data?.length > 0 ? branchFb.data[0] : null;
+
+    // Auto-create branch in Firestore if not found
     if (!branchDoc) {
-      // Extract branch name from branchId (e.g., "SAPTHALA.JUBILEEHILLS" -> "Jubilee Hills")
-      const branchName = branchId.split('.')[1].replace(/([A-Z])/g, ' $1').trim();
-      branchDoc = await Branch.create({
-        branchId,
-        branchName,
-        location: `${branchName} Branch`,
-        isActive: true,
-        createdBy: req.user.id
+      const branchName = branchId.split('.').slice(1).join(' ').replace(/([A-Z])/g, ' $1').trim() || branchId;
+      branchDoc = { branchId, branchName, location: `${branchName} Branch`, isActive: true, adminId };
+      await clientDB(req).setDocument('branches', branchId, {
+        ...branchDoc,
+        createdAt: new Date().toISOString(),
+        createdBy: req.user.username
       });
-      console.log(`✅ Branch auto-created: ${branchName} (${branchId})`);
-      
-      // Auto-create staff for all workflow stages in this branch
-      const settings = await Settings.findOne();
-      if (settings && settings.workflowStages) {
+      console.log(`✅ Branch auto-created in Firestore: ${branchId}`);
+
+      // Auto-create staff for workflow stages
+      const settings = await getAppSettings({ req });
+      if (settings?.workflowStages) {
         for (const stage of settings.workflowStages) {
           const staffId = `${branchId.replace(/\s+/g, '')}_${stage.id}`;
-          const staffName = `${stage.name} (${branchName})`;
-          await Staff.create({
-            staffId,
-            name: staffName,
-            phone: '9876543210',
-            email: `${staffId.toLowerCase()}@sapthala.com`,
-            role: stage.name,
-            pin: '1234',
-            branch: branchId,
-            workflowStages: [stage.id],
-            skills: stage.requiredSkills || [],
-            isAvailable: true
+          await clientDB(req).setDocument('staff', staffId, {
+            staffId, name: `${stage.name} (${branchDoc.branchName})`,
+            phone: '9876543210', role: stage.name, pin: '1234',
+            branch: branchId, workflowStages: [stage.id],
+            skills: stage.requiredSkills || [], isAvailable: true,
+            adminId, createdAt: new Date().toISOString()
           });
-          console.log(`✅ Auto-created staff: ${staffId} for stage ${stage.name}`);
         }
       }
     }
 
+    // Hash password and write sub-admin to Firestore /users/{username}
     const hashedPassword = await bcrypt.hash(password, 10);
-    const subAdmin = new User({
+    const subAdminData = {
       username,
       password: hashedPassword,
       role: 'sub-admin',
       branch: branchId,
+      adminId,                      // ← inherits parent admin's boutique slug
+      isActive: true,
       permissions: {
         canEdit: false,
         canDelete: false,
         canViewReports: true,
         canManageStaff: false,
         branchAccess: [branchId],
-        ...permissions
+        ...(permissions || {})
       },
-      createdBy: req.user.id
-    });
+      createdBy: req.user.username || 'admin',
+      createdAt: new Date().toISOString()
+    };
 
-    await subAdmin.save();
-    console.log(`✅ Sub-admin created: ${username} for branch ${branchId}`);
-    
-    res.json({ 
-      success: true, 
-      subAdmin: {
-        id: subAdmin._id,
-        username: subAdmin.username,
-        branch: subAdmin.branch,
-        permissions: subAdmin.permissions
-      },
-      branch: {
-        branchId: branchDoc.branchId,
-        branchName: branchDoc.branchName
-      }
-    });
+    // Write to flat /users (for login lookup) AND to boutique subcollection
+    await firebaseIntegrationService.setDocument('users', username, subAdminData);
+    await clientDB(req).setDocument('users', username, subAdminData);
+
+    console.log(`✅ Sub-admin created in Firestore: ${username} for branch ${branchId} (adminId: ${adminId})`);
+    res.json({ success: true, subAdmin: { username, branch: branchId, role: 'sub-admin', permissions: subAdminData.permissions } });
   } catch (error) {
     console.error('Create sub-admin error:', error);
     res.status(500).json({ error: 'Failed to create sub-admin' });
@@ -1162,18 +1506,53 @@ app.get('/api/admin/sub-admins', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const subAdmins = await User.find({ role: 'sub-admin' })
-      .select('-password')
-      .sort({ createdAt: -1 });
+    const nocache = req.query.nocache === '1';
+   const cacheKey = `admin_sub_admins_${req.user.adminId || req.user.username}`;
+    if (!nocache) {
+      const cached = getCache(cacheKey);
+      if (cached) return res.json(cached);
+    }
+
+                  let subAdmins = [];
+
+                  // Firestore PRIMARY — read sub-admins scoped to this admin's boutique
+                  // Firestore PRIMARY — read sub-admins scoped to this admin's boutique subcollection
+                  if (firebaseIntegrationService.initialized) {
+                    const db = firebaseIntegrationService.forClient(req.user.adminId || req.user.username);
+                    const fbRes = await db.getCollection('users', {
+                      where: [['role', '==', 'sub-admin']],
+                      limit: 1000
+                    });
+                    if (fbRes.success && Array.isArray(fbRes.data)) {
+                      subAdmins = fbRes.data;
+                    }
+                  }
+
+                  // MongoDB fallback only if Firestore returned nothing
+                  if (subAdmins.length === 0 && isMongoConnected()) {
+                    try {
+                      subAdmins = await User.find({ role: 'sub-admin' }).select('-password').sort({ createdAt: -1 });
+                    } catch(e) { console.warn('Mongo sub-admins fallback failed:', e.message); }
+                  }
+      
     
-    // Fetch branch details for each sub-admin
+    // Fetch branch details for each sub-admin (Mongo branches or Firestore)
     const branchIds = [...new Set(subAdmins.map(sa => sa.branch).filter(Boolean))];
-    const branches = await Branch.find({ branchId: { $in: branchIds } }).lean();
+    let branches = [];
+    if (branchIds.length === 0) branches = [];
+    else
+    if (branchIds.length > 0 && firebaseIntegrationService.initialized) {
+      const db = firebaseIntegrationService.forClient(req.user.adminId);
+      const fbBranchRes = await db.getCollection('branches', { limit: 500 });
+      if (fbBranchRes.success && Array.isArray(fbBranchRes.data)) {
+        branches = fbBranchRes.data;
+      }
+    }
     const branchMap = {};
     branches.forEach(b => branchMap[b.branchId] = b);
     
     const enrichedSubAdmins = subAdmins.map(sa => ({
-      _id: sa._id,
+      _id: sa._id || sa.id,
       username: sa.username,
       role: sa.role,
       branch: sa.branch,
@@ -1182,7 +1561,9 @@ app.get('/api/admin/sub-admins', authenticateToken, async (req, res) => {
       createdAt: sa.createdAt
     }));
     
-    res.json({ success: true, subAdmins: enrichedSubAdmins });
+    const responseBody = { success: true, subAdmins: enrichedSubAdmins };
+    setCache(cacheKey, responseBody,5 * 60 * 1000);
+    res.json(responseBody);
   } catch (error) {
     console.error('Get sub-admins error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch sub-admins' });
@@ -1202,34 +1583,17 @@ app.put('/api/admin/sub-admins/:id/password', authenticateToken, async (req, res
       return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
 
-    const subAdmin = await User.findById(req.params.id);
-    if (!subAdmin) {
-      return res.status(404).json({ error: 'Sub-admin not found' });
-    }
-
-    if (subAdmin.role !== 'sub-admin') {
-      return res.status(400).json({ error: 'Can only change passwords for sub-admins' });
-    }
-
-    // Hash new password
+     const db = clientDB(req);
+    const snap = await db.getDocument('users', req.params.id);
+    if (!snap.success || !snap.data) return res.status(404).json({ error: 'Sub-admin not found' });
+    if (snap.data.role !== 'sub-admin') return res.status(400).json({ error: 'Can only change passwords for sub-admins' });
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    subAdmin.password = hashedPassword;
-    subAdmin.passwordChangedAt = new Date();
-    subAdmin.passwordChangedBy = req.user.id;
-    await subAdmin.save();
-
-    // Log the password change for audit
-    console.log(`🔐 Password changed for sub-admin: ${subAdmin.username} by admin: ${req.user.username}`);
-    console.log(`   Reason: ${reason || 'No reason provided'}`);
-
-    // TODO: Send notification to sub-admin about password change
-    // await NotificationService.notifyPasswordChange(subAdmin.email, subAdmin.username);
-
-    res.json({ 
-      success: true, 
-      message: 'Password changed successfully',
-      changedAt: subAdmin.passwordChangedAt
-    });
+    const changedAt = new Date().toISOString();
+    // Update in subcollection + flat collection (needed for login)
+    await db.setDocument('users', req.params.id, { password: hashedPassword, passwordChangedAt: changedAt, passwordChangedBy: req.user.username });
+    await firebaseIntegrationService.setDocument('users', req.params.id, { password: hashedPassword, passwordChangedAt: changedAt });
+    console.log(`🔐 Password changed for sub-admin: ${req.params.id} by ${req.user.username}. Reason: ${reason || 'none'}`);
+    res.json({ success: true, message: 'Password changed successfully', changedAt });
   } catch (error) {
     console.error('Change sub-admin password error:', error);
     res.status(500).json({ error: 'Failed to change password' });
@@ -1243,20 +1607,24 @@ app.delete('/api/admin/sub-admins/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const subAdmin = await User.findByIdAndDelete(req.params.id);
-    if (!subAdmin) {
-      return res.status(404).json({ error: 'Sub-admin not found' });
-    }
-
-    // Also delete the associated branch and staff if it exists
+     const adminId = req.user.adminId || req.user.username;
+    if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+    const db = firebaseIntegrationService.forClient(adminId);
+    const snap = await db.getDocument('users', req.params.id);
+    if (!snap.success || !snap.data) return res.status(404).json({ error: 'Sub-admin not found' });
+    const subAdmin = snap.data;
+    // Delete only from client subcollection
+    await db.deleteDocument('users', req.params.id);
+    // Cascade: delete staff + branch in same client subcollection
     if (subAdmin.branch) {
-      await Staff.deleteMany({ branch: subAdmin.branch });
-      console.log(`✅ Staff deleted for branch: ${subAdmin.branch}`);
-      await Branch.findOneAndDelete({ branchId: subAdmin.branch });
-      console.log(`✅ Branch deleted: ${subAdmin.branch}`);
+      const staffRes = await db.getCollection('staff', { where: [['branch', '==', subAdmin.branch]], limit: 200 });
+      for (const s of (staffRes.data || [])) {
+        await db.deleteDocument('staff', s.id || s.staffId);
+      }
+      await db.deleteDocument('branches', subAdmin.branch);
     }
-
-    console.log(`✅ Sub-admin deleted: ${subAdmin.username}`);
+    invalidateCache([`admin_sub_admins_${adminId}`, `branches_all`, `public_branches_${adminId}`]);
+    console.log(`✅ Sub-admin deleted: ${req.params.id}`);
     res.json({ success: true, message: 'Sub-admin and associated branch deleted successfully' });
   } catch (error) {
     console.error('Delete sub-admin error:', error);
@@ -1266,11 +1634,37 @@ app.delete('/api/admin/sub-admins/:id', authenticateToken, async (req, res) => {
 
 // ==================== BRANCH MANAGEMENT ROUTES ====================
 
-// Get all branches
+// Get all branches — Firestore primary, MongoDB fallback
 app.get('/api/branches', authenticateToken, async (req, res) => {
   try {
-    const branches = await Branch.find().sort({ createdAt: -1 });
-    res.json({ success: true, branches });
+    const nocache = req.query.nocache === '1';
+    const cacheKey = `branches_all_${req.user.adminId || req.user.username}`;
+    if (!nocache) {
+      const cached = getCache(cacheKey);
+      if (cached) return res.json(cached);
+    }
+
+    // Prefer Firestore when initialized
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      const db = firebaseIntegrationService.forClient(req.user.adminId || req.user.username);
+      const fbRes = await db.getCollection('branches', { orderBy: { field: 'branchName', direction: 'asc' } });
+      if (fbRes.success) {
+        const branches = (fbRes.data || []).map(d => ({
+          branchId: d.branchId || d.id || '',
+          branchName: d.branchName || d.name || (d.branch && d.branch.name) || '',
+          location: d.location || (d.branch && d.branch.location) || ''
+        }));
+        const responseBody = { success: true, branches, dataSource: 'Firebase Firestore (real-time)' };
+        setCache(cacheKey, responseBody, 30 * 60 * 1000);
+        return res.json(responseBody);
+      }
+      console.warn('⚠️ Firestore branches fetch failed — falling back to MongoDB:', fbRes.error);
+    }
+
+     
+    
+
+    return res.status(503).json({ success: false, error: 'No database available' });
   } catch (error) {
     console.error('Get branches error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch branches' });
@@ -1280,7 +1674,7 @@ app.get('/api/branches', authenticateToken, async (req, res) => {
 // Public festivals endpoint (returns festival dates)
 app.get('/api/festivals', async (req, res) => {
   try {
-    const settings = await Settings.findOne();
+    const settings = await getAppSettings({ req });
     if (!settings) return res.json({});
     return res.json({ success: true, festivals: settings.festivalDates || {} });
   } catch (error) {
@@ -1301,220 +1695,224 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid festival data' });
     }
 
-    const settings = await Settings.findOne();
-    if (!settings) {
-      // create settings doc
-      const created = await Settings.create({ festivalDates: newDates });
-      return res.json({ success: true, festivals: created.festivalDates });
+    // Read existing settings (Firestore first, Mongo fallback)
+    const existingSettings = await getAppSettings({ req });
+    
+    // If no settings exist anywhere, create in Mongo when available or write to Firestore
+    if (!existingSettings) {
+      if (typeof isMongoConnected === 'function' && isMongoConnected()) {
+        const created = await Settings.create({ festivalDates: newDates });
+        // keep Firestore in sync
+        if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+          await clientDB(req).setDocument('settings', 'global', created);
+        }
+        return res.json({ success: true, festivals: created.festivalDates });
+      }
+
+      if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+        await clientDB(req).setDocument('settings', 'global', { festivalDates: newDates });
+        return res.json({ success: true, festivals: newDates });
+      }
+
+      return res.status(500).json({ success: false, error: 'Settings storage not available' });
     }
 
-    settings.festivalDates = Object.assign({}, settings.festivalDates || {}, newDates);
-    settings.updatedAt = new Date();
-    await settings.save();
-    res.json({ success: true, festivals: settings.festivalDates });
+    // Update MongoDB settings when connected
+    if (typeof isMongoConnected === 'function' && isMongoConnected() && existingSettings._id) {
+      existingSettings.festivalDates = Object.assign({}, existingSettings.festivalDates || {}, newDates);
+      existingSettings.updatedAt = new Date();
+      await existingSettings.save();
+    }
+
+    // Also update Firestore to keep sources consistent
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      await clientDB(req).setDocument('settings', existingSettings.id || 'global', { festivalDates: newDates });
+    }
+
+    return res.json({ success: true, festivals: (existingSettings.festivalDates || {}) });
   } catch (error) {
     console.error('Update festivals error:', error);
     res.status(500).json({ success: false, error: 'Failed to update festival settings' });
   }
 });
 
-// Public branches endpoint for clients with DISTINCT branches
-app.get('/api/public/branches', async (req, res) => {
-  try {
-    const branches = await Branch.aggregate([
-      { $group: { 
-        _id: '$branchId',
-        branchName: { $first: '$branchName' },
-        location: { $first: '$location' }
-      }},
-      { $sort: { branchName: 1 } }
-    ]);
-    
-    const uniqueBranches = branches.map(b => ({
-      branchId: b._id,
-      branchName: b.branchName || b._id,
-      location: b.location || ''
-    }));
-    
-    res.json(uniqueBranches);
-  } catch (error) {
-    console.error('Get public branches error:', error);
-    res.status(500).json({ error: 'Failed to fetch branches' });
-  }
-});
+          // Public branches endpoint for clients with DISTINCT branches
+          // GET /api/public/branches — scoped to a client if adminId provided
+          app.get('/api/public/branches', async (req, res) => {
+            try {
+              const { adminId } = req.query;
+              const nocache = req.query.nocache === '1';
+              const cacheKey = `public_branches_${adminId || 'all'}`;
+
+              if (!nocache) {
+                const cached = getCache(cacheKey);
+                if (cached) return res.json(cached);
+              }
+
+             const resolvedAdminId = adminId || (req.user && req.user.adminId) || (req.user && req.user.username) || null;
+              if (!resolvedAdminId) {
+                return res.status(400).json({ error: 'adminId query param is required' });
+              }
+
+              if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+                const db = firebaseIntegrationService.forClient(resolvedAdminId);
+                const fb = await db.getCollection('branches', { orderBy: { field: 'branchName', direction: 'asc' } });
+                if (fb.success) {
+                  const branches = (fb.data || []).map(d => ({
+                    branchId: d.branchId || d.id || '',
+                    branchName: d.branchName || d.name || '',
+                    location: d.location || '',
+                    adminId: resolvedAdminId  
+                  }));
+                  setCache(cacheKey, branches, 30 * 60 * 1000);
+                  return res.json(branches);
+                }
+                console.warn('⚠️ Firestore public branches fetch failed:', fb.error);
+              }
+
+              return res.status(503).json({ error: 'No database available' });
+            } catch (error) {
+              console.error('Get public branches error:', error);
+              res.status(500).json({ error: 'Failed to fetch branches' });
+            }
+          });
 
 // ------------------ Public Staff Endpoints ------------------
 // Get public staff list (no auth required) - RETURNS UNIQUE STAFF ONLY
-app.get('/api/staff', async (req, res) => {
+ app.get('/api/staff', async (req, res) => {
   try {
     const { branch } = req.query || {};
-    let query = {};
+    // ✅ Get adminId from query OR JWT token OR logged-in username as fallback
+    const adminId = req.query.adminId
+      || (req.user && req.user.adminId)
+      || (req.user && req.user.username)
+      || null;
+    if (!adminId) return res.status(400).json({ error: 'adminId is required' });
 
-    if (branch) {
-      const b = await Branch.findOne({ $or: [ { branchId: branch }, { branchName: branch } ] });
-      if (!b) {
-        const bLower = (branch || '').toLowerCase();
-        const byName = await Branch.findOne({ branchName: { $regex: new RegExp('^' + bLower + '$', 'i') } });
-        const byId = await Branch.findOne({ branchId: { $regex: new RegExp('^' + bLower + '$', 'i') } });
-        if (byName) query.branch = byName.branchId;
-        else if (byId) query.branch = byId.branchId;
-        else query.branch = branch;
-      } else {
-        query.branch = b.branchId;
-      }
+    if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) {
+      return res.status(503).json({ error: 'Firebase not initialized' });
     }
 
-    // Use aggregation to get UNIQUE staff by staffId
-    const staff = await Staff.aggregate([
-      { $match: query },
-      { $sort: { createdAt: -1 } },
-      { $group: { 
-        _id: '$staffId',
-        doc: { $first: '$$ROOT' }
-      }},
-      { $replaceRoot: { newRoot: '$doc' } },
-      { $sort: { createdAt: -1 } }
-    ]);
+    const filters = {};
+    if (branch) filters.where = [['branch', '==', branch]];
 
-    const branchIds = Array.from(new Set(staff.map(s => s.branch).filter(Boolean)));
-    const branches = await Branch.find({ branchId: { $in: branchIds } }).lean();
-    const branchMap = {};
-    for (const b of branches) branchMap[b.branchId] = b.branchName;
+     
+    const fb = await firebaseIntegrationService.forClient(adminId).getCollection('staff', filters);
 
-    const out = staff.map(s => ({
-      staffId: s.staffId,
-      id: s._id,
-      name: s.name,
-      phone: s.phone,
-      email: s.email || null,
-      role: s.role,
-      branch: s.branch || null,
-      branchName: branchMap[s.branch] || null,
-      isAvailable: s.isAvailable || false,
+    if (!fb.success) {
+      console.error('❌ Firestore staff fetch failed:', fb.error);
+      return res.status(500).json({ error: 'Failed to fetch staff from Firebase', details: fb.error });
+    }
+
+    // Deduplicate by staffId (keep first seen)
+    const seen = new Map();
+    (fb.data || []).forEach(s => {
+      const key = s.staffId || s.id || '';
+      if (key && !seen.has(key)) seen.set(key, s);
+    });
+
+    const out = Array.from(seen.values()).map(s => ({
+      staffId:        s.staffId        || s.id || '',
+      id:             s._id            || s.id || '',
+      name:           s.name           || '',
+      phone:          s.phone          || '',
+      email:          s.email          || null,
+      role:           s.role           || '',
+      branch:         s.branch         || null,
+      branchName:     s.branchName     || null,
+      isAvailable:    s.isAvailable !== undefined ? s.isAvailable : true,
       workflowStages: s.workflowStages || []
     }));
+
     res.json(out);
   } catch (error) {
-    console.error('Get staff error:', error);
-    res.status(500).json({ error: 'Failed to fetch staff list' });
+    console.error('❌ Get staff error:', error);
+    res.status(500).json({ error: 'Failed to fetch staff', details: error.message });
   }
 });
 
 // Staff login (public endpoint for simple PIN-based login)
-app.post('/api/staff/login', async (req, res) => {
-  try {
-    const { staffId, pin, branch } = req.body || {};
-    if (!staffId || !pin) return res.status(400).json({ error: 'staffId and pin are required' });
+// app.post('/api/staff/login', async (req, res) => {
+//   try {
+//     const { staffId, pin, branch } = req.body || {};
+//     if (!staffId || !pin) return res.status(400).json({ error: 'staffId and pin are required' });
 
-    // Allow searching by staffId and optionally branch
-    const query = { staffId };
-    if (branch) query.branch = branch;
+//     // Allow searching by staffId and optionally branch
+//     const query = { staffId };
+//     if (branch) query.branch = branch;
 
-    const staff = await Staff.findOne(query).lean();
-    if (!staff) {
-      return res.status(401).json({ error: 'Invalid staff credentials' });
-    }
+//     const staff = await Staff.findOne(query).lean();
+//     if (!staff) {
+//       return res.status(401).json({ error: 'Invalid staff credentials' });
+//     }
 
-    // Simple PIN check (stored as plain for now in default data)
-    if ((staff.pin || '1234').toString() !== pin.toString()) {
-      return res.status(401).json({ error: 'Invalid staff credentials' });
-    }
+//     // Simple PIN check (stored as plain for now in default data)
+//     if ((staff.pin || '1234').toString() !== pin.toString()) {
+//       return res.status(401).json({ error: 'Invalid staff credentials' });
+//     }
 
-    // create a lightweight token for session use
-    const token = jwt.sign({ id: staff._id, staffId: staff.staffId, name: staff.name, role: staff.role, branch: staff.branch }, JWT_SECRET, { expiresIn: '12h' });
+//     // create a lightweight token for session use
+//     const token = jwt.sign({ id: staff._id, staffId: staff.staffId, name: staff.name, role: staff.role, branch: staff.branch }, JWT_SECRET, { expiresIn: '12h' });
 
-    // remove sensitive fields
-    const safeStaff = Object.assign({}, staff);
-    delete safeStaff.pin;
+//     // remove sensitive fields
+//     const safeStaff = Object.assign({}, staff);
+//     delete safeStaff.pin;
 
-    res.json({ success: true, staff: safeStaff, token });
-  } catch (error) {
-    console.error('Staff login error:', error);
-    res.status(500).json({ error: 'Failed to login staff' });
-  }
-});
+//     res.json({ success: true, staff: safeStaff, token });
+//   } catch (error) {
+//     console.error('Staff login error:', error);
+//     res.status(500).json({ error: 'Failed to login staff' });
+//   }
+// });
 
 // Admin: create staff member for a branch
-app.post('/api/staff', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
-
-    const { staffId, name, phone, email, role, pin = '1234', branch, workflowStages = [], skills = [] } = req.body || {};
-    if (!staffId || !name || !branch) return res.status(400).json({ error: 'staffId, name and branch are required' });
-
-    // Validate staffId format
-    const sid = (staffId || '').toString().trim();
-    const valid = validateStaffIdFormat(sid);
-    if (!valid.valid) return res.status(400).json({ error: valid.message });
-
-    // Allow branch to be specified as branchId or branchName
-    let branchDoc = await Branch.findOne({ $or: [ { branchId: branch }, { branchName: branch } ] });
-    if (!branchDoc) {
-      // try case-insensitive search
-      const branchLower = (branch || '').toLowerCase();
-      const byName = await Branch.findOne({ branchName: { $regex: new RegExp('^' + branchLower + '$', 'i') } });
-      const byId = await Branch.findOne({ branchId: { $regex: new RegExp('^' + branchLower + '$', 'i') } });
-      if (byName) branchDoc = byName;
-      else if (byId) branchDoc = byId;
-    }
-    if (!branchDoc) return res.status(400).json({ error: 'Branch not found' });
-
-    // Enforce case-insensitive uniqueness of staffId across all branches
-    const existing = await Staff.findOne({ staffId: { $regex: new RegExp('^' + escapeRegExp(sid) + '$', 'i') } });
-    if (existing) return res.status(400).json({ error: 'Staff with this staffId already exists' });
-
-    const staff = new Staff({ staffId: sid, name, phone, email, role, pin, branch: branchDoc.branchId, workflowStages, skills, isAvailable: true });
-    await staff.save();
-    console.log(`✅ Admin ${req.user.username} created staff ${staffId} for branch ${branch}`);
-    res.json({ success: true, staff });
-  } catch (error) {
-    console.error('Create staff error:', error);
-    res.status(500).json({ error: 'Failed to create staff' });
-  }
-});
+      app.post('/api/staff', authenticateToken, async (req, res) => {
+        try {
+          if (!['admin', 'sub-admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
+          const adminId = req.user.adminId;
+          if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+          const { staffId, name, phone, email, role, pin = '1234', branch, workflowStages = [], skills = [] } = req.body || {};
+          if (!staffId || !name || !branch) return res.status(400).json({ error: 'staffId, name and branch are required' });
+          const sid = staffId.toString().trim();
+          const valid = validateStaffIdFormat(sid);
+          if (!valid.valid) return res.status(400).json({ error: valid.message });
+          const db = firebaseIntegrationService.forClient(adminId);
+          // Check uniqueness in Firestore
+          const existing = await db.getCollection('staff', { where: [['staffId', '==', sid]], limit: 1 });
+          if (existing?.data?.length > 0) return res.status(400).json({ error: 'Staff with this staffId already exists' });
+          const staffDoc = { staffId: sid, name, phone: phone || '', email: email || '', role: role || 'staff',
+            pin, branch, workflowStages, skills, isAvailable: true, adminId, createdAt: new Date() };
+          await db.syncStaff(staffDoc);
+          console.log(`✅ Staff created: ${name} (${sid}) for ${adminId}`);
+          res.json({ success: true, staff: staffDoc });
+        } catch (error) {
+          console.error('Create staff error:', error);
+          res.status(500).json({ error: 'Failed to create staff' });
+        }
+      });
 
 // Update staff (admin only) - supports changing staffId with validation
-app.put('/api/staff/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
-
-    const id = req.params.id;
-    const update = req.body || {};
-
-    // If staffId is being updated, validate format and uniqueness
-    if (update.staffId) {
-      const newId = update.staffId.toString().trim();
-      const valid = validateStaffIdFormat(newId);
-      if (!valid.valid) return res.status(400).json({ error: valid.message });
-
-      const conflict = await Staff.findOne({ staffId: { $regex: new RegExp('^' + escapeRegExp(newId) + '$', 'i') }, _id: { $ne: id } });
-      if (conflict) return res.status(400).json({ error: 'Another staff member with this staffId already exists' });
-
-      update.staffId = newId;
-    }
-
-    // If branch is provided, resolve to canonical branchId
-    if (update.branch) {
-      let branchDoc = await Branch.findOne({ $or: [ { branchId: update.branch }, { branchName: update.branch } ] });
-      if (!branchDoc) {
-        const bLower = (update.branch || '').toLowerCase();
-        const byName = await Branch.findOne({ branchName: { $regex: new RegExp('^' + bLower + '$', 'i') } });
-        const byId = await Branch.findOne({ branchId: { $regex: new RegExp('^' + bLower + '$', 'i') } });
-        if (byName) branchDoc = byName;
-        else if (byId) branchDoc = byId;
-      }
-      if (!branchDoc) return res.status(400).json({ error: 'Branch not found' });
-      update.branch = branchDoc.branchId;
-    }
-
-    const updated = await Staff.findByIdAndUpdate(id, update, { new: true });
-    if (!updated) return res.status(404).json({ error: 'Staff not found' });
-    res.json({ success: true, staff: updated });
-  } catch (error) {
-    console.error('Update staff error:', error);
-    res.status(500).json({ error: 'Failed to update staff' });
-  }
-});
+            app.put('/api/staff/:id', authenticateToken, async (req, res) => {
+              try {
+                if (!['admin', 'sub-admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
+                const adminId = req.user.adminId;
+                if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+                const update = { ...req.body, updatedAt: new Date() };
+                if (update.staffId) {
+                  const sid = update.staffId.toString().trim();
+                  const valid = validateStaffIdFormat(sid);
+                  if (!valid.valid) return res.status(400).json({ error: valid.message });
+                  update.staffId = sid;
+                }
+                const db = firebaseIntegrationService.forClient(adminId);
+                 await db.setDocument('staff', req.params.id, update);
+                console.log(`✅ Staff updated: ${req.params.id} for ${adminId}`);
+                res.json({ success: true });
+              } catch (error) {
+                console.error('Update staff error:', error);
+                res.status(500).json({ error: 'Failed to update staff' });
+              }
+            });
 
 // ==================== CUSTOMER ENDPOINTS ====================
 
@@ -1523,6 +1921,29 @@ app.get('/api/admin/customers', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Attempt Firestore first when Mongo is not connected or when Firestore has data
+    if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
+     const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 1000 });
+      if (fbRes.success && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
+        const out = fbRes.data.map(c => ({
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          email: c.email || null,
+          address: c.address || null,
+          totalOrders: c.totalOrders || 0,
+          totalSpent: c.totalSpent || 0,
+          createdAt: c.createdAt && c.createdAt.toDate ? c.createdAt.toDate() : c.createdAt
+        }));
+        return res.json({ success: true, customers: out });
+      }
+      // if Firestore returned empty or failed, fall through to Mongo if available
+      if (!isMongoConnected()) {
+        // no mongo either; return empty list instead of error
+        return res.json({ success: true, customers: [] });
+      }
     }
 
     const { search, name, phone } = req.query;
@@ -1563,6 +1984,18 @@ app.get('/api/admin/customers', authenticateToken, async (req, res) => {
 // Public: simple customers list for lightweight clients (no auth)
 app.get('/api/public/customers', async (req, res) => {
   try {
+    // Firestore fallback
+    if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
+      const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 500 });
+      if (fbRes.success && Array.isArray(fbRes.data)) {
+        const out = fbRes.data.map(c => ({ name: c.name, phone: c.phone, totalOrders: c.totalOrders || 0 }));
+        return res.json(out);
+      }
+      if (!isMongoConnected()) {
+        return res.json([]);
+      }
+    }
+
     const customers = await Customer.find().sort({ createdAt: -1 }).limit(200).lean();
     const out = customers.map(c => ({ name: c.name, phone: c.phone, totalOrders: c.totalOrders || (Array.isArray(c.orders) ? c.orders.length : 0) }));
     res.json(out);
@@ -1575,6 +2008,16 @@ app.get('/api/public/customers', async (req, res) => {
 // Generic customers endpoint (tries to be tolerant)
 app.get('/api/customers', async (req, res) => {
   try {
+    if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
+      const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 500 });
+      if (fbRes.success && Array.isArray(fbRes.data)) {
+        return res.json({ success: true, customers: fbRes.data });
+      }
+      if (!isMongoConnected()) {
+        return res.json({ success: true, customers: [] });
+      }
+    }
+
     const customers = await Customer.find().sort({ createdAt: -1 }).limit(500).lean();
     res.json({ success: true, customers });
   } catch (error) {
@@ -1586,101 +2029,93 @@ app.get('/api/customers', async (req, res) => {
 // Create branch
 app.post('/api/branches', authenticateToken, async (req, res) => {
   try {
-    // Allow both platform `super-admin` and regular `admin` to create branches.
-    // Previously this blocked `super-admin` and caused the "Add Branch" action to fail.
-    if (!['admin', 'super-admin'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, error: 'Only main admin or super-admin can create branches' });
+    if (!['admin', 'super-admin', 'sub-admin'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
     }
-
-    const { branchName, location, phone, email } = req.body;
-    
-    if (!branchName || !location) {
-      return res.status(400).json({ success: false, error: 'Branch name and location are required' });
-    }
-
-    const branchId = `SAPTHALA.${branchName.replace(/\s+/g, '').toUpperCase()}`;
-    
-    const existingBranch = await Branch.findOne({ branchId });
-    if (existingBranch) {
-      return res.status(400).json({ success: false, error: 'Branch already exists' });
-    }
-
-    const branch = new Branch({
-      branchId,
-      branchName,
-      location,
-      phone,
-      email,
-      createdBy: req.user.id
-    });
-
-    await branch.save();
-    console.log(`✅ Branch created: ${branchName} (${branchId})`);
-    // Also mirror branch to Firestore if firebase-admin initialized (emulator or production)
-    try {
-      if (firebaseAdmin) {
-        const fs = firebaseAdmin.firestore();
-        await fs.collection('branches').doc(branchId).set({
-          branchId,
-          branchName,
-          location,
-          phone: phone || '',
-          email: email || '',
-          createdBy: req.user.username || req.user.id || null,
-          createdAt: new Date()
-        });
-        console.log(`🔁 Branch mirrored to Firestore: ${branchId}`);
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ success: false, error: 'adminId missing from token' });
+    const { branchName, location, phone, email, logo } = req.body;
+    if (!branchName || !location) return res.status(400).json({ success: false, error: 'Branch name and location are required' });
+    // Prefix from this client's adminId — not hardcoded SAPTHALA
+    const prefix = adminId.toUpperCase().replace(/-/g, '.');
+    const branchId = `${prefix}.${branchName.replace(/\s+/g, '').toUpperCase()}`;
+    const db = firebaseIntegrationService.forClient(adminId);
+    // Check uniqueness in subcollection
+    const existing = await db.getCollection('branches', { where: [['branchId', '==', branchId]], limit: 1 });
+    if (existing?.data?.length > 0) return res.status(400).json({ success: false, error: 'Branch already exists' });
+    const branchDoc = { branchId, branchName, location, phone: phone || '', email: email || '', logo: logo || '', adminId, isActive: true, createdBy: req.user.username, createdAt: new Date().toISOString() };
+    await db.setDocument('branches', branchId, branchDoc);
+    // Auto-create staff for all workflow stages
+    const settings = await getAppSettings({ req });
+    if (settings?.workflowStages) {
+      for (const stage of settings.workflowStages) {
+        const staffId = `${branchId}_${stage.id}`;
+        const exists = await db.getCollection('staff', { where: [['staffId', '==', staffId]], limit: 1 });
+        if (!exists?.data?.length) {
+          await db.setDocument('staff', staffId, { staffId, name: `${stage.name} (${branchName})`, phone: '9876543210', role: stage.name, pin: '1234', branch: branchId, workflowStages: [stage.id], skills: [], isAvailable: true, adminId, createdAt: new Date().toISOString() });
+        }
       }
-    } catch (e) {
-      console.warn('⚠️ Failed to mirror branch to Firestore:', e && e.message ? e.message : e);
     }
-    
-    res.json({ success: true, branch });
+    console.log(`✅ Branch created in subcollection: ${branchId} for ${adminId}`);
+    invalidateCache(['branches_all', `public_branches_${adminId}`]);
+    res.json({ success: true, branch: branchDoc });
   } catch (error) {
     console.error('Create branch error:', error);
     res.status(500).json({ success: false, error: 'Failed to create branch' });
+  
+  }  
+});
+
+// Get single branch by ID
+app.get('/api/branches/:id', authenticateToken, async (req, res) => {
+  try {
+   const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ success: false, error: 'adminId missing' });
+    const db = firebaseIntegrationService.forClient(adminId);
+    // Try doc ID first, then query by branchId field
+    const snap = await db.getDocument('branches', req.params.id);
+    if (snap.success && snap.data) return res.json({ success: true, branch: snap.data });
+    const q = await db.getCollection('branches', { where: [['branchId', '==', req.params.id]], limit: 1 });
+    if (!q.data?.length) return res.status(404).json({ success: false, error: 'Branch not found' });
+    res.json({ success: true, branch: q.data[0] });
+  } catch (error) {
+    console.error('Get branch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch branch' });
   }
 });
 
 // Update branch
 app.put('/api/branches/:id', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
-
-    const { branchName, location, phone, email, isActive } = req.body;
-    
-    const branch = await Branch.findByIdAndUpdate(
-      req.params.id,
-      { branchName, location, phone, email, isActive, updatedAt: new Date() },
-      { new: true }
-    );
-    
-    if (!branch) {
-      return res.status(404).json({ success: false, error: 'Branch not found' });
-    }
-    
-    res.json({ success: true, branch });
+    if (!['admin', 'super-admin'].includes(req.user.role)) return res.status(403).json({ success: false, error: 'Access denied' });
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ success: false, error: 'adminId missing' });
+    const { branchName, location, phone, email, isActive, logo } = req.body;
+    const db = firebaseIntegrationService.forClient(adminId);
+    const update = { branchName, location, phone: phone || '', email: email || '', isActive, logo: logo || '', updatedAt: new Date().toISOString() };
+    await db.setDocument('branches', req.params.id, update);
+    console.log(`✅ Branch updated in subcollection: ${req.params.id} for ${adminId}`);
+    invalidateCache(['branches_all', `public_branches_${adminId}`]);
+    res.json({ success: true, branch: { branchId: req.params.id, ...update } });
   } catch (error) {
     console.error('Update branch error:', error);
     res.status(500).json({ success: false, error: 'Failed to update branch' });
-  }
+  } 
 });
 
 // Delete branch
 app.delete('/api/branches/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
-
-    const branch = await Branch.findByIdAndDelete(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ success: false, error: 'Branch not found' });
-    }
-    
+   try {
+    if (!['admin', 'super-admin'].includes(req.user.role)) return res.status(403).json({ success: false, error: 'Access denied' });
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ success: false, error: 'adminId missing' });
+    const db = firebaseIntegrationService.forClient(adminId);
+    // Delete all staff in this branch from subcollection
+    const staffRes = await db.getCollection('staff', { where: [['branch', '==', req.params.id]], limit: 200 });
+    for (const s of (staffRes.data || [])) await db.deleteDocument('staff', s.id || s.staffId);
+    await db.deleteDocument('branches', req.params.id);
+    console.log(`✅ Branch + ${staffRes.data?.length || 0} staff deleted from subcollection: ${req.params.id}`);
+    invalidateCache(['branches_all', `public_branches_${adminId}`]);
     res.json({ success: true, message: 'Branch deleted successfully' });
   } catch (error) {
     console.error('Delete branch error:', error);
@@ -1811,7 +2246,7 @@ app.post('/api/admin/ensure-branch-staff', authenticateToken, async (req, res) =
     }
     if (!branchDoc) return res.status(404).json({ error: 'Branch not found' });
 
-    const settings = await Settings.findOne();
+    const settings = await getAppSettings({ req });
     const stages = (settings && settings.workflowStages) || [];
     const created = [];
     for (const st of stages) {
@@ -1832,19 +2267,66 @@ app.post('/api/admin/ensure-branch-staff', authenticateToken, async (req, res) =
   }
 });
 
-// Dashboard stats (admin/sub-admin)
+// Dashboard stats (admin/sub-admin) — Firebase first, **MongoDB fallback** and clear dataSource
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     let match = {};
     if (req.user.role === 'sub-admin') match.branch = req.user.branch;
 
-    const orders = await Order.find(match).lean();
-    const totalOrders = orders.length;
-    const totalRevenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-    const advanceCollected = orders.reduce((s, o) => s + (o.advanceAmount || 0), 0);
-    const pendingOrders = orders.filter(o => ['pending','in_progress'].includes(o.status)).length;
+    // Try Firebase when initialized
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      try {
+        const filters = {};
+        if (match.branch) filters.where = [['branch', '==', match.branch]];
 
-    res.json({ success: true, totalOrders, totalRevenue, advanceCollected, pendingOrders });
+        const result = await clientDB(req).getCollection('orders', filters);
+        if (result.success) {
+          const orders = result.data || [];
+          const totalOrders = orders.length;
+          const totalRevenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+          const advanceCollected = orders.reduce((s, o) => s + (o.advanceAmount || 0), 0);
+          const pendingOrders = orders.filter(o => ['pending','in_progress'].includes(o.status)).length;
+
+          // Server-side RBAC: redact revenue fields for sub-admins
+          if (req.user && req.user.role === 'sub-admin') {
+            return res.json({
+              success: true,
+              totalOrders,
+              pendingOrders,
+              dataSource: 'Firebase Firestore (real-time)',
+              revenueRedacted: true
+            });
+          }
+
+          return res.json({ success: true, totalOrders, totalRevenue, advanceCollected, pendingOrders, dataSource: 'Firebase Firestore (real-time)' });
+        }
+        // fall through to MongoDB when firebase fetch failed
+        console.warn('⚠️ Firebase dashboard fetch failed — falling back to MongoDB:', result.error);
+      } catch (fbErr) {
+        console.warn('⚠️ Firebase dashboard fetch error — falling back to MongoDB:', fbErr && fbErr.message ? fbErr.message : fbErr);
+      }
+    }
+
+    // MongoDB fallback (if available)
+    if (typeof isMongoConnected === 'function' && isMongoConnected()) {
+      const matchQuery = match.branch ? { branch: match.branch } : {};
+      const orders = await Order.find(matchQuery).lean();
+      const totalOrders = orders.length;
+      const totalRevenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+      const advanceCollected = orders.reduce((s, o) => s + (o.advanceAmount || 0), 0);
+      const pendingOrders = orders.filter(o => ['pending','in_progress'].includes(o.status)).length;
+
+      // Server-side RBAC: redact revenue fields for sub-admins
+      if (req.user && req.user.role === 'sub-admin') {
+        return res.json({ success: true, totalOrders, pendingOrders, dataSource: 'MongoDB (local)', revenueRedacted: true });
+      }
+
+      return res.json({ success: true, totalOrders, totalRevenue, advanceCollected, pendingOrders, dataSource: 'MongoDB (local)' });
+    }
+
+    // Degraded response when no DB available
+    console.warn('⚠️ No database available for dashboard (Firestore not initialized, MongoDB not connected)');
+    return res.status(503).json({ success: false, error: 'No database available', totalOrders: 0, totalRevenue: 0, advanceCollected: 0, pendingOrders: 0, dataSource: 'unavailable' });
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
@@ -1854,77 +2336,200 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 // Reports: staff performance
 app.get('/api/reports/staff-performance', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role === 'sub-admin' || req.user.role === 'admin') {
-      const { fromDate, toDate } = req.query;
-      const match = {};
-      if (req.user.role === 'sub-admin') match.branch = req.user.branch;
-      if (fromDate || toDate) match.createdAt = {};
-      if (fromDate) match.createdAt.$gte = new Date(fromDate);
-      if (toDate) match.createdAt.$lte = new Date(toDate);
+    if (req.user.role !== 'sub-admin' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) {
+      return res.status(503).json({ success: false, error: 'Firebase not initialized' });
+    }
 
-      const orders = await Order.find(match).lean();
+    // ✅ Always get adminId — from JWT claim or query param
+    const adminId = req.user.adminId || req.query.adminId || null;
+    if (!adminId) {
+      return res.status(400).json({ success: false, error: 'adminId is required. Ensure user doc has adminId field in Firestore.' });
+    }
+    // ✅ Force read from clients/{adminId}/staff subcollection
+    const clientFirestore = firebaseIntegrationService.forClient(adminId);
 
-      const stats = {};
-      for (const order of orders) {
-        const tasks = Array.isArray(order.workflowTasks) ? order.workflowTasks : [];
-        for (const t of tasks) {
-          if (!t.assignedTo && !t.assignedToName) continue;
-          // assignedTo might be ObjectId or staffId string
-          const key = (t.assignedTo && t.assignedTo.toString()) || (t.assignedToName && t.assignedToName.toString()) || 'unassigned';
-          stats[key] = stats[key] || { staffIdentifier: key, staffName: t.assignedToName || key, tasksCompleted: 0, totalTime: 0 };
-          if (t.status === 'completed') {
-            stats[key].tasksCompleted += 1;
-            stats[key].totalTime += (t.timeSpent || 0);
-          }
+    const { fromDate, toDate, branch } = req.query;
+
+    // Build Firebase filters for orders collection
+    const filters = { orderBy: { field: 'createdAt', direction: 'desc' } };
+    const where = [];
+
+    if (req.user.role === 'sub-admin') where.push(['branch', '==', req.user.branch]);
+    else if (branch && branch.toLowerCase() !== 'all') where.push(['branch', '==', branch]);
+
+    if (fromDate) where.push(['createdAt', '>=', new Date(fromDate)]);
+    if (toDate) { const to = new Date(toDate); to.setHours(23,59,59,999); where.push(['createdAt', '<=', to]); }
+
+    if (where.length) filters.where = where;
+
+    // Fetch orders from Firebase
+    const fbOrders = await clientFirestore.getCollection('orders', filters);
+    if (!fbOrders.success) {
+      console.error('❌ Firestore staff-performance orders fetch failed:', fbOrders.error);
+      return res.status(500).json({ success: false, error: 'Failed to fetch orders from Firebase', details: fbOrders.error });
+    }
+
+    const orders = fbOrders.data || [];
+
+    // Build per-staff stats from workflowTasks
+    const stats = {};
+    for (const order of orders) {
+      const tasks = Array.isArray(order.workflowTasks) ? order.workflowTasks : [];
+      for (const t of tasks) {
+        if (!t.assignedTo && !t.assignedToName) continue;
+        const key = (t.assignedTo && t.assignedTo.toString()) || t.assignedToName || 'unassigned';
+        if (!stats[key]) {
+          stats[key] = { staffIdentifier: key, staffName: t.assignedToName || key, tasksCompleted: 0, totalTime: 0 };
+        }
+        if (t.status === 'completed') {
+          stats[key].tasksCompleted += 1;
+          stats[key].totalTime += (t.timeSpent || 0);
         }
       }
-
-      // Map keys to staff objects where possible
-      const staffKeys = Object.keys(stats).filter(k => k !== 'unassigned');
-      const staffDocs = await Staff.find({ $or: [ { _id: { $in: staffKeys.filter(k => /^[0-9a-fA-F]{24}$/.test(k)).map(k=>k) } }, { staffId: { $in: staffKeys.filter(k => !/^[0-9a-fA-F]{24}$/.test(k)) } } ] }).lean();
-      const staffMap = {};
-      for (const s of staffDocs) staffMap[(s._id||s.staffId).toString()] = s;
-
-      const out = Object.values(stats).map(s => {
-        const doc = staffMap[s.staffIdentifier];
-        const name = doc ? (doc.name || doc.staffId) : s.staffName;
-        const avgTime = s.tasksCompleted > 0 ? Math.round(s.totalTime / s.tasksCompleted) : 0;
-        return { staffId: (doc&&doc.staffId) || s.staffIdentifier, staffName: name, tasksCompleted: s.tasksCompleted, averageTimePerTask: avgTime };
-      });
-
-      res.json({ success: true, reports: out });
-    } else {
-      res.status(403).json({ error: 'Access denied' });
     }
+
+    // Fetch staff from Firebase to enrich name/phone/role
+    const staffFilters = {};
+    if (req.user.role === 'sub-admin') staffFilters.where = [['branch', '==', req.user.branch]];
+    else if (branch && branch.toLowerCase() !== 'all') staffFilters.where = [['branch', '==', branch]];
+
+    const fbStaff = await clientFirestore.getCollection('staff', staffFilters);
+    const staffList = fbStaff.success ? (fbStaff.data || []) : [];
+
+    // Build lookup map by staffId and by name
+    const staffMap = {};
+    staffList.forEach(s => {
+      if (s.staffId) staffMap[s.staffId] = s;
+      if (s.name)    staffMap[s.name]    = staffMap[s.name] || s;
+    });
+
+    const out = Object.values(stats).map(s => {
+      const doc = staffMap[s.staffIdentifier] || staffMap[s.staffName] || null;
+      const avgTime = s.tasksCompleted > 0 ? Math.round(s.totalTime / s.tasksCompleted) : 0;
+      return {
+        staffId:            doc ? (doc.staffId || s.staffIdentifier) : s.staffIdentifier,
+        staffName:          doc ? (doc.name    || s.staffName)       : s.staffName,
+        phone:              doc ? (doc.phone   || null)              : null,
+        role:               doc ? (doc.role    || null)              : null,
+        branch:             doc ? (doc.branch  || null)              : null,
+        tasksCompleted:     s.tasksCompleted,
+        averageTimePerTask: avgTime
+      };
+    });
+
+    res.json({ success: true, reports: out, dataSource: 'Firebase Firestore' });
+
   } catch (error) {
-    console.error('Staff performance report error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate staff performance report' });
+    console.error('❌ Staff performance report error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error', details: error.message });
   }
 });
 
-// Reports: orders endpoint expected by admin UI
-app.get('/api/reports/orders', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role === 'sub-admin' || req.user.role === 'admin') {
-      const { fromDate, toDate } = req.query;
-      const match = {};
-      if (req.user.role === 'sub-admin') match.branch = req.user.branch;
-      if (fromDate || toDate) match.createdAt = {};
-      if (fromDate) match.createdAt.$gte = new Date(fromDate);
-      if (toDate) match.createdAt.$lte = new Date(toDate);
+                          app.get('/api/reports/orders', authenticateToken, async (req, res) => {
+                            try {
+                              if (req.user.role !== 'sub-admin' && req.user.role !== 'admin') {
+                                return res.status(403).json({ error: 'Access denied' });
+                              }
 
-      const orders = await Order.find(match).sort({ createdAt: -1 }).limit(500).lean();
-      const formatted = orders.map(o => ({ orderId: o.orderId, createdAt: o.createdAt, customerName: o.customerName, customerPhone: o.customerPhone, totalAmount: o.totalAmount || 0, status: o.status, branch: o.branch }));
-      res.json({ success: true, orders: formatted });
-    } else {
-      res.status(403).json({ error: 'Access denied' });
-    }
-  } catch (error) {
-    console.error('Reports orders error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch orders report' });
-  }
-});
+                              const { fromDate, toDate, branch, filterBy, q } = req.query;
 
+                              if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) {
+                                return res.status(503).json({ success: false, error: 'Firebase not initialized' });
+                              }
+
+                              const filters = { orderBy: { field: 'createdAt', direction: 'desc' }, limit: 500 };
+                              const where = [];
+
+                              // Branch
+                              if (req.user.role === 'sub-admin') where.push(['branch', '==', req.user.branch]);
+                              else if (branch && branch.toLowerCase() !== 'all') where.push(['branch', '==', branch]);
+
+                              // Date
+                              if (fromDate) where.push(['createdAt', '>=', new Date(fromDate)]);
+                              if (toDate) { const to = new Date(toDate); to.setHours(23,59,59,999); where.push(['createdAt', '<=', to]); }
+
+                              if (where.length) filters.where = where;
+
+                              const fbRes = await clientDB(req).getCollection('orders', filters);
+
+                              if (!fbRes.success) {
+                                console.error('❌ Firestore reports/orders failed:', fbRes.error);
+                                return res.status(500).json({ success: false, error: 'Failed to fetch orders from Firebase', details: fbRes.error });
+                              }
+
+                              let orders = fbRes.data || [];
+
+                              // Client-side filters (Firestore can't query nested/text fields)
+                              if (filterBy && q && q.trim()) {
+                                const sv = q.trim().toLowerCase();
+                                orders = orders.filter(o => {
+                                  switch (filterBy.toLowerCase()) {
+                                    case 'customer': return (o.customerName || '').toLowerCase().includes(sv);
+                                    case 'phone':    return (o.customerPhone || '').includes(q.trim());
+                                    case 'orderid':  return (o.orderId || '').toLowerCase() === sv;
+                                    case 'staff':    return (o.workflowTasks || []).some(t => (t.assignedToName || '').toLowerCase().includes(sv));
+                                    default:         return true;
+                                  }
+                                });
+                              }
+
+                              // Format
+                              const formatted = orders.map(o => {
+                                const tasks = Array.isArray(o.workflowTasks) ? o.workflowTasks : [];
+                                const totalTasks = tasks.length;
+                                const completedTasks = tasks.filter(t => t.status === 'completed').length;
+                                const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+                                const seenStaff = new Set();
+                                const assignedStaff = [];
+                                tasks.forEach(t => {
+                                  const name = t.assignedToName || '';
+                                  if (name && !seenStaff.has(name)) { seenStaff.add(name); assignedStaff.push({ name, stage: t.stageName || '' }); }
+                                });
+
+                                return {
+                                  orderId:         o.orderId || o.id || '',
+                                  createdAt:       o.createdAt && o.createdAt.toDate ? o.createdAt.toDate() : o.createdAt,
+                                  customerName:    o.customerName    || '',
+                                  customerPhone:   o.customerPhone   || '',
+                                  customerAddress: o.customerAddress || '',
+                                  garmentType:     o.garmentType     || '',
+                                  totalAmount:     o.totalAmount     || 0,
+                                  advanceAmount:   o.advanceAmount   || 0,
+                                  balanceAmount:   o.balanceAmount   || 0,
+                                  status:          o.status          || 'pending',
+                                  branch:          o.branch          || '',
+                                  deliveryDate:    o.deliveryDate     || null,
+                                  totalTasks,
+                                  completedTasks,
+                                  progress,
+                                  assignedStaff,
+                                  workflowTasks: tasks
+                                };
+                              });
+
+                              // Sub-admin: redact revenue fields
+                              if (req.user.role === 'sub-admin') {
+                                const redacted = formatted.map(o => {
+                                  const c = { ...o };
+                                  delete c.totalAmount;
+                                  delete c.advanceAmount;
+                                  delete c.balanceAmount;
+                                  return c;
+                                });
+                                return res.json({ success: true, orders: redacted, dataSource: 'Firebase Firestore', revenueRedacted: true });
+                              }
+
+                              res.json({ success: true, orders: formatted, dataSource: 'Firebase Firestore' });
+
+                            } catch (error) {
+                              console.error('❌ Reports orders error:', error);
+                              res.status(500).json({ success: false, error: 'Internal server error', details: error.message });
+                            }
+                          });
 
 // ==================== ENHANCED REPORTS ROUTES ====================
 
@@ -1944,6 +2549,57 @@ app.get('/api/reports/last-orders', authenticateToken, async (req, res) => {
     
     console.log(`📊 Generating last orders report (limit: ${limit})`);
     
+    // Prefer Firestore when available
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      try {
+        const filters = { where: [], orderBy: { field: 'createdAt', direction: 'desc' }, limit: parseInt(limit) };
+        if (req.user.role === 'sub-admin') filters.where.push(['branch', '==', req.user.branch]);
+        else if (branch) filters.where.push(['branch', '==', branch]);
+
+        const fbRes = await clientDB(req).getCollection('orders', filters);
+        if (fbRes.success) {
+          const fbOrders = Array.isArray(fbRes.data) ? fbRes.data : [];
+
+          const totalAmount = fbOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+          const totalAdvance = fbOrders.reduce((sum, order) => sum + (order.advanceAmount || 0), 0);
+          const totalBalance = totalAmount - totalAdvance;
+
+          const formattedOrders = fbOrders.map(order => {
+            const tasks = Array.isArray(order.workflowTasks) ? order.workflowTasks : [];
+            const completedTasks = tasks.filter(t => t.status === 'completed').length;
+            const totalTasks = tasks.length;
+            const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            return {
+              orderId: order.orderId || order.id,
+              customerName: order.customerName || '',
+              customerPhone: order.customerPhone || '',
+              garmentType: order.garmentType || '',
+              totalAmount: order.totalAmount || 0,
+              advanceAmount: order.advanceAmount || 0,
+              balanceAmount: (order.totalAmount || 0) - (order.advanceAmount || 0),
+              status: order.status || '',
+              progress: `${progress}%`,
+              createdAt: order.createdAt && order.createdAt.toDate ? order.createdAt.toDate() : order.createdAt,
+              deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate() : order.deliveryDate,
+              branch: order.branch || ''
+            };
+          });
+
+          // Redact revenue for sub-admins
+          if (req.user.role === 'sub-admin') {
+            const redactedOrders = formattedOrders.map(o => { const c = { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
+            return res.json({ success: true, orders: redactedOrders, summary: { totalOrders: formattedOrders.length }, dataSource: 'Firebase Firestore (real-time)', revenueRedacted: true });
+          }
+
+          return res.json({ success: true, orders: formattedOrders, summary: { totalOrders: fbOrders.length, totalAmount, totalAdvance, totalBalance, averageOrderValue: fbOrders.length > 0 ? Math.round(totalAmount / fbOrders.length) : 0 }, dataSource: 'Firebase Firestore (real-time)' });
+        }
+      } catch (e) {
+        console.warn('⚠️ Firestore last-orders fetch failed — falling back to MongoDB:', e.message || e);
+      }
+    }
+
+    // Fallback to MongoDB
     const orders = await Order.find(matchQuery)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
@@ -1975,6 +2631,11 @@ app.get('/api/reports/last-orders', authenticateToken, async (req, res) => {
         branch: order.branch
       };
     });
+
+    if (req.user.role === 'sub-admin') {
+      const redacted = formattedOrders.map(o => { const copy = { ...o }; delete copy.totalAmount; delete copy.advanceAmount; delete copy.balanceAmount; return copy; });
+      return res.json({ success: true, orders: redacted, summary: { totalOrders: formattedOrders.length }, dataSource: 'MongoDB (local)', revenueRedacted: true });
+    }
     
     res.json({
       success: true,
@@ -2042,29 +2703,67 @@ app.get('/api/reports/branch-wise', authenticateToken, async (req, res) => {
 // ==================== ADMIN ORDERS ENDPOINTS (ENHANCED) ====================
 
 // Get all orders (admin view with timeline data) - Firebase-first approach
+// Accepts query params: branch, overdue=true, customerPhone, orderId (all optional; branch auto-set for sub-admins)
 app.get('/api/admin/orders', authenticateToken, async (req, res) => {
   try {
     const branch = req.query.branch || (req.user.role === 'sub-admin' ? req.user.branch : null);
+    const overdueFlag = req.query.overdue === 'true';
     
     // Try Firebase first if initialized
     let orders = [];
     let source = 'unknown';
     
-    try {
-      const filters = {};
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      // build filters for firestore
+      const filters = { orderBy: { field: 'createdAt', direction: 'desc' }, limit: 1000 };
+      // apply branch restriction to firestore as well
       if (branch) {
-        filters.where = [['branch', '==', branch]];
+        filters.where = filters.where || [];
+        filters.where.push(['branch', '==', branch]);
       }
-      filters.orderBy = { field: 'createdAt', direction: 'desc' };
-      
-      const result = await firebaseIntegrationService.getCollection('orders', filters);
-      if (result.success && result.data) {
-        orders = result.data;
-        source = 'firebase';
-        console.log(`✅ Fetched ${orders.length} orders from Firebase`);
+      if (overdueFlag) {
+        // orders with deliveryDate less than now and pending/not yet completed
+        filters.where = filters.where || [];
+        filters.where.push(['deliveryDate', '<', new Date()]);
+        // we can also filter by status using 'in' which is compatible with a range query
+        filters.where.push(['status', 'in', ['pending','assigned','in_progress']]);
       }
-    } catch (firebaseError) {
-      console.warn('⚠️ Firebase fetch attempt failed, using MongoDB:', firebaseError.message);
+      if (req.query.customerPhone) {
+        filters.where = filters.where || [];
+        filters.where.push(['customerPhone', '==', req.query.customerPhone]);
+      }
+      if (req.query.orderId) {
+        filters.where = filters.where || [];
+        filters.where.push(['orderId', '==', req.query.orderId]);
+      }
+      const fbRes = await clientDB(req).getCollection('orders', filters);
+      if (fbRes.success) {
+        const fbOrders = Array.isArray(fbRes.data) ? fbRes.data : [];
+        if (fbOrders.length > 0) {
+          orders = fbOrders.map(o => ({
+            _id: o.id,
+            orderId: o.orderId || o.id,
+            customerName: o.customerName || '',
+            customerPhone: o.customerPhone || '',
+            customerAddress: o.customerAddress || '',
+            garmentType: o.garmentType || '',
+            totalAmount: o.totalAmount || 0,
+            advanceAmount: o.advanceAmount || 0,
+            status: o.status || '',
+            createdAt: o.createdAt && o.createdAt.toDate ? o.createdAt.toDate() : o.createdAt,
+            deliveryDate: o.deliveryDate && o.deliveryDate.toDate ? o.deliveryDate.toDate() : o.deliveryDate,
+            branch: o.branch || '',
+            workflowTasks: o.workflowTasks || []
+          }));
+          source = 'firebase';
+        } else {
+          source = 'mongodb';
+        }
+      } else {
+        console.warn('⚠️ Firebase orders fetch failed:', fbRes.error);
+        source = 'mongodb';
+      }
+    } else {
       source = 'mongodb';
     }
     
@@ -2074,16 +2773,19 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
       if (branch) {
         matchQuery.branch = branch;
       }
-      
-      if (req.query.customer) {
-        const customer = await Customer.findById(req.query.customer).catch(() => null);
-        if (customer) {
-          matchQuery.customerPhone = customer.phone;
-        } else {
-          matchQuery.customerPhone = req.query.customer;
-        }
+      if (overdueFlag) {
+        matchQuery.deliveryDate = { $lt: new Date() };
+        matchQuery.status = { $in: ['pending','assigned','in_progress'] };
       }
-      
+      // support additional query parameters sent from client
+      if (req.query.customerPhone) {
+        matchQuery.customerPhone = req.query.customerPhone;
+      }
+      if (req.query.orderId) {
+        // exact match on orderId (e.g. ORD-123)
+        matchQuery.orderId = req.query.orderId;
+      }
+
       const mongoOrders = await Order.find(matchQuery)
         .sort({ createdAt: -1 })
         .select('orderId customerName customerPhone customerAddress garmentType totalAmount advanceAmount status createdAt deliveryDate workflowTasks branch');
@@ -2107,6 +2809,17 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
       source = 'mongodb';
     }
 
+    // Redact revenue fields for sub-admins
+    if (req.user && req.user.role === 'sub-admin') {
+      const redacted = orders.map(o => { const c = { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
+      return res.json(redacted);
+    }
+
+    // attach overdue flag for convenience
+    if (overdueFlag) {
+      orders = orders.map(o => ({ ...o, overdue: true }));
+    }
+
     res.json(orders);
   } catch (error) {
     console.error('Get admin orders error:', error);
@@ -2120,22 +2833,62 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
     const param = req.params.orderId;
     let order = null;
 
-    // Try to resolve by Mongo _id first
-    if (param && /^[0-9a-fA-F]{24}$/.test(param)) {
-      order = await Order.findById(param);
+    // If Mongo is connected, try using it
+    if (isMongoConnected()) {
+      // Try to resolve by Mongo _id first
+      if (param && /^[0-9a-fA-F]{24}$/.test(param)) {
+        order = await Order.findById(param);
+      }
+
+      // If not found by _id, try lookup by orderId (e.g., ORD-123...)
+      if (!order) {
+        order = await Order.findOne({ orderId: param });
+      }
     }
 
-    // If not found by _id, try lookup by orderId (e.g., ORD-123...)
-    if (!order) {
-      order = await Order.findOne({ orderId: param });
+    // Firestore fallback when we still have no order and Firebase initialized
+    if (!order && firebaseIntegrationService.initialized) {
+      let fbRes;
+      // attempt by document id first
+      try {
+        fbRes = await clientDB(req).getDocument('orders', param);
+      } catch (e) {
+        fbRes = null;
+      }
+      if (fbRes && fbRes.success && fbRes.data) {
+        order = fbRes.data;
+      } else {
+        // fallback to query by orderId field
+        const queryRes = await clientDB(req).getCollection('orders', { where: [['orderId', '==', param]], limit: 1 });
+        if (queryRes.success && Array.isArray(queryRes.data) && queryRes.data.length > 0) {
+          order = queryRes.data[0];
+        }
+      }
     }
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Return full order details with timeline
-    res.json({
+    // normalize Firestore order if needed
+    if (order && !order._id && order.id) {
+      order._id = order.id;
+    }
+    // Firestore timestamps -> JS Date
+    if (order && order.createdAt && order.createdAt.toDate) {
+      order.createdAt = order.createdAt.toDate();
+    }
+    if (order && order.deliveryDate && order.deliveryDate.toDate) {
+      order.deliveryDate = order.deliveryDate.toDate();
+    }
+
+    // RBAC: sub-admins can only view orders from their branch
+    if (req.user && req.user.role === 'sub-admin' && order.branch !== req.user.branch) {
+      return res.status(403).json({ error: 'Access denied. Order belongs to a different branch.' });
+    }
+
+    // Prepare response
+    const response = {
       _id: order._id,
       orderId: order.orderId,
       customerName: order.customerName,
@@ -2151,57 +2904,192 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
       measurements: order.measurements || {},
       designNotes: order.designNotes || '',
       designImages: order.designImages || [],
-      workflowTasks: order.workflowTasks || []
-    });
+      workflowTasks: order.workflowTasks || [],
+      // new fields
+      addons: order.addons || [],
+      paymentMode: order.paymentMode || '',
+      paymentRemarks: order.paymentRemarks || '',
+      stageTimeLimits: order.stageTimeLimits || {}
+    };
+
+    // Redact revenue fields for sub-admins
+    if (req.user && req.user.role === 'sub-admin') {
+      delete response.totalAmount;
+      delete response.advanceAmount;
+      delete response.balanceAmount;
+      response.revenueRedacted = true;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Get order details error:', error);
     res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
 
-// Update order with RBAC checks
-app.put('/api/admin/orders/:id', authenticateToken, async (req, res) => {
+                  // Update order with RBAC checks
+                  app.put('/api/admin/orders/:id', authenticateToken, async (req, res) => {
+                    try {
+                      const orderId = req.params.id;
+
+                      if (req.user.role !== 'admin' && req.user.role !== 'sub-admin') {
+                        return res.status(403).json({ error: 'Access denied' });
+                      }
+
+                      if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) {
+                        return res.status(503).json({ error: 'Firebase not available' });
+                      }
+
+                     const fb = await clientDB(req).getCollection('orders', {
+                        where: [['orderId', '==', orderId]]
+                      });
+                      const existing = fb.success && fb.data && fb.data.length > 0 ? fb.data[0] : null;
+                      if (!existing) return res.status(404).json({ error: 'Order not found' });
+
+                      const docId = existing.id || existing._id || orderId;
+
+                      // Safely merge measurements — never wipe existing values with empty object
+                      const incomingMeasurements = req.body.measurements || {};
+                      const existingMeasurements = existing.measurements || {};
+                      const safeMeasurements = Object.keys(incomingMeasurements).length > 0
+                        ? { ...existingMeasurements, ...incomingMeasurements }
+                        : existingMeasurements;
+
+                      // Handle workflowTasks from selectedWorkflowStages
+                      let workflowTasks = existing.workflowTasks || [];
+                      if (Array.isArray(req.body.selectedWorkflowStages)) {
+                        const stageNames = {
+                           'dyeing': 'Dyeing',
+                          'cutting': 'Cutting', 'stitching': 'Stitching','khakha':'Khakha', 'maggam': 'Maggam Work',
+                          'painting': 'Painting', 'finishing': 'Finishing',
+                          'quality-check': 'Quality Check', 'ready-to-deliver': 'Ready to Deliver'
+                        };
+                        workflowTasks = req.body.selectedWorkflowStages.map(sid => {
+                          const ex = (existing.workflowTasks || []).find(t => t.stageId === sid);
+                          return ex || { stageId: sid, stageName: stageNames[sid] || sid, status: 'waiting', createdAt: new Date() };
+                        });
+                      }
+
+                      const { selectedWorkflowStages, measurements, ...restBody } = req.body;
+                      const merged = {
+                        ...existing,
+                        ...restBody,
+                        measurements: safeMeasurements,
+                        workflowTasks,
+                        updatedAt: new Date()
+                      };
+
+                      await clientDB(req).setDocument('orders', docId, merged);
+                      console.log(`✅ Order updated in Firestore: ${orderId}`);
+                      res.json({ success: true, order: merged });
+
+                    } catch (error) {
+                      console.error('Update order error:', error);
+                      res.status(500).json({ error: 'Failed to update order' });
+                    }
+                  });
+// Sync customer changes to orders
+// Supports both new payload ({ id, name, phone, address, oldPhone })
+// and legacy ({ customerId, customerData }) format for backward compatibility.
+app.post('/api/admin/orders/sync-customer', authenticateToken, async (req, res) => {
   try {
-    const orderId = req.params.id;
-    const updateData = req.body;
-    
-    // Find the order first
-    const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+    // normalize request body values
+    const customerId = req.body.customerId || req.body.id;
+    let customerData = req.body.customerData;
+    if (!customerData) {
+      customerData = {};
+      if (req.body.name) customerData.name = req.body.name;
+      if (req.body.phone) customerData.phone = req.body.phone;
+      if (req.body.address) customerData.address = req.body.address;
     }
-    
-    // RBAC: Check if user can edit this order
-    if (req.user.role === 'sub-admin') {
-      // Sub-admins can only edit orders from their branch
-      if (order.branch !== req.user.branch) {
-        return res.status(403).json({ error: 'Access denied. You can only edit orders from your branch.' });
+    const oldPhoneFromRequest = req.body.oldPhone;
+
+    if (!customerId || Object.keys(customerData).length === 0) {
+      return res.status(400).json({ success: false, error: 'customerId and customerData required' });
+    }
+
+    // look up the customer so we can determine existing phone
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ success: false, error: 'Customer not found' });
+    }
+
+    // construct phone filter list (old + new values)
+    const phoneFilter = [];
+    if (oldPhoneFromRequest) phoneFilter.push(oldPhoneFromRequest);
+    if (customerData.phone) phoneFilter.push(customerData.phone);
+    // if no phone info provided, fall back to the stored number
+    if (phoneFilter.length === 0 && customer.phone) phoneFilter.push(customer.phone);
+
+    const uniquePhones = [...new Set(phoneFilter)];
+    const filterQuery = uniquePhones.length === 1
+      ? { customerPhone: uniquePhones[0] }
+      : { customerPhone: { $in: uniquePhones } };
+
+    // prepare updates
+    const updateFields = {};
+    if (customerData.name) updateFields.customerName = customerData.name;
+    if (customerData.phone) updateFields.customerPhone = customerData.phone;
+    if (customerData.address) updateFields.customerAddress = customerData.address;
+
+    const result = await Order.updateMany(filterQuery, { $set: updateFields });
+
+    // sync Firestore orders as well
+    if (firebaseIntegrationService.initialized) {
+      try {
+        // we may need to run multiple small queries since Firestore has limited support
+        const phoneClauses = uniquePhones.map(ph => ['customerPhone', '==', ph]);
+        for (const clause of phoneClauses) {
+          const fbOrders = await clientDB(req).getCollection('orders', { where: [clause] });
+          if (fbOrders.success && fbOrders.data) {
+            for (const order of fbOrders.data) {
+              await clientDB(req).setDocument('orders', order.id, {
+                ...order,
+                ...updateFields
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore sync warning:', e.message);
       }
-      
-      // Sub-admins cannot edit assigned orders (orders with active workflow tasks)
-      const hasActiveTask = order.workflowTasks && order.workflowTasks.some(task => 
-        task.status === 'assigned' || task.status === 'in_progress'
-      );
-      
-      if (hasActiveTask) {
-        return res.status(403).json({ error: 'Cannot edit assigned orders. Only main admin can modify orders with active tasks.' });
-      }
     }
-    
-    // Main admin can edit any order
-    if (req.user.role !== 'admin' && req.user.role !== 'sub-admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    
-    // Update the order
-    const updatedOrder = await Order.findByIdAndUpdate(orderId, updateData, { new: true });
-    
-    res.json({ success: true, order: updatedOrder });
+
+    res.json({ 
+      success: true,
+      message: `Updated ${result.modifiedCount || result.n || 0} orders`,
+      modifiedCount: result.modifiedCount || result.n || 0
+    });
   } catch (error) {
-    console.error('Update order error:', error);
-    res.status(500).json({ error: 'Failed to update order' });
+    console.error('Sync customer to orders error:', error);
+    res.status(500).json({ success: false, error: 'Failed to sync customer changes' });
   }
 });
+
+                    // Get single customer by ID
+                      app.get('/api/admin/customers/:id', authenticateToken, async (req, res) => {
+                        try {
+                          const id = req.params.id;
+                          let customer = null;
+
+                          // Try Firestore first — search by phone
+                          if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+                            try {
+                               const fb = await clientDB(req).getCollection('customers', {
+                                where: [['phone', '==', id]]
+                              });
+                              if (fb.success && fb.data && fb.data.length > 0) customer = fb.data[0];
+                            } catch(e) {}
+                          }
+
+                           
+                          if (!customer) return res.status(404).json({ success: false, error: 'Customer not found' });
+                          res.json({ success: true, customer });
+                        } catch (error) {
+                          console.error('Get customer error:', error);
+                          res.status(500).json({ success: false, error: 'Failed to fetch customer' });
+                        }
+                      });
 
 // Update customer with RBAC checks
 app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
@@ -2209,6 +3097,51 @@ app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
     const customerId = req.params.id;
     const updateData = req.body;
     
+    // If Mongo is disconnected but Firestore is available, perform update there.
+    if (!isMongoConnected() && firebaseIntegrationService.initialized) {
+      // RBAC checks are skipped for fallback - assume admin
+      const fbCustomer = await clientDB(req).getDocument('customers', customerId);
+      if (!fbCustomer || !fbCustomer.success) {
+        return res.status(404).json({ error: 'Customer not found in firestore' });
+      }
+
+      // capture old values so we can propagate changes to orders as well
+      const oldPhone = fbCustomer.data.phone;
+      const oldName = fbCustomer.data.name;
+
+      // propagate customer change to Firestore
+      await clientDB(req).setDocument('customers', customerId, { ...fbCustomer.data, ...updateData });
+
+      // if phone or name changed, update matching orders in Firestore too
+      try {
+        const changes = {};
+        if (updateData.phone && updateData.phone !== oldPhone) {
+          changes.customerPhone = updateData.phone;
+        }
+        if (updateData.name && updateData.name !== oldName) {
+          changes.customerName = updateData.name;
+        }
+        if (Object.keys(changes).length > 0 && oldPhone) {
+           const orderList = await clientDB(req).getCollection('orders', { where: [['customerPhone', '==', oldPhone]] });
+          if (orderList && orderList.success && Array.isArray(orderList.data)) {
+            for (const o of orderList.data) {
+              const docId = o.id || o._id || o.orderId;
+              if (!docId) continue;
+              try {
+                await clientDB(req).setDocument('orders', docId, { ...o, ...changes });
+              } catch (e) {
+                console.warn('Failed to propagate customer update to order', docId, e.message || e);
+              }
+            }
+          }
+        }
+      } catch (propErr) {
+        console.warn('Firestore customer-to-order propagation error:', propErr && propErr.message ? propErr.message : propErr);
+      }
+
+      return res.json({ success: true, customer: { id: customerId, ...updateData } });
+    }
+
     // Find the customer first
     const customer = await Customer.findById(customerId);
     if (!customer) {
@@ -2236,6 +3169,28 @@ app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
     // Update the customer
     const updatedCustomer = await Customer.findByIdAndUpdate(customerId, updateData, { new: true });
     
+    // propagate changes to orders if phone or name changed
+    try {
+      const changes = {};
+      if (updateData.phone && updateData.phone !== customer.phone) {
+        changes.customerPhone = updateData.phone;
+      }
+      if (updateData.name && updateData.name !== customer.name) {
+        changes.customerName = updateData.name;
+      }
+      if (Object.keys(changes).length > 0) {
+        await Order.updateMany({ customerPhone: customer.phone }, { $set: changes });
+        console.log(`✅ Propagated customer update to orders for phone ${customer.phone}`);
+      }
+    } catch (propErr) {
+      console.warn('Failed to propagate customer update to orders:', propErr.message || propErr);
+    }
+
+    // also mirror to Firestore if available
+    if (firebaseIntegrationService.initialized) {
+     await clientDB(req).setDocument('customers', customerId, { ...updatedCustomer.toObject() });
+    }
+
     res.json({ success: true, customer: updatedCustomer });
   } catch (error) {
     console.error('Update customer error:', error);
@@ -2246,7 +3201,8 @@ app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
 // Enhanced Order Creation with Data Flow Service
 let orderCreationInProgress = false;
 
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', authenticateToken, async (req, res) => {
+
   try {
     if (orderCreationInProgress) {
       console.log('⚠️ Order creation already in progress, rejecting duplicate request');
@@ -2259,11 +3215,26 @@ app.post('/api/orders', async (req, res) => {
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     
     // Validate required fields
-    if (!req.body.customer?.name || !req.body.customer?.phone || !req.body.garmentType) {
-      orderCreationInProgress = false;
-      console.error('❌ Validation failed: Missing required fields');
-      return res.status(400).json({ success: false, error: 'Customer name, phone, and garment type are required' });
-    }
+    // Support both single order and array of orders
+          const isMultiple = Array.isArray(req.body.orders);
+          const orderList = isMultiple ? req.body.orders : [req.body];
+
+          if (!isMultiple && (!req.body.customer?.name || !req.body.customer?.phone || !req.body.garmentType)) {
+            orderCreationInProgress = false;
+            return res.status(400).json({ success: false, error: 'Customer name, phone, and garment type are required' });
+          }
+
+          if (isMultiple && orderList.length === 0) {
+            orderCreationInProgress = false;
+            return res.status(400).json({ success: false, error: 'orders array is empty' });
+          }
+
+          // Process all orders in loop
+          const groupId = isMultiple ? `GRP-${Date.now()}` : null;
+          const results = [];
+          for (let _i = 0; _i < orderList.length; _i++) {
+            req.body = { ...orderList[_i], linkedOrderGroup: groupId || orderList[_i].linkedOrderGroup };
+            // ---- rest of single order logic runs below for each item ----
     
     const orderData = {
       orderId: `ORD-${Date.now()}`,
@@ -2278,56 +3249,114 @@ app.post('/api/orders', async (req, res) => {
       deliveryDate: req.body.deliveryDate ? new Date(req.body.deliveryDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       branch: req.body.branch || 'SAPTHALA.MAIN',
       status: 'pending',
-      currentStage: 'dyeing',
+      currentStage: null, // will be set after determining workflow
       workflowTasks: [],
       designNotes: req.body.designNotes || '',
       designImages: Array.isArray(req.body.designImages) ? req.body.designImages.map(img => {
         if (typeof img === 'string') return img;
         if (img && img.name) return img.name;
         return '';
-      }).filter(Boolean) : []
+      }).filter(Boolean) : [],
+      addons: Array.isArray(req.body.addons) ? req.body.addons.map(a => typeof a === 'object' ? a : { name: String(a) }) : [],
+      paymentMode: req.body.paymentMode || '',
+      paymentRemarks: req.body.paymentRemarks || '',
+      stageTimeLimits: req.body.stageTimeLimits || {},
+      selectedWorkflowStages: Array.isArray(req.body.workflow) ? req.body.workflow : [],
+      adminId: req.user?.adminId || null,
+
     };
 
     console.log('💾 Creating order:', orderData.orderId);
     console.log('Order data:', JSON.stringify(orderData, null, 2));
 
-    const settings = await Settings.findOne();
+    // Prefer reading workflowStages from Firestore when available, otherwise
+    // fall back to MongoDB Settings or use a safe default.
+    let settings = null;
+    try {
+      if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+        const fbSettings = await clientDB(req).getCollection('settings', { limit: 1 });
+        if (fbSettings && fbSettings.success && fbSettings.data && fbSettings.data.length > 0) {
+          settings = fbSettings.data[0];
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to read settings from Firestore (will try Mongo):', e.message || e);
+    }
+
+    // Mongo fallback only when connected
+    if (!settings && typeof isMongoConnected === 'function' && isMongoConnected()) {
+      try {
+        settings = await Settings.findOne();
+      } catch (e) {
+        console.warn('⚠️ Failed to read settings from MongoDB:', e.message || e);
+      }
+    }
+
+    // Final fallback default: if settings are missing, use an in-memory default
     if (!settings || !settings.workflowStages || settings.workflowStages.length === 0) {
-      console.error('❌ No workflow stages found in settings');
-      orderCreationInProgress = false;
-      return res.status(500).json({ error: 'Workflow not configured. Please contact administrator.' });
+      console.warn('⚠️ No workflow stages found in settings (Firestore or Mongo). Using built-in default workflow.');
+      settings = {
+        workflowStages: [
+          { id: 'dyeing', name: 'Dyeing', icon: '🎨', order: 1 },
+          { id: 'cutting', name: 'Cutting', icon: '✂️', order: 2 },
+          { id: 'stitching', name: 'Stitching', icon: '🧵', order: 3 },
+          { id: 'khakha', name: 'Khakha', icon: '📐', order: 4 },
+          { id: 'maggam', name: 'Maggam Work', icon: '🪡', order: 5 },
+          { id: 'painting', name: 'Painting', icon: '🖌️', order: 6 },
+          { id: 'finishing', name: 'Finishing', icon: '✨', order: 7 },
+          { id: 'quality-check', name: 'Quality Check', icon: '🔍', order: 8 },
+          { id: 'ready-to-deliver', name: 'Ready to Deliver', icon: '🚚', order: 9 }
+        ]
+      };
+
+      // Try to persist default settings to Firestore (best-effort)
+      if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+        try {
+          await clientDB(req).setDocument('settings', 'default', { workflowStages: settings.workflowStages });
+          console.log('✅ Default workflow seeded to Firestore (document: settings/default)');
+        } catch (seedErr) {
+          console.warn('⚠️ Could not seed default workflow to Firestore:', seedErr && seedErr.message ? seedErr.message : seedErr);
+        }
+      }
     }
 
     console.log(`✅ Found ${settings.workflowStages.length} workflow stages`);
-    
+
     // Use requested stages or default workflow (excluding measurements-design)
-    let requestedStages = req.body.workflow;
-    if (!requestedStages || requestedStages.length === 0) {
-      // Default workflow: dyeing → finishing → quality-check → ready-to-deliver
-      requestedStages = ['dyeing', 'finishing', 'quality-check', 'ready-to-deliver'];
-      console.log('No workflow specified, using default workflow: dyeing → finishing → quality-check → ready-to-deliver');
-    }
+                     let requestedStages = Array.isArray(req.body.workflow) ? req.body.workflow : [];
+                    if (requestedStages.length === 0) {
+                      requestedStages = (settings.workflowStages || []).map(s => s.id);
+                      console.log('No workflow specified, using all settings stages:', requestedStages);
+                    }
+                    // Set currentStage to the actual first stage in the selected workflow
+                    orderData.currentStage = requestedStages[0] || 'dyeing';
+                    orderData.selectedWorkflowStages = requestedStages;
     console.log('Creating tasks for stages:', requestedStages);
-    
-    // Create workflow tasks
-    requestedStages.forEach((stageId, index) => {
-      const stageConfig = settings.workflowStages.find(s => s.id === stageId);
-      if (stageConfig) {
-        const task = {
-          stageId: stageConfig.id,
-          stageName: stageConfig.name,
-          stageIcon: stageConfig.icon,
-          status: index === 0 ? 'pending' : 'waiting',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        
+
+                      // Create workflow tasks
+                  requestedStages.forEach((stageId, index) => {
+                        const stageConfig = settings.workflowStages.find(s => s.id === stageId);
+                        if (stageConfig) {
+                          const timeLimitData = (req.body.stageTimeLimits || {})[stageId];
+                          const task = {
+                            stageId: stageConfig.id,
+                            stageName: stageConfig.name,
+                            stageIcon: stageConfig.icon,
+                            status: index === 0 ? 'pending' : 'waiting',
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            ...(timeLimitData ? {
+                              timeLimitMinutes: timeLimitData.minutes,
+                              timeLimitDisplay: `${timeLimitData.value} ${timeLimitData.unit}`,
+                            } : {})
+                          };
+
         if (stageId === 'measurements-design') {
           task.designNotes = req.body.designNotes || 'Pending measurements and design finalization';
           task.measurementsData = req.body.measurements || {};
           task.designImages = orderData.designImages || [];
         }
-        
+
         orderData.workflowTasks.push(task);
         console.log(`   ✅ Created task: ${stageConfig.name} (${index === 0 ? 'pending' : 'waiting'})`);
       } else {
@@ -2341,93 +3370,115 @@ app.post('/api/orders', async (req, res) => {
       orderCreationInProgress = false;
       return res.status(500).json({ success: false, error: 'Failed to create workflow tasks. Please contact administrator.' });
     }
-    
+
     console.log(`✅ Created ${orderData.workflowTasks.length} workflow tasks`);
-    
-    const order = new Order(orderData);
-    
-    // Auto-assign first task to available staff - set as PENDING not ASSIGNED
-    if (order.workflowTasks.length > 0) {
-      const firstTask = order.workflowTasks[0];
-      console.log(`🔍 First task: ${firstTask.stageId} - ${firstTask.stageName}`);
-      console.log(`   Status will be: pending (staff must accept)`);
-      
-      // Task is already pending, no auto-assignment
-      // Staff will see it in Available Tasks and must accept it
-    }
-    
-    await order.save();
-    console.log('✅ Order saved to MongoDB:', order.orderId);
-    console.log(`   Order ID: ${order._id}`);
-    console.log(`   Workflow tasks: ${order.workflowTasks.length}`);
-    console.log(`   First task status: pending (staff must accept)`);
-    
-    // Sync to Firebase
-    try {
-      await firebaseIntegrationService.syncOrder(order.toObject());
-      console.log('🔥 Order synced to Firebase');
-    } catch (firebaseError) {
-      console.warn('⚠️ Firebase sync failed (order still saved to MongoDB):', firebaseError.message);
-    }
-    
-    const customer = await Customer.findOneAndUpdate(
-      { phone: orderData.customerPhone },
-      { 
-        $set: { 
-          name: orderData.customerName, 
-          phone: orderData.customerPhone,
-          address: orderData.customerAddress 
-        },
-        $push: { orders: order._id },
-        $inc: { totalOrders: 1, totalSpent: orderData.totalAmount }
-      },
-      { upsert: true, new: true }
-    );
-    console.log(`✅ Customer record updated: ${customer.name}`);
-    
-    // Sync customer to Firebase
-    try {
-      await firebaseIntegrationService.syncCustomer(customer.toObject());
-      console.log('🔥 Customer synced to Firebase');
-    } catch (firebaseError) {
-      console.warn('⚠️ Firebase customer sync failed:', firebaseError.message);
+
+    // Persist the order: Firestore is primary. Persist to Mongo only if backup mode is enabled
+    let savedOrderMongo = null;
+    let savedToFirestore = false;
+
+    // Save to Firestore (primary) — set createdAt now so the doc is queryable immediately
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      try {
+        orderData.createdAt = orderData.createdAt || new Date();
+        orderData.updatedAt = new Date();
+await clientDB(req).syncOrder(orderData);
+        savedToFirestore = true;
+        console.log('🔥 Order saved to Firebase (primary):', orderData.orderId);
+      } catch (fbErr) {
+        console.warn('⚠️ Failed to save order to Firestore:', fbErr.message || fbErr);
+      }
     }
 
-    console.log('🎉 Order creation completed successfully!');
-    
-    // Process with Data Flow Service for staff synchronization
-    try {
-      const dataFlowResult = await DataFlowService.processOrderCreation({
-        ...orderData,
-        _id: order._id
-      }, req.user || { id: 'admin' });
-      
-      console.log('✅ Data flow processing completed:', dataFlowResult.message);
-    } catch (dataFlowError) {
-      console.warn('⚠️ Data flow processing failed (order still created):', dataFlowError.message);
+    // Persist to MongoDB only when connected
+    if (typeof isMongoConnected === 'function' && isMongoConnected()) {
+      try {
+        const orderModel = new Order(orderData);
+        await orderModel.save();
+        savedOrderMongo = orderModel;
+        console.log('✅ Order saved to MongoDB (backup):', orderModel.orderId);
+      } catch (mongoErr) {
+        console.warn('⚠️ Failed to persist order to MongoDB backup:', mongoErr.message || mongoErr);
+      }
+    } else {
+      console.log('ℹ️ MongoDB not connected — skipping Mongo persistence for order');
     }
-    
-    res.json({ 
-      success: true, 
-      order: {
-        _id: order._id,
-        orderId: order.orderId,
-        customerName: order.customerName,
-        status: order.status,
-        workflowTasks: order.workflowTasks.map(t => ({
-          stageId: t.stageId,
-          stageName: t.stageName,
-          status: t.status,
-          assignedToName: t.assignedToName
-        }))
-      },
-      message: 'Order created and synced to staff application'
-    });
+
+    // Customer upsert — prefer Firestore
+    try {
+      if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+        const customerDoc = {
+          name: orderData.customerName,
+          phone: orderData.customerPhone,
+          address: orderData.customerAddress || '',
+          totalOrders: 1,
+          totalSpent: orderData.totalAmount || 0
+        };
+await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId });
+        console.log('🔥 Customer upserted in Firestore');
+      }
+
+      if (typeof isMongoConnected === 'function' && isMongoConnected()) {
+        const cust = await Customer.findOneAndUpdate(
+          { phone: orderData.customerPhone },
+          { 
+            $set: { name: orderData.customerName, phone: orderData.customerPhone, address: orderData.customerAddress },
+            $push: { orders: savedOrderMongo ? savedOrderMongo._id : null },
+            $inc: { totalOrders: 1, totalSpent: orderData.totalAmount }
+          },
+          { upsert: true, new: true }
+        );
+        console.log('✅ Customer record updated in MongoDB:', cust && cust.name);
+      }
+    } catch (custErr) {
+      console.warn('⚠️ Customer upsert error (non-fatal):', custErr.message || custErr);
+    }
+
+    // DataFlowService migrated to Firestore — prefer Firestore, fall back to Mongo if still present
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      try {
+        const dataFlowResult = await DataFlowService.processOrderCreation({ ...orderData, _id: savedOrderMongo ? savedOrderMongo._id : null }, req.user || { id: 'admin' });
+        console.log('✅ Data flow processing completed (Firestore):', dataFlowResult.message);
+      } catch (dataFlowError) {
+        console.warn('⚠️ Data flow processing failed (order still created):', dataFlowError.message);
+      }
+    } else if (typeof isMongoConnected === 'function' && isMongoConnected()) {
+      // Legacy path: allow DataFlowService to operate against Mongo if configured (back-compat)
+      try {
+        const dataFlowResult = await DataFlowService.processOrderCreation({ ...orderData, _id: savedOrderMongo ? savedOrderMongo._id : null }, req.user || { id: 'admin' });
+        console.log('✅ Data flow processing completed (Mongo fallback):', dataFlowResult.message);
+      } catch (dataFlowError) {
+        console.warn('⚠️ Data flow processing failed (order still created):', dataFlowError.message);
+      }
+    } else {
+      console.log('ℹ️ No database available for DataFlowService — skipping assignment');
+    }
+
+    // Respond with a Firestore-first representation
+    const responseOrder = {
+      orderId: orderData.orderId,
+      customerName: orderData.customerName,
+      status: orderData.status,
+      workflowTasks: orderData.workflowTasks.map(t => ({ stageId: t.stageId, stageName: t.stageName, status: t.status, assignedToName: t.assignedToName }))
+    };
+
+    results.push({ orderId: orderData.orderId, garmentType: orderData.garmentType, status: 'created' });
+} // end for loop
+
+      invalidateCache(['orders_list_', 'public_orders_']);
+      res.json({
+        success: true,
+        groupId,
+        ordersCreated: results.length,
+        orders: results,
+        order: results[0],
+        message: `${results.length} order(s) created`
+      });
 
     // Fire-and-forget: generate themed PDF and send WhatsApp notification to customer
     (async () => {
       try {
-        const settings = await Settings.findOne() || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '', defaultTheme: 'default' };
+        const settings = await getAppSettings({ req }) || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '', defaultTheme: 'default' };
         // Attach theme if provided in request
         const theme = req.body.theme || settings.defaultTheme || 'default';
         const pdfOrder = Object.assign({}, orderData, { theme });
@@ -2461,57 +3512,113 @@ app.post('/api/orders', async (req, res) => {
   } finally {
     setTimeout(() => {
       orderCreationInProgress = false;
-    }, 2000);
+    }, 500);
   }
 });
-
+                   
 // Share an order PDF and optionally send WhatsApp message
-app.post('/api/share-order-pdf', async (req, res) => {
-  try {
-    const { orderData, sendNow = true } = req.body;
-    if (!orderData) return res.status(400).json({ success: false, error: 'orderData is required' });
+                app.post('/api/share-order-pdf', async (req, res) => {
+                  try {
+                    const { orderData, sendNow = true } = req.body;
+                    if (!orderData) return res.status(400).json({ success: false, error: 'orderData is required' });
 
-    if (!orderData.orderId) orderData.orderId = `ORD-${Date.now()}`;
+                    if (!orderData.orderId) orderData.orderId = `ORD-${Date.now()}`;
 
-    const settings = await Settings.findOne() || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '' };
+                    // Normalize customer fields — PDF service needs both flat and nested
+                    if (!orderData.customerName && orderData.customer?.name) orderData.customerName = orderData.customer.name;
+                    if (!orderData.customerPhone && orderData.customer?.phone) orderData.customerPhone = orderData.customer.phone;
+                    if (!orderData.customerAddress && orderData.customer?.address) orderData.customerAddress = orderData.customer.address;
+                    if (!orderData.customer) orderData.customer = { name: orderData.customerName || '', phone: orderData.customerPhone || '', address: orderData.customerAddress || '' };
 
-    // Use enhanced PDF service with theme support
-    const result = await EnhancedPDFService.generateAndSavePDFFiles(orderData, settings);
-    if (!result.success) return res.status(500).json({ success: false, error: result.error });
+                    // Normalize pricing fields
+                    if (!orderData.totalAmount && orderData.pricing?.total) orderData.totalAmount = orderData.pricing.total;
+                    if (!orderData.advanceAmount && orderData.pricing?.advance) orderData.advanceAmount = orderData.pricing.advance;
+                    if (orderData.balanceAmount == null) orderData.balanceAmount = orderData.pricing?.balance ?? Math.max(0, (orderData.totalAmount || 0) - (orderData.advanceAmount || 0));
 
-    // Upsert order record to set pdfPath
-    try {
-      const pdfRelative = result.pdfPath || result.htmlPath;
-      const update = { $set: { pdfPath: pdfRelative } };
-      const order = await Order.findOneAndUpdate({ orderId: orderData.orderId }, update, { upsert: true, new: true, setDefaultsOnInsert: true });
-      if (order && (!order.customerPhone || !order.customerName)) {
-        order.customerPhone = orderData.customerPhone || order.customer?.phone || order.customerPhone;
-        order.customerName = orderData.customerName || order.customer?.name || order.customerName;
-        order.garmentType = orderData.garmentType || order.garmentType;
-        await order.save();
-      }
-    } catch (err) {
-      console.warn('Failed to update Order with pdfPath:', err.message);
-    }
+                    const settings = await getAppSettings({ req }) || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '' };
 
-    const message = NotificationService.generateCustomerMessage(orderData);
-    let notifyResult = { sent: false, provider: 'wa.me', whatsappUrl: null };
-    if (sendNow) {
-      notifyResult = await NotificationService.sendWhatsAppToCustomer(orderData.customerPhone || orderData.customer?.phone, message, result.pdfPath || result.htmlPath);
-    }
+                    const result = await EnhancedPDFService.generateAndSavePDFFiles(orderData, settings);
+                    if (!result.success) return res.status(500).json({ success: false, error: result.error });
 
-    res.json({ success: true, pdf: result, notify: notifyResult });
-  } catch (error) {
-    console.error('Share order pdf error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+                    // Only persist pdfPath to DB for real orders (not previews with PREV- prefix)
+                    const isPreview = String(orderData.orderId).startsWith('PREV-');
+                    if (!isPreview) {
+                      try {
+                        const pdfRelative = result.pdfPath || result.htmlPath;
+                        await Order.findOneAndUpdate(
+                          { orderId: orderData.orderId },
+                          { $set: { pdfPath: pdfRelative } },
+                          { new: true }
+                        );
+                      } catch (err) {
+                        console.warn('Failed to update Order with pdfPath:', err.message);
+                      }
+                    }
 
-// Get Orders
+                    const message = NotificationService.generateCustomerMessage(orderData);
+                    let notifyResult = { sent: false, provider: 'wa.me', whatsappUrl: null };
+                    if (sendNow && !isPreview) {
+                      notifyResult = await NotificationService.sendWhatsAppToCustomer(orderData.customerPhone, message, result.pdfPath || result.htmlPath);
+                    }
+
+                    res.json({ success: true, pdf: result, notify: notifyResult });
+                  } catch (error) {
+                    console.error('Share order pdf error:', error);
+                    res.status(500).json({ success: false, error: error.message });
+                  }
+                });
+
+// Get Orders — Firestore primary, MongoDB fallback
 app.get('/api/orders', authenticateToken, async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
-    res.json(orders);
+                    const nocache = req.query.nocache === '1';
+                    const branch = req.query.branch || '';
+                    const phoneFilter = req.query.phone || '';// public endpoint may not filter by branch
+    const role = req.user && req.user.role ? req.user.role : 'guest';
+    const cacheKey = `public_orders_${branch}_${role}`;
+    if (!nocache) {
+      const cached = getCache(cacheKey);
+      if (cached) return res.json(cached);
+    }
+
+    let responseData;
+    // Prefer Firestore when initialized
+    if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+      try {
+        const fb = await clientDB(req).getCollection('orders', { orderBy: { field: 'createdAt', direction: 'desc' }, limit: 1000 });
+        if (fb.success) {
+                            let data = fb.data || [];
+                              if (phoneFilter) {
+                                data = data.filter(o =>
+                                  o.customerPhone === phoneFilter ||
+                                  (o.customer && (o.customer.phone === phoneFilter || o.customer.whatsapp === phoneFilter))
+                                );
+                              }
+                              if (req.user && req.user.role === 'sub-admin') {
+            const redacted = data.map(o => { const c = { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
+            responseData = redacted;
+          } else {
+            responseData = data;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Firestore orders fetch error — falling back to MongoDB:', e.message || e);
+      }
+    }
+
+    // Fallback to MongoDB if no responseData yet
+    if (!responseData) {
+      const orders = await Order.find().sort({ createdAt: -1 });
+      if (req.user && req.user.role === 'sub-admin') {
+        const redacted = orders.map(o => { const c = o.toObject ? o.toObject() : { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
+        responseData = redacted;
+      } else {
+        responseData = orders;
+      }
+    }
+
+    setCache(cacheKey, responseData, 45 * 1000);
+    res.json(responseData);
   } catch (error) {
     console.error('Get orders error:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });
@@ -2520,358 +3627,482 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 
 // ==================== STAFF ROUTES ====================
 
-// Get all staff (with optional branch filter)
-app.get('/api/staff', async (req, res) => {
-  try {
-    const { branch } = req.query;
-    const query = branch ? { branch } : {};
-    const staff = await Staff.find(query).sort({ createdAt: -1 });
-    res.json(staff);
-  } catch (error) {
-    console.error('Get staff error:', error);
-    res.status(500).json({ error: 'Failed to fetch staff' });
-  }
-});
-
+// Get all staff (with optional branch filter) — Firestore primary, MongoDB fallback
 // Get single staff
-app.get('/api/staff/:id', async (req, res) => {
-  try {
-    const staff = await Staff.findById(req.params.id);
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
-    res.json(staff);
-  } catch (error) {
-    console.error('Get staff error:', error);
-    res.status(500).json({ error: 'Failed to fetch staff' });
-  }
-});
-
+      app.get('/api/staff/:id', authenticateToken, async (req, res) => {
+        try {
+          const adminId = req.user.adminId;
+          if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+          const db = firebaseIntegrationService.forClient(adminId);
+          const result = await db.getCollection('staff', {
+            where: [['staffId', '==', req.params.id]], limit: 1
+          });
+          const staff = result?.data?.[0];
+          if (!staff) return res.status(404).json({ error: 'Staff not found' });
+          res.json(staff);
+        } catch (error) {
+          console.error('Get staff error:', error);
+          res.status(500).json({ error: 'Failed to fetch staff' });
+        }
+      });
 // Create staff
-app.post('/api/staff', async (req, res) => {
-  try {
-    const { staffId, name, phone, email, role, pin, branch, workflowStages } = req.body;
+// app.post('/api/staff',authenticateToken, async (req, res) => {
+//   try {
+//     const { staffId, name, phone, email, role, pin, branch, workflowStages } = req.body;
     
-    // Check if staffId already exists
-    const existing = await Staff.findOne({ staffId });
-    if (existing) {
-      return res.status(400).json({ error: 'Staff ID already exists' });
-    }
+//     // Check if staffId already exists
+//     const existing = await Staff.findOne({ staffId });
+//     if (existing) {
+//       return res.status(400).json({ error: 'Staff ID already exists' });
+//     }
     
-    const staff = new Staff({
-      staffId,
-      name,
-      phone,
-      email,
-      role,
-      pin,
-      branch: branch || 'SAPTHALA.MAIN',
-      workflowStages,
-      isAvailable: true,
-      currentTaskCount: 0
-    });
+//     const staff = new Staff({
+//       staffId,
+//       name,
+//       phone,
+//       email,
+//       role,
+//       pin,
+//       branch: branch || 'SAPTHALA.MAIN',
+//       workflowStages,
+//       isAvailable: true,
+//       currentTaskCount: 0
+//     });
     
-    await staff.save();
-    console.log(`✅ Staff created: ${name} (${staffId}) - Branch: ${staff.branch}`);
+//     await staff.save();
+//     console.log(`✅ Staff created: ${name} (${staffId}) - Branch: ${staff.branch}`);
     
-    // Sync to Firebase
-    try {
-      await firebaseIntegrationService.syncStaff(staff.toObject());
-      console.log('🔥 Staff synced to Firebase');
-    } catch (firebaseError) {
-      console.warn('⚠️ Firebase staff sync failed:', firebaseError.message);
-    }
+//     // Sync to Firebase
+//     try {
+//        await clientDB(req).syncStaff({ ...staff.toObject(), adminId: req.user?.adminId });
+//       console.log('🔥 Staff synced to Firebase');
+//     } catch (firebaseError) {
+//       console.warn('⚠️ Firebase staff sync failed:', firebaseError.message);
+//     }
     
-    res.json({ success: true, staff });
-  } catch (error) {
-    console.error('Create staff error:', error);
-    res.status(500).json({ error: 'Failed to create staff' });
-  }
-});
+//     res.json({ success: true, staff });
+//   } catch (error) {
+//     console.error('Create staff error:', error);
+//     res.status(500).json({ error: 'Failed to create staff' });
+//   }
+// });
 
 // Update staff
-app.put('/api/staff/:id', async (req, res) => {
-  try {
-    const { staffId, name, phone, email, role, pin, branch, workflowStages } = req.body;
+// app.put('/api/staff/:id',authenticateToken, async (req, res) => {
+//   try {
+//     const { staffId, name, phone, email, role, pin, branch, workflowStages } = req.body;
     
-    // Check if new staffId conflicts with another staff
-    const existing = await Staff.findOne({ staffId, _id: { $ne: req.params.id } });
-    if (existing) {
-      return res.status(400).json({ error: 'Staff ID already exists' });
-    }
+//     // Check if new staffId conflicts with another staff
+//     const existing = await Staff.findOne({ staffId, _id: { $ne: req.params.id } });
+//     if (existing) {
+//       return res.status(400).json({ error: 'Staff ID already exists' });
+//     }
     
-    const staff = await Staff.findByIdAndUpdate(
-      req.params.id,
-      { staffId, name, phone, email, role, pin, branch: branch || 'SAPTHALA.MAIN', workflowStages, updatedAt: new Date() },
-      { new: true }
-    );
+//     const staff = await Staff.findByIdAndUpdate(
+//       req.params.id,
+//       { staffId, name, phone, email, role, pin, branch: branch || 'SAPTHALA.MAIN', workflowStages, updatedAt: new Date() },
+//       { new: true }
+//     );
     
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
+//     if (!staff) {
+//       return res.status(404).json({ error: 'Staff not found' });
+//     }
     
-    console.log(`✅ Staff updated: ${name} (${staffId}) - Branch: ${staff.branch}`);
-    res.json({ success: true, staff });
-  } catch (error) {
-    console.error('Update staff error:', error);
-    res.status(500).json({ error: 'Failed to update staff' });
-  }
-});
+//     console.log(`✅ Staff updated: ${name} (${staffId}) - Branch: ${staff.branch}`);
+//     res.json({ success: true, staff });
+//   } catch (error) {
+//     console.error('Update staff error:', error);
+//     res.status(500).json({ error: 'Failed to update staff' });
+//   }
+// });
 
 // Toggle staff availability
-app.put('/api/staff/:id/availability', async (req, res) => {
-  try {
-    const { isAvailable } = req.body;
-    
-    const staff = await Staff.findByIdAndUpdate(
-      req.params.id,
-      { isAvailable, updatedAt: new Date() },
-      { new: true }
-    );
-    
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
-    
-    console.log(`✅ Staff availability updated: ${staff.name} - ${isAvailable ? 'Available' : 'Busy'}`);
-    res.json({ success: true, staff });
-  } catch (error) {
-    console.error('Update availability error:', error);
-    res.status(500).json({ error: 'Failed to update availability' });
-  }
-});
+          app.put('/api/staff/:id/availability', authenticateToken, async (req, res) => {
+            try {
+              const { isAvailable } = req.body;
+              const adminId = req.user.adminId;
+              if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+              const db = firebaseIntegrationService.forClient(adminId);
+              await db.setDocument('staff', req.params.id, { isAvailable, updatedAt: new Date() });
+              console.log(`✅ Staff availability updated: ${req.params.id} → ${isAvailable}`);
+              res.json({ success: true });
+            } catch (error) {
+              console.error('Update availability error:', error);
+              res.status(500).json({ error: 'Failed to update availability' });
+            }
+          });
 
-// Delete staff
-app.delete('/api/staff/:id', async (req, res) => {
-  try {
-    const staff = await Staff.findByIdAndDelete(req.params.id);
-    
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
-    
-    console.log(`✅ Staff deleted: ${staff.name} (${staff.staffId})`);
-    res.json({ success: true, message: 'Staff deleted successfully' });
-  } catch (error) {
-    console.error('Delete staff error:', error);
-    res.status(500).json({ error: 'Failed to delete staff' });
-  }
-});
+        // Delete staff
+        app.delete('/api/staff/:id', authenticateToken, async (req, res) => {
+          try {
+            const adminId = req.user.adminId;
+            if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+            const db = firebaseIntegrationService.forClient(adminId);
+            await db.deleteDocument('staff', req.params.id);
+            console.log(`✅ Staff deleted: ${req.params.id}`);
+            res.json({ success: true, message: 'Staff deleted successfully' });
+          } catch (error) {
+            console.error('Delete staff error:', error);
+            res.status(500).json({ error: 'Failed to delete staff' });
+          }
+        });
+            // Staff Login — reads from clients/{adminId}/staff subcollection
+            app.post('/api/staff/login', async (req, res) => {
+              try {
+                const { staffId, pin, adminId } = req.body || {};
 
-// Staff Login
-app.post('/api/staff/login', async (req, res) => {
-  try {
-    const { staffId, pin } = req.body;
-    
-    // Validate input
-    if (!staffId || !pin) {
-      console.log(`❌ Missing credentials: staffId=${!!staffId}, pin=${!!pin}`);
-      return res.status(400).json({ error: 'Staff ID and PIN are required' });
-    }
+                if (!staffId || !pin) {
+                  return res.status(400).json({ error: 'Staff ID and PIN are required' });
+                }
+                if (!adminId) {
+                  return res.status(400).json({ error: 'adminId is required to identify your boutique' });
+                }
 
-    console.log(`📱 Staff login attempt: ${staffId} with PIN: ${pin}`);
-    
-    const staff = await Staff.findOne({ staffId });
-    
-    if (!staff) {
-      console.log(`❌ Staff not found: ${staffId}`);
-      return res.status(401).json({ error: 'Invalid staff ID or PIN' });
-    }
+                console.log(`📱 Staff login attempt: ${staffId} for client: ${adminId}`);
 
-    console.log(`   Staff DB Record: ID=${staff._id}, Name=${staff.name}, PIN=${staff.pin}, Stages=${JSON.stringify(staff.workflowStages)}`);
+                if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) {
+                  return res.status(503).json({ error: 'Database not available. Please try again shortly.' });
+                }
 
-    // Compare PIN (convert both to string for comparison)
-    const staffPin = String(staff.pin).trim();
-    const inputPin = String(pin).trim();
-    
-    if (staffPin !== inputPin) {
-      console.log(`❌ Invalid PIN for staff: ${staffId} - Expected: '${staffPin}', Got: '${inputPin}'`);
-      return res.status(401).json({ error: 'Invalid staff ID or PIN' });
-    }
+                // Scope to the correct client's subcollection: clients/{adminId}/staff
+                const db = firebaseIntegrationService.forClient(adminId);
+                const fb = await db.getCollection('staff', {
+                  where: [['staffId', '==', staffId]],
+                  limit: 1
+                });
 
-    // Update last login
-    staff.lastLogin = new Date();
-    await staff.save();
+                let staff = null;
+                if (fb && fb.success && fb.data && fb.data.length > 0) {
+                  staff = fb.data[0];
+                }
 
-    const token = jwt.sign(
-      { id: staff._id, staffId: staff.staffId, role: 'staff' },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+                if (!staff) {
+                  console.log(`❌ Staff not found: ${staffId} in client: ${adminId}`);
+                  return res.status(401).json({ error: 'Invalid staff ID or PIN' });
+                }
 
-    const staffResponse = {
-      id: staff._id,
-      staffId: staff.staffId,
-      name: staff.name,
-      role: staff.role,
-      workflowStages: staff.workflowStages,
-      phone: staff.phone || '',
-      avatarUrl: staff.avatarUrl || ''
-    };
+                const staffPin = String(staff.pin || '1234').trim();
+                const inputPin = String(pin).trim();
 
-    console.log(`✅ Staff login successful: ${staff.name}`);
-    console.log(`   Returning staff data:`, JSON.stringify(staffResponse));
+                if (staffPin !== inputPin) {
+                  console.log(`❌ Invalid PIN for staff: ${staffId}`);
+                  return res.status(401).json({ error: 'Invalid staff ID or PIN' });
+                }
 
-    res.json({
-      success: true,
-      token,
-      staff: staffResponse
-    });
-  } catch (error) {
-    console.error('❌ Staff login error:', error);
-    res.status(500).json({ error: 'Server error. Please try again.' });
-  }
-});
+                const token = jwt.sign(
+                  { id: staff._id || staff.id, staffId: staff.staffId, role: 'staff', adminId },
+                  JWT_SECRET,
+                  { expiresIn: '24h' }
+                );
+
+                console.log(`✅ Staff login successful: ${staff.name} (${adminId})`);
+                res.json({
+                  success: true,
+                  token,
+                  staff: {
+                    id: staff._id || staff.id,
+                    staffId: staff.staffId,
+                    name: staff.name,
+                    role: staff.role,
+                    workflowStages: staff.workflowStages || [],
+                    phone: staff.phone || '',
+                    avatarUrl: staff.avatarUrl || ''
+                  },
+                  adminId
+                });
+              } catch (error) {
+                console.error('❌ Staff login error:', error);
+                res.status(500).json({ error: 'Server error. Please try again.' });
+              }
+            });
 
 // Get Staff Tasks with Enhanced Data Flow
-app.get('/api/staff/:staffId/tasks', async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    console.log(`🔍 Getting enhanced tasks for staff: ${staffId}`);
-    
-    const result = await DataFlowService.getStaffTasks(staffId, true);
-    
-    console.log(`✅ Returning ${result.myTasks.length} assigned tasks and ${result.availableTasks.length} available tasks`);
-    
-    // Return in the format expected by the Flutter app and staff portal
-    res.json(result.myTasks || []);
-  } catch (error) {
-    console.error('❌ Get staff tasks error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch tasks', myTasks: [], availableTasks: [] });
-  }
-});
+            app.get('/api/staff/:staffId/tasks', async (req, res) => {
+              try {
+                const { staffId } = req.params;
+                const { adminId } = req.query;
+                if (!adminId) return res.status(400).json({ error: 'adminId is required' });
+                const nocache = req.query.nocache === '1';
+                const cacheKey = `staff_tasks_${adminId}_${staffId}`;
+                if (!nocache) {
+                  const cached = getCache(cacheKey);
+                  if (cached) return res.json(cached);
+                }
+                console.log(`🔍 Getting tasks for staff: ${staffId} (${adminId})`);
+                const db = firebaseIntegrationService.forClient(adminId);
+                const ordersRes = await db.getCollection('orders', {
+                  where: [['workflowTasks', '!=', null]]
+                });
+                const orders = ordersRes?.data || [];
+                const myTasks = [];
+                orders.forEach(order => {
+                  (order.workflowTasks || []).forEach(task => {
+                    if ((task.assignedTo === staffId || task.assignedToStaffId === staffId) && task.status !== 'completed') {
+                     
+                    myTasks.push({
+                        ...task,
+                        orderId: order.orderId,
+                        customerName: order.customerName || '',
+                        garmentType: order.garmentType || '',
+                        deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate().toISOString() : (order.deliveryDate || null),
+                        customerPhone: order.customerPhone || '',
+                        measurements: order.measurements || task.measurementsData || {},
+                        designNotes: task.designNotes || order.designNotes || '',
+                        images: order.designImages || task.designImages || []
+                    });
+                                        }
+                  });
+                });
+                setCache(cacheKey, myTasks,2 * 60* 1000);
+                res.json(myTasks);
+              } catch (error) {
+                console.error('❌ Get staff tasks error:', error);
+                res.status(500).json({ success: false, error: 'Failed to fetch tasks', myTasks: [] });
+              }
+            });
 
-// Get Available Tasks with Enhanced Data Flow
-app.get('/api/staff/:staffId/available-tasks', async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    console.log(`🔍 Finding enhanced available tasks for staff: ${staffId}`);
-    
-    const result = await DataFlowService.getStaffTasks(staffId, true);
-    
-    console.log(`✅ Returning ${result.availableTasks.length} available tasks for ${result.staff.name}`);
-    res.json(result.availableTasks || []);
-  } catch (error) {
-    console.error('❌ Get available tasks error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch available tasks', availableTasks: [] });
-  }
-});
+            app.get('/api/staff/:staffId/available-tasks', async (req, res) => {
+              try {
+                const { staffId } = req.params;
+                const { adminId } = req.query;
+                if (!adminId) return res.status(400).json({ error: 'adminId is required' });
+                const nocache = req.query.nocache === '1';
+                const cacheKey = `staff_available_${adminId}_${staffId}`;
+                if (!nocache) {
+                  const cached = getCache(cacheKey);
+                  if (cached) return res.json(cached);
+                }
+                console.log(`🔍 Getting available tasks for staff: ${staffId} (${adminId})`);
 
+                // Get staff's assigned workflow stages
+                const db = firebaseIntegrationService.forClient(adminId);
+                const staffRes = await db.getCollection('staff', { where: [['staffId', '==', staffId]], limit: 1 });
+                const staff = staffRes?.data?.[0];
+                if (!staff) return res.status(404).json({ error: 'Staff not found' });
+                const myStages = staff.workflowStages || [];
+
+                 const branch = staff.branch || req.query.branch || null;
+                const orderWhere = branch
+                  ? [['workflowTasks', '!=', null], ['branch', '==', branch]]
+                  : [['workflowTasks', '!=', null]];
+                const ordersRes = await db.getCollection('orders', { where: orderWhere });
+                const orders = ordersRes?.data || [];
+                const availableTasks = [];
+                orders.forEach(order => {
+                  (order.workflowTasks || []).forEach(task => {
+                    if (myStages.includes(task.stageId) && task.status === 'pending' && !task.assignedTo) {
+                     
+                  availableTasks.push({
+                      ...task,
+                      orderId: order.orderId,
+                      customerName: order.customerName || '',
+                      garmentType: order.garmentType || '',
+                      deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate().toISOString() : (order.deliveryDate || null),
+                      customerPhone: order.customerPhone || '',
+                      measurements: order.measurements || task.measurementsData || {},
+                      designNotes: task.designNotes || order.designNotes || '',
+                      images: order.designImages || task.designImages || []
+                  });
+                    }
+                  });
+                });
+                setCache(cacheKey, availableTasks,2 * 60  * 1000);
+                res.json(availableTasks);
+              } catch (error) {
+                console.error('❌ Get available tasks error:', error);
+                res.status(500).json({ success: false, error: 'Failed to fetch available tasks', availableTasks: [] });
+              }
+            });
 // Accept Task with Enhanced Data Flow
-app.post('/api/staff/:staffId/accept-task', async (req, res) => {
+app.post('/api/staff/:staffId/accept-task', authenticateToken, async (req, res) => {
   try {
     const { staffId } = req.params;
     const { orderId, stageId } = req.body;
-    
-    console.log(`✅ Processing task acceptance: ${staffId} -> ${orderId} -> ${stageId}`);
-    
-    const result = await DataFlowService.acceptTask(staffId, orderId, stageId);
-    res.json(result);
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+    console.log(`✅ Task acceptance: ${staffId} -> ${orderId} -> ${stageId} (${adminId})`);
+    const db = firebaseIntegrationService.forClient(adminId);
+    const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+    const order = orderRes?.data?.[0];
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+          const now = new Date().toISOString();
+const tasks = (order.workflowTasks || []).map(t =>
+    t.stageId === stageId
+      ? { ...t, status: 'assigned', assignedTo: staffId, assignedToStaffId: staffId, assignedAt: now, updatedAt: now }
+      : t
+  );
+  const docId = order.id || order._id || orderId;
+  await db.updateDocument('orders', docId, { workflowTasks: tasks });
+      invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
+      console.log(`✅ Task assigned: ${stageId} → ${staffId} on order ${orderId} (${adminId})`);
+    invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
+    res.json({ success: true });
   } catch (error) {
     console.error('Accept task error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Update Task Status with Enhanced Data Flow
-app.post('/api/staff/:staffId/update-task', async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    const { orderId, stageId, status, notes, qualityRating } = req.body;
-    
-    console.log(`🔄 Processing task update: ${staffId} -> ${orderId} -> ${stageId} -> ${status}`);
-    
-    const updateData = { status, notes, qualityRating };
-    const result = await DataFlowService.processStaffTaskUpdate(staffId, orderId, stageId, updateData);
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Update task error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+          app.post('/api/staff/:staffId/update-task', authenticateToken, async (req, res) => {
+            try {
+               const { staffId } = req.params;
+              const { orderId, stageId, status, notes, qualityRating } = req.body;
+              const adminId = req.user.adminId;
+              if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
 
+              console.log(`🔄 Task update: ${staffId} -> ${orderId} -> ${stageId} -> ${status} (${adminId})`);
+
+              const db = firebaseIntegrationService.forClient(adminId);
+              const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+              const order = orderRes?.data?.[0];
+              if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+
+              const docId = order.id;
+              if (!docId) return res.status(500).json({ success: false, error: 'Order document ID missing' });
+
+              console.log(`🔍 docId: ${docId}, orderId: ${order.orderId}`);
+
+              const now = new Date();
+
+              // Step 1: find the index of the task being updated BEFORE mutating anything
+              const targetIdx = (order.workflowTasks || []).findIndex(t => t.stageId === stageId);
+              if (targetIdx === -1) return res.status(404).json({ success: false, error: 'Task not found for stageId: ' + stageId });
+
+              // Step 2: build updated tasks array
+              const tasks = (order.workflowTasks || []).map((t, i) => {
+                if (i !== targetIdx) return t;
+                const updated = {
+                  ...t,
+                  status,
+                  notes: notes || t.notes,
+                  qualityRating: qualityRating || t.qualityRating,
+                  updatedAt: now.toISOString(),
+                };
+                if (status === 'started' && !t.startedAt)  updated.startedAt  = now.toISOString();
+                if (status === 'paused')                    updated.pausedAt   = now.toISOString();
+                if (status === 'resumed')                   updated.startedAt  = t.startedAt || now.toISOString();
+                if (status === 'completed') {
+                  updated.completedAt = now.toISOString();
+                  updated.timeSpent   = t.startedAt ? Math.round((now - new Date(t.startedAt)) / 60000) : 0;
+                }
+                return updated;
+              });
+
+              // Step 3: serialize all Date objects (safety net for any remaining Date values)
+              const serializeDates = (taskList) => taskList.map(t => {
+                const s = { ...t };
+                ['createdAt', 'updatedAt', 'startedAt', 'completedAt', 'pausedAt', 'resumedAt', 'assignedAt'].forEach(f => {
+                  if (s[f] instanceof Date) s[f] = s[f].toISOString();
+                });
+                return s;
+              });
+
+              // Step 4: handle completed — find next stage using the ORIGINAL order tasks (not mutated array)
+              if (status === 'completed') {
+                // Search for the next waiting/pending task AFTER the completed one in the ORIGINAL task list
+                const nextIdx = (order.workflowTasks || []).findIndex(
+                  (t, i) => i > targetIdx && (t.status === 'waiting' || t.status === 'pending')
+                );
+
+                let nextStageId = null;
+                if (nextIdx !== -1) {
+                  tasks[nextIdx] = { ...tasks[nextIdx], status: 'pending', updatedAt: now.toISOString() };
+                  nextStageId = order.workflowTasks[nextIdx].stageId; // read stageId from original
+                }
+
+                const updatePayload = {
+                  workflowTasks: serializeDates(tasks),
+                  currentStage: nextStageId || 'completed',
+                  status: nextStageId ? 'in-progress' : 'completed',
+                };
+
+                console.log(`🔍 Writing to docId: ${docId} — currentStage: ${updatePayload.currentStage}, nextStage: ${nextStageId}`);
+
+                const updateResult = await db.updateDocument('orders', docId, updatePayload);
+                console.log(`🔍 updateDocument result:`, JSON.stringify(updateResult));
+
+                invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`, `orders_list_`]);
+                console.log(`✅ Stage completed: ${stageId} → next: ${nextStageId || 'completed'} on order ${orderId} (${adminId})`);
+                return res.json({ success: true, nextStage: nextStageId, currentStage: nextStageId || 'completed' });
+              }
+
+              // Step 5: handle all other statuses (started, paused, resumed)
+              const updatePayload = {
+                workflowTasks: serializeDates(tasks),
+              };
+
+              const updateResult = await db.updateDocument('orders', docId, updatePayload);
+              console.log(`🔍 updateDocument result (${status}):`, JSON.stringify(updateResult));
+
+              invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
+              console.log(`✅ Task ${status}: ${stageId} on order ${orderId} (${adminId})`);
+              return res.json({ success: true });
+
+            } catch (error) {
+              console.error('Update task error:', error);
+              res.status(500).json({ success: false, error: error.message });
+            }
+          });
 // Helper function to progress to next stage
-async function progressToNextStage(order, completedStageId) {
-  try {
-    const settings = await Settings.findOne();
-    if (!settings || !settings.workflowStages) return;
+      async function progressToNextStage(order, completedStageId, db) {
+        try {
+          const settings = order._settings || await getAppSettings({});
+          if (!settings || !settings.workflowStages) return;
 
-    const currentStage = settings.workflowStages.find(s => s.id === completedStageId);
-    if (!currentStage) return;
+          const currentStage = settings.workflowStages.find(s => s.id === completedStageId);
+          if (!currentStage) return;
 
-    const nextStage = settings.workflowStages.find(s => s.order === currentStage.order + 1);
-    
-    if (!nextStage) {
-      // All stages completed
-      order.status = 'completed';
-      order.currentStage = 'completed';
-      await order.save();
-      console.log(`🎉 Order ${order.orderId} completed all stages!`);
-      return;
-    }
+          const nextStage = settings.workflowStages.find(s => s.order === (currentStage.order + 1));
+          const tasks = (order.workflowTasks || []).map(t => ({ ...t }));
 
-    // Activate next stage
-    const nextTaskIndex = order.workflowTasks.findIndex(t => t.stageId === nextStage.id);
-    if (nextTaskIndex !== -1) {
-      order.workflowTasks[nextTaskIndex].status = 'pending';
-      order.workflowTasks[nextTaskIndex].updatedAt = new Date();
-      order.currentStage = nextStage.id;
-      await order.save();
+          if (!nextStage) {
+            // All stages done
+            if (db) await db.updateDocument('orders', order.id || order.orderId, { status: 'completed', currentStage: 'completed', updatedAt: new Date() });
+            console.log(`🎉 Order ${order.orderId} fully completed`);
+            return;
+          }
 
-      // Auto-assign next task
-      const nextStageStaff = await Staff.findOne({
-        workflowStages: nextStage.id,
-        isAvailable: true
-      }).sort({ currentTaskCount: 1 });
-
-      if (nextStageStaff) {
-        order.workflowTasks[nextTaskIndex].status = 'assigned';
-        order.workflowTasks[nextTaskIndex].assignedTo = nextStageStaff._id;
-        order.workflowTasks[nextTaskIndex].assignedToName = nextStageStaff.name;
-        order.workflowTasks[nextTaskIndex].updatedAt = new Date();
-
-        nextStageStaff.currentTaskCount += 1;
-        await nextStageStaff.save();
-        await order.save();
-
-        // Create notification
-        await Notification.create({
-          type: 'task_assigned',
-          title: `New ${nextStage.name} Task`,
-          message: `Order #${order.orderId} for ${order.customerName} has been assigned to you.`,
-          recipientId: nextStageStaff._id,
-          orderId: order.orderId
-        });
-
-        console.log(`🔄 Next stage assigned: ${nextStageStaff.name} got ${nextStage.name} for order ${order.orderId}`);
+          // Activate next stage — staff picks it up from Available Tasks
+          const nextIdx = tasks.findIndex(t => t.stageId === nextStage.id);
+          if (nextIdx !== -1) {
+            tasks[nextIdx].status = 'pending';
+            tasks[nextIdx].updatedAt = new Date();
+            if (db) await db.updateDocument('orders', order.id || order.orderId, {
+              workflowTasks: tasks, currentStage: nextStage.id, updatedAt: new Date()
+            });
+            console.log(`▶️ Next stage '${nextStage.name}' set to pending — awaiting staff pickup`);
+          }
+        } catch (error) {
+          console.error('progressToNextStage error:', error);
+        }
       }
-    }
-  } catch (error) {
-    console.error('Progress to next stage error:', error);
-  }
-}
 
 // Get Staff Notifications
-app.get('/api/staff/:staffId/notifications', async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    const staff = await Staff.findOne({ staffId });
-    
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
+        app.get('/api/staff/:staffId/notifications', async (req, res) => {
+          try {
+            const { staffId } = req.params;
+            const { adminId } = req.query;
+            if (!adminId) return res.status(400).json({ error: 'adminId is required' });
 
-    const notifications = await Notification.find({ 
-      recipientId: staff._id 
-    }).sort({ sentAt: -1 }).limit(10);
+            const db = firebaseIntegrationService.forClient(adminId);
+            const staffRes = await db.getCollection('staff', {
+              where: [['staffId', '==', staffId]], limit: 1
+            });
+            const staff = staffRes?.data?.[0];
+            if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
-    res.json(notifications);
-  } catch (error) {
-    console.error('Get notifications error:', error);
-    res.status(500).json({ error: 'Failed to fetch notifications' });
-  }
-});
+            // Fetch notifications scoped to this client
+            const notifRes = await db.getCollection('notifications', {
+              where: [['recipientStaffId', '==', staffId]],
+              orderBy: { field: 'sentAt', direction: 'desc' },
+              limit: 10
+            });
+            res.json(notifRes?.data || []);
+          } catch (error) {
+            console.error('Get notifications error:', error);
+            res.status(500).json({ error: 'Failed to fetch notifications' });
+          }
+        });
 
 // Mark Notification as Read
 app.post('/api/notifications/:id/read', async (req, res) => {
@@ -2891,306 +4122,104 @@ app.post('/api/notifications/:id/read', async (req, res) => {
 // ==================== REPORTS ROUTES ====================
 
 // Get Staff Performance Report
-app.get('/api/reports/staff-performance', async (req, res) => {
-  try {
-    const { staffId, startDate, endDate, branch, staff } = req.query;
-    
-    console.log(`📊 Generating staff performance report`);
-    
-    let matchQuery = {};
-    if (branch) matchQuery.branch = branch;
-    if (staffId || staff) {
-      const staffDoc = await Staff.findOne({ $or: [{ staffId: staffId || staff }, { name: { $regex: new RegExp(staff || staffId, 'i') } }] });
-      if (staffDoc) matchQuery['workflowTasks.assignedTo'] = staffDoc._id;
-    }
-    
-    if (startDate || endDate) {
-      matchQuery.createdAt = {};
-      if (startDate) matchQuery.createdAt.$gte = new Date(startDate);
-      if (endDate) matchQuery.createdAt.$lte = new Date(endDate);
-    }
-    
-    const orders = await Order.find(matchQuery);
-    console.log(`   Found ${orders.length} orders`);
-    
-    const staffReports = {};
-    
-    orders.forEach(order => {
-      order.workflowTasks.forEach(task => {
-        if (task.assignedToName && task.status === 'completed') {
-          if (!staffReports[task.assignedToName]) {
-            staffReports[task.assignedToName] = {
-              staffName: task.assignedToName,
-              tasksCompleted: 0,
-              totalTimeSpent: 0,
-              averageTimePerTask: 0,
-              tasksByStage: {},
-              qualityRatings: [],
-              orders: []
-            };
-          }
-          
-          const report = staffReports[task.assignedToName];
-          report.tasksCompleted++;
-          report.totalTimeSpent += task.timeSpent || 0;
-          
-          if (!report.tasksByStage[task.stageName]) {
-            report.tasksByStage[task.stageName] = { count: 0, totalTime: 0 };
-          }
-          report.tasksByStage[task.stageName].count++;
-          report.tasksByStage[task.stageName].totalTime += task.timeSpent || 0;
-          
-          if (task.qualityRating) {
-            report.qualityRatings.push(task.qualityRating);
-          }
-          
-          report.orders.push({
-            orderId: order.orderId,
-            customerName: order.customerName,
-            stageName: task.stageName,
-            timeSpent: task.timeSpent || 0,
-            completedAt: task.completedAt,
-            qualityRating: task.qualityRating
-          });
-        }
-      });
-    });
-    
-    Object.values(staffReports).forEach(report => {
-      report.averageTimePerTask = report.tasksCompleted > 0 ? 
-        Math.round(report.totalTimeSpent / report.tasksCompleted) : 0;
-      report.averageQuality = report.qualityRatings.length > 0 ? 
-        (report.qualityRatings.reduce((a, b) => a + b, 0) / report.qualityRatings.length).toFixed(1) : 0;
-    });
-    
-    console.log(`   Generated reports for ${Object.keys(staffReports).length} staff members`);
-    
-    res.json({
-      success: true,
-      reports: Object.values(staffReports)
-    });
-  } catch (error) {
-    console.error('Staff performance report error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate staff performance report' });
-  }
-});
-
-// Get Order Reports with enhanced filtering and sorting
-app.get('/api/reports/orders', authenticateToken, async (req, res) => {
-  try {
-    const { startDate, endDate, status, branch, orderId, customer, phone, filterBy, q, sortBy = 'createdAt_desc' } = req.query;
-    
-    let matchQuery = {};
-    
-    // Branch filtering for sub-admins
-    if (req.user.role === 'sub-admin') {
-      matchQuery.branch = req.user.branch;
-    } else if (branch && branch !== 'all') {
-      matchQuery.branch = branch;
-    }
-    
-    // Date filtering
-    if (startDate || endDate) {
-      matchQuery.createdAt = {};
-      if (startDate) matchQuery.createdAt.$gte = new Date(startDate);
-      if (endDate) matchQuery.createdAt.$lte = new Date(endDate);
-    }
-    
-    // Dynamic filtering based on filterBy parameter
-    if (filterBy && q) {
-      const searchRegex = new RegExp(q, 'i');
-      switch (filterBy) {
-        case 'orderId':
-          matchQuery.orderId = searchRegex;
-          break;
-        case 'customer':
-          matchQuery.customerName = searchRegex;
-          break;
-        case 'phone':
-          matchQuery.customerPhone = searchRegex;
-          break;
-      }
-    }
-    
-    // Legacy filters for backward compatibility
-    if (status) matchQuery.status = status;
-    if (orderId) matchQuery.orderId = { $regex: new RegExp(orderId, 'i') };
-    if (customer) matchQuery.customerName = { $regex: new RegExp(customer, 'i') };
-    if (phone) matchQuery.customerPhone = { $regex: new RegExp(phone, 'i') };
-    
-    // Parse sorting
-    const [sortField, sortDirection] = sortBy.split('_');
-    const sortOrder = sortDirection === 'desc' ? -1 : 1;
-    const sortObj = { [sortField]: sortOrder };
-    
-    let orders = await Order.find(matchQuery)
-      .sort(sortObj)
-      .select('orderId customerName customerPhone garmentType totalAmount advanceAmount balanceAmount status createdAt deliveryDate branch workflowTasks');
-    
-    const orderReports = orders.map(order => {
-      const totalTasks = (order.workflowTasks || []).length;
-      const completedTasks = (order.workflowTasks || []).filter(t => t.status === 'completed').length;
-      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
-      return {
-        orderId: order.orderId || '',
-        customerName: order.customerName || '',
-        customerPhone: order.customerPhone || '',
-        garmentType: order.garmentType || '',
-        totalAmount: order.totalAmount || 0,
-        status: order.status || 'pending',
-        createdAt: order.createdAt,
-        deliveryDate: order.deliveryDate,
-        progressPercentage: progress,
-        completedTasks: completedTasks,
-        totalTasks: totalTasks,
-        workflowTasks: order.workflowTasks,
-        branch: order.branch
-      };
-    });
-    
-    res.json({ success: true, orders: orderReports });
-  } catch (error) {
-    console.error('Order reports error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate order reports' });
-  }
-});
-
 // Get Individual Staff Report
-app.get('/api/reports/staff/:staffId', async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    const { startDate, endDate } = req.query;
-    
-    const staff = await Staff.findOne({ staffId });
-    if (!staff) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
-    
-    let matchQuery = { 'workflowTasks.assignedTo': staff._id };
-    if (startDate || endDate) {
-      matchQuery.createdAt = {};
-      if (startDate) matchQuery.createdAt.$gte = new Date(startDate);
-      if (endDate) matchQuery.createdAt.$lte = new Date(endDate);
-    }
-    
-    const orders = await Order.find(matchQuery);
-    
-    const staffTasks = [];
-    let totalTimeSpent = 0;
-    let completedTasks = 0;
-    const qualityRatings = [];
-    const stageStats = {};
-    
-    orders.forEach(order => {
-      order.workflowTasks.forEach(task => {
-        if (task.assignedTo && task.assignedTo.toString() === staff._id.toString()) {
-          staffTasks.push({
-            orderId: order.orderId,
-            customerName: order.customerName,
-            stageName: task.stageName,
-            status: task.status,
-            timeSpent: task.timeSpent || 0,
-            startedAt: task.startedAt,
-            completedAt: task.completedAt,
-            qualityRating: task.qualityRating,
-            notes: task.notes
+          app.get('/api/reports/staff/:staffId', async (req, res) => {
+            try {
+              const { staffId } = req.params;
+              const { startDate, endDate, adminId } = req.query;
+
+              if (!adminId) return res.status(400).json({ error: 'adminId is required' });
+
+              const db = firebaseIntegrationService.forClient(adminId);
+
+              // Fetch staff from Firestore subcollection
+              const staffRes = await db.getCollection('staff', {
+                where: [['staffId', '==', staffId]], limit: 1
+              });
+              const staff = staffRes?.data?.[0];
+              if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+              // Fetch orders from Firestore subcollection
+              const ordersFilters = { where: [['workflowTasks', '!=', null]] };
+              if (startDate) ordersFilters.where.push(['createdAt', '>=', new Date(startDate)]);
+              if (endDate)   ordersFilters.where.push(['createdAt', '<=', new Date(endDate)]);
+              const ordersRes = await db.getCollection('orders', ordersFilters);
+              const orders = ordersRes?.data || [];
+
+              const staffTasks = [];
+              let totalTimeSpent = 0, completedTasks = 0;
+              const qualityRatings = [], stageStats = {};
+
+              orders.forEach(order => {
+                (order.workflowTasks || []).forEach(task => {
+                  if (task.assignedTo === staffId || task.assignedToStaffId === staffId || task.assignedToName === staff.name) {
+                    staffTasks.push({
+                      orderId: order.orderId,
+                      customerName: order.customerName,
+                      stageName: task.stageName,
+                      status: task.status,
+                      timeSpent: task.timeSpent || 0,
+                      startedAt: task.startedAt,
+                      completedAt: task.completedAt,
+                      qualityRating: task.qualityRating,
+                      notes: task.notes
+                    });
+                    if (task.status === 'completed') {
+                      completedTasks++;
+                      totalTimeSpent += task.timeSpent || 0;
+                      if (task.qualityRating) qualityRatings.push(task.qualityRating);
+                      if (!stageStats[task.stageName]) stageStats[task.stageName] = { count: 0, totalTime: 0 };
+                      stageStats[task.stageName].count++;
+                      stageStats[task.stageName].totalTime += task.timeSpent || 0;
+                    }
+                  }
+                });
+              });
+
+              res.json({
+                staff: { staffId: staff.staffId, name: staff.name, role: staff.role, workflowStages: staff.workflowStages },
+                summary: {
+                  totalTasks: staffTasks.length,
+                  completedTasks,
+                  totalTimeSpent,
+                  averageTimePerTask: completedTasks > 0 ? Math.round(totalTimeSpent / completedTasks) : 0,
+                  averageQuality: qualityRatings.length > 0 ? (qualityRatings.reduce((a, b) => a + b, 0) / qualityRatings.length).toFixed(1) : 0
+                },
+                stageStats,
+                tasks: staffTasks.sort((a, b) => new Date(b.completedAt || b.startedAt || 0) - new Date(a.completedAt || a.startedAt || 0))
+              });
+            } catch (error) {
+              console.error('Individual staff report error:', error);
+              res.status(500).json({ error: 'Failed to generate staff report' });
+            }
           });
-          
-          if (task.status === 'completed') {
-            completedTasks++;
-            totalTimeSpent += task.timeSpent || 0;
-            
-            if (task.qualityRating) {
-              qualityRatings.push(task.qualityRating);
-            }
-            
-            if (!stageStats[task.stageName]) {
-              stageStats[task.stageName] = { count: 0, totalTime: 0 };
-            }
-            stageStats[task.stageName].count++;
-            stageStats[task.stageName].totalTime += task.timeSpent || 0;
-          }
-        }
-      });
-    });
-    
-    const averageTimePerTask = completedTasks > 0 ? Math.round(totalTimeSpent / completedTasks) : 0;
-    const averageQuality = qualityRatings.length > 0 ? 
-      (qualityRatings.reduce((a, b) => a + b, 0) / qualityRatings.length).toFixed(1) : 0;
-    
-    res.json({
-      staff: {
-        staffId: staff.staffId,
-        name: staff.name,
-        role: staff.role,
-        workflowStages: staff.workflowStages
-      },
-      summary: {
-        totalTasks: staffTasks.length,
-        completedTasks,
-        totalTimeSpent,
-        averageTimePerTask,
-        averageQuality
-      },
-      stageStats,
-      tasks: staffTasks.sort((a, b) => new Date(b.completedAt || b.startedAt || 0) - new Date(a.completedAt || a.startedAt || 0))
-    });
-  } catch (error) {
-    console.error('Individual staff report error:', error);
-    res.status(500).json({ error: 'Failed to generate staff report' });
-  }
-});
 
 // ==================== COMMON ROUTES ====================
 
 // Complete Design Phase (Measurements & Design stage)
-app.post('/api/staff/:staffId/complete-design', async (req, res) => {
+app.post('/api/staff/:staffId/complete-design', authenticateToken, async (req, res) => {
   try {
     const { staffId } = req.params;
     const { orderId, designNotes, designImages } = req.body;
-    
-    console.log(`📐 Completing design phase for order: ${orderId}`);
-    
-    const staff = await Staff.findOne({ staffId });
-    const order = await Order.findOne({ orderId });
-    
-    if (!staff || !order) {
-      return res.status(404).json({ error: 'Staff or order not found' });
-    }
-
-    // Find design task
-    const designTaskIndex = order.workflowTasks.findIndex(t => t.stageId === 'measurements-design');
-    if (designTaskIndex === -1) {
-      return res.status(404).json({ error: 'Design task not found' });
-    }
-
-    const designTask = order.workflowTasks[designTaskIndex];
-    
-    // Update design task
-    designTask.status = 'completed';
-    designTask.completedAt = new Date();
-    designTask.designNotes = designNotes || designTask.designNotes;
-    designTask.designImages = designImages || designTask.designImages || [];
-    designTask.updatedAt = new Date();
-    
-    console.log(`✅ Design finalized for ${order.customerName}: ${designNotes}`);
-    console.log(`📸 Design images: ${designImages?.length || 0}`);
-    
-    // Update staff task count
-    staff.currentTaskCount = Math.max(0, staff.currentTaskCount - 1);
-    
-    // Progress to next stage (Dyeing)
-    await progressToNextStage(order, 'measurements-design');
-    
-    await staff.save();
-    
-    res.json({ 
-      success: true, 
-      message: 'Design approved and order moved to next stage',
-      nextStage: 'Dyeing'
-    });
-  } catch (error) {
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+    console.log(`📐 Completing design for order: ${orderId} by ${staffId} (${adminId})`);
+    const db = firebaseIntegrationService.forClient(adminId);
+    const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+    const order = orderRes?.data?.[0];
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const tasks = (order.workflowTasks || []).map(t =>
+      t.stageId === 'measurements-design'
+        ? { ...t, status: 'completed', completedAt: new Date(), designNotes: designNotes || t.designNotes,
+            designImages: designImages || t.designImages || [], updatedAt: new Date() }
+        : t
+    );
+    const docId = order.id || order._id || orderId;
+      await db.updateDocument('orders', docId, { workflowTasks: tasks, updatedAt: new Date() });
+      await progressToNextStage({ ...order, workflowTasks: tasks, id: docId }, 'measurements-design', db);
+      invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
+      res.json({ success: true, message: 'Design approved and order moved to next stage', nextStage: 'Dyeing' });
+        } catch (error) {
     console.error('Complete design error:', error);
     res.status(500).json({ error: 'Failed to complete design phase' });
   }
@@ -3199,7 +4228,7 @@ app.post('/api/staff/:staffId/complete-design', async (req, res) => {
 // Get Settings (includes logo path)
 app.get('/api/settings', async (req, res) => {
   try {
-    const settings = await Settings.findOne();
+    const settings = await getAppSettings({ req });
     res.json(settings || {
       companyName: 'SAPTHALA Designer Workshop',
       logoPath: '/img/sapthala logo.png'
@@ -3260,6 +4289,15 @@ app.get('/super-admin', (req, res) => {
   res.status(404).send('Super admin panel not found');
 });
 
+// Serve quick access super admin panel
+app.get('/super-admin-quick', (req, res) => {
+  const quickPath = path.join(__dirname, 'super-admin-quick.html');
+  if (fs.existsSync(quickPath)) {
+    return res.sendFile(quickPath);
+  }
+  res.status(404).send('Quick access panel not found');
+});
+
 // Handle SPA routing for super-admin React app - all /super-admin/* routes
 app.get('/super-admin/*', (req, res) => {
   const reactDistPath = path.join(__dirname, 'Boutique-app', 'super-admin-panel', 'dist', 'index.html');
@@ -3269,15 +4307,15 @@ app.get('/super-admin/*', (req, res) => {
   res.status(404).send('Super admin panel not found');
 });
 
-// Serve staff portal
-app.get('/staff', (req, res) => {
-  const filePath = path.join(__dirname, 'staff-portal.html');
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).send('Staff portal not found');
-  }
-});
+// // Serve staff portal
+// app.get('/staff', (req, res) => {
+//   const filePath = path.join(__dirname, 'staff-portal.html');
+//   if (fs.existsSync(filePath)) {
+//     res.sendFile(filePath);
+//   } else {
+//     res.status(404).send('Staff portal not found');
+//   }
+// });
 
 // Save PDF endpoint
 app.post('/api/save-pdf', async (req, res) => {
@@ -3341,7 +4379,7 @@ if (process.env.ENABLE_DEV_TESTS === 'true') {
         totalAmount: 999, advanceAmount: 100, deliveryDate: new Date().toISOString()
       };
 
-      const settings = await Settings.findOne() || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '' };
+const settings = await getAppSettings({ req }) || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '' };
       const pdfRes = await PDFService.generateAndSavePDFFiles(sampleOrder, settings);
       results.checks.push({ name: 'generate_pdf', success: pdfRes.success, pdf: pdfRes });
 

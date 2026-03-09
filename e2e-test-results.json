@@ -1,0 +1,66 @@
+{
+  "passed": 5,
+  "failed": 7,
+  "tests": [
+    {
+      "name": "Admin Login",
+      "passed": true,
+      "message": "Token received"
+    },
+    {
+      "name": "Create Staff",
+      "passed": true,
+      "message": "Staff ID: 69930a8aa3cef856c8ff0541"
+    },
+    {
+      "name": "Create Order",
+      "passed": false,
+      "message": "Request failed with status code 400"
+    },
+    {
+      "name": "Verify Order",
+      "passed": false,
+      "message": "Order not found"
+    },
+    {
+      "name": "Assign Order to Staff",
+      "passed": false,
+      "message": "Request failed with status code 404"
+    },
+    {
+      "name": "Staff Notification",
+      "passed": false,
+      "message": "Request failed with status code 500"
+    },
+    {
+      "name": "Staff Accept Task",
+      "passed": false,
+      "message": "Request failed with status code 404"
+    },
+    {
+      "name": "Staff Complete Task",
+      "passed": false,
+      "message": "Request failed with status code 404"
+    },
+    {
+      "name": "Generate PDF",
+      "passed": true,
+      "message": "PDF: /pdfs/ORD-1771244173800-default.html"
+    },
+    {
+      "name": "Workflow Progress",
+      "passed": false,
+      "message": "No progress recorded"
+    },
+    {
+      "name": "Dashboard Stats",
+      "passed": true,
+      "message": "Total Orders: 69"
+    },
+    {
+      "name": "Reports Generation",
+      "passed": true,
+      "message": "Found 69 orders"
+    }
+  ]
+}

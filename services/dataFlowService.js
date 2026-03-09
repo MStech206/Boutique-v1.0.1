@@ -1,502 +1,386 @@
-const { Order, Staff, Customer, Notification, Settings } = require('../database');
-
+const firebaseIntegrationService = require('../firebase-integration-service');
+const admin = require('firebase-admin');
+ 
+      const Ts = () => admin.firestore.Timestamp.now();
+      const toDate = (v) => {
+        if (!v) return null;
+        if (typeof v.toDate === 'function') return v.toDate();       // Firestore Timestamp
+        if (v.seconds !== undefined) return new Date(v.seconds * 1000); // raw {seconds}
+        return new Date(v);
+      };
 /**
- * Data Flow Service - Ensures seamless data synchronization between Admin Panel and Staff Application
- * This service handles real-time data updates and maintains consistency across all platforms
+ * Data Flow Service (Firestore-backed)
+ * - Migrated from Mongoose → Firestore
+ * - Keeps same public API so routes/tests remain compatible
  */
 class DataFlowService {
-    
-    /**
-     * Process order creation from admin panel and sync to staff application
-     */
-    static async processOrderCreation(orderData, adminUser) {
-        try {
-            console.log('🔄 Processing order creation for staff sync...');
-            
-            // 1. Create order in database
-            const order = new Order(orderData);
-            await order.save();
-            
-            // 2. Auto-assign first task to available staff
-            if (order.workflowTasks && order.workflowTasks.length > 0) {
-                const firstTask = order.workflowTasks[0];
-                const availableStaff = await this.findAvailableStaff(firstTask.stageId, order.branch);
-                
-                if (availableStaff) {
-                    firstTask.status = 'assigned';
-                    firstTask.assignedTo = availableStaff._id;
-                    firstTask.assignedToName = availableStaff.name;
-                    firstTask.updatedAt = new Date();
-                    
-                    // Update staff workload
-                    availableStaff.currentTaskCount += 1;
-                    await availableStaff.save();
-                    await order.save();
-                    
-                    // 3. Create notification for staff
-                    await this.createStaffNotification({
-                        type: 'task_assigned',
-                        title: `New ${firstTask.stageName} Task`,
-                        message: `Order #${order.orderId} for ${order.customerName} has been assigned to you.`,
-                        recipientId: availableStaff._id,
-                        orderId: order.orderId,
-                        taskId: firstTask.stageId
-                    });
-                    
-                    console.log(`✅ Task auto-assigned to ${availableStaff.name}`);
-                } else {
-                    // Keep as pending if no staff available
-                    firstTask.status = 'pending';
-                    await order.save();
-                    console.log('⚠️ No available staff found, task kept as pending');
-                }
-            }
-            
-            // 4. Update customer record
-            await this.updateCustomerRecord(orderData);
-            
-            // 5. Trigger real-time updates
-            await this.broadcastUpdate('order_created', {
-                orderId: order.orderId,
-                branch: order.branch,
-                affectedStaff: order.workflowTasks
-                    .filter(t => t.assignedTo)
-                    .map(t => t.assignedTo.toString())
-            });
-            
-            return { success: true, order, message: 'Order created and synced to staff application' };
-            
-        } catch (error) {
-            console.error('❌ Order creation processing error:', error);
-            throw error;
-        }
+
+  static _toDate(field) {
+    if (!field) return null;
+    if (field && typeof field.toDate === 'function') return field.toDate();
+    return new Date(field);
+  }
+
+  
+  static _db(adminId) {
+    return adminId
+      ? firebaseIntegrationService.forClient(adminId)
+      : firebaseIntegrationService;
+  }
+
+  static async _getOrder(orderId, adminId) {
+    // Orders are stored by orderId field, not as doc ID — query by field
+    const db = this._db(adminId);
+    const res = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+    if (res.success && res.data && res.data.length > 0) return res.data[0];
+    return null;
+  }
+
+ 
+  static async _setOrder(orderId, data, adminId) {
+    const db = this._db(adminId);
+    const existing = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+    const docId = (existing.success && existing.data?.[0]?.id) || orderId;
+    return db.setDocument('orders', docId, data);
+  }
+
+  static async _getStaffById(staffId, adminId) {
+    const db = this._db(adminId);
+    const res = await db.getCollection('staff', { where: [['staffId', '==', staffId]], limit: 1 });
+    if (res.success && res.data && res.data.length > 0) return res.data[0];
+    return null;
+  }
+
+  static validateOrderPayload(orderData) {
+    if (!orderData) throw new Error('Missing order data');
+
+    const customerName = orderData.customerName || (orderData.customer && orderData.customer.name);
+    if (!customerName || String(customerName).trim().length === 0) throw new Error('customerName is required');
+
+    const rawPhone = orderData.customerPhone || (orderData.customer && orderData.customer.phone) || '';
+    const digits = String(rawPhone).replace(/\D/g, '');
+    if (!digits || digits.length < 10) throw new Error('customerPhone is required and must be at least 10 digits');
+
+    if (!orderData.garmentType || String(orderData.garmentType).trim().length === 0) throw new Error('garmentType is required');
+
+    const total = Number(orderData.totalAmount || (orderData.pricing && orderData.pricing.total) || 0);
+    if (!(total > 0)) throw new Error('totalAmount (pricing.total) must be greater than zero');
+
+    const workflow = orderData.workflow || (orderData.workflowTasks && orderData.workflowTasks.length ? orderData.workflowTasks.map(t => t.stageId) : []);
+    if (!workflow || workflow.length === 0) throw new Error('At least one workflow stage must be provided');
+
+    const advance = Number(orderData.advanceAmount || (orderData.pricing && orderData.pricing.advance) || 0);
+    if (advance < 0) throw new Error('advance must be a non-negative number');
+    if (advance > total) throw new Error('advance cannot be greater than total amount');
+
+    return { valid: true };
+  }
+
+  /**
+   * Find available staff for a stage (Firestore)
+   */
+  static async findAvailableStaff(stageId, branch) {
+    try {
+      // Avoid composite-index queries by querying on `workflowStages` only
+      // then filtering/sorting in-memory (acceptable for small staff collections / emulator tests).
+      const res = await firebaseIntegrationService.getCollection('staff', { where: [['workflowStages', 'array-contains', stageId]] });
+      if (!res.success || !Array.isArray(res.data) || res.data.length === 0) return null;
+
+      // Filter by availability and branch
+      const candidates = res.data.filter(s => s.isAvailable && (!branch || s.branch === branch));
+      if (candidates.length === 0) return null;
+
+      // Pick staff with least currentTaskCount
+      candidates.sort((a, b) => (Number(a.currentTaskCount || 0) - Number(b.currentTaskCount || 0)));
+      return candidates[0];
+    } catch (error) {
+      console.error('❌ findAvailableStaff error:', error.message || error);
+      return null;
     }
-    
-    /**
-     * Find available staff for a specific workflow stage and branch
-     */
-    static async findAvailableStaff(stageId, branch) {
-        try {
-            const staff = await Staff.findOne({
-                workflowStages: stageId,
-                branch: branch,
-                isAvailable: true
-            }).sort({ currentTaskCount: 1 }); // Assign to staff with least workload
-            
-            return staff;
-        } catch (error) {
-            console.error('❌ Find available staff error:', error);
-            return null;
-        }
+  }
+
+  /**
+   * Create staff notification (Firestore)
+   */
+  static async createStaffNotification(notificationData) {
+    try {
+      const id = `${notificationData.recipientId || 'notif'}_${Date.now()}`;
+      const doc = {
+        ...notificationData,
+        sentAt: new Date(),
+      };
+      await firebaseIntegrationService.setDocument('notifications', id, doc);
+
+      // Also return the saved notification object for tests
+      return { id, ...doc };
+    } catch (error) {
+      console.error('❌ createStaffNotification error:', error.message || error);
+      throw error;
     }
-    
-    /**
-     * Create staff notification and ensure it reaches the mobile app
-     */
-    static async createStaffNotification(notificationData) {
-        try {
-            const notification = new Notification(notificationData);
-            await notification.save();
-            
-            // Trigger real-time notification to staff app
-            await this.sendRealTimeNotification(notificationData.recipientId, {
-                type: notificationData.type,
-                title: notificationData.title,
-                message: notificationData.message,
-                orderId: notificationData.orderId,
-                timestamp: new Date().toISOString()
-            });
-            
-            return notification;
-        } catch (error) {
-            console.error('❌ Create staff notification error:', error);
-            throw error;
-        }
+  }
+
+  /**
+   * Update customer record in Firestore
+   */
+  static async updateCustomerRecord(orderData) {
+    try {
+      const phone = orderData.customerPhone || (orderData.customer && orderData.customer.phone);
+      if (!phone) return null;
+
+      const existing = await firebaseIntegrationService.getDocument('customers', phone);
+      const totalOrders = (existing.success && existing.data.totalOrders) ? existing.data.totalOrders + 1 : 1;
+      const totalSpent = (existing.success && existing.data.totalSpent) ? (existing.data.totalSpent + (orderData.totalAmount || 0)) : (orderData.totalAmount || 0);
+
+      const customerDoc = {
+        name: orderData.customerName || (orderData.customer && orderData.customer.name) || '',
+        phone,
+        address: orderData.customerAddress || '',
+        totalOrders,
+        totalSpent,
+        orders: (existing.success && Array.isArray(existing.data.orders)) ? [...existing.data.orders, orderData.orderId] : [orderData.orderId]
+      };
+
+      await firebaseIntegrationService.syncCustomer(customerDoc);
+      return customerDoc;
+    } catch (error) {
+      console.error('❌ updateCustomerRecord error:', error.message || error);
+      throw error;
     }
-    
-    /**
-     * Update customer record with order information
-     */
-    static async updateCustomerRecord(orderData) {
-        try {
-            const customer = await Customer.findOneAndUpdate(
-                { phone: orderData.customerPhone },
-                {
-                    $set: {
-                        name: orderData.customerName,
-                        phone: orderData.customerPhone,
-                        address: orderData.customerAddress || ''
-                    },
-                    $inc: {
-                        totalOrders: 1,
-                        totalSpent: orderData.totalAmount || 0
-                    },
-                    $setOnInsert: {
-                        createdAt: new Date()
-                    }
-                },
-                { upsert: true, new: true }
-            );
-            
-            return customer;
-        } catch (error) {
-            console.error('❌ Update customer record error:', error);
-            throw error;
+  }
+
+  /**
+   * Process order creation (Firestore-backed assignment)
+   */
+  static async processOrderCreation(orderData, adminUser) {
+    try {
+      this.validateOrderPayload(orderData);
+
+      // Ensure order exists in Firestore (server.js usually calls syncOrder before this)
+      let fbOrder = await this._getOrder(orderData.orderId);
+      if (!fbOrder) {
+        await firebaseIntegrationService.syncOrder(orderData);
+        fbOrder = await this._getOrder(orderData.orderId);
+      }
+
+      // Auto-assign first task
+      if (fbOrder && Array.isArray(fbOrder.workflowTasks) && fbOrder.workflowTasks.length > 0) {
+        const firstTask = fbOrder.workflowTasks[0];
+        const availableStaff = await this.findAvailableStaff(firstTask.stageId, fbOrder.branch);
+
+        if (availableStaff) {
+          firstTask.status = 'assigned';
+          firstTask.assignedTo = availableStaff.staffId || availableStaff.id;
+          firstTask.assignedToName = availableStaff.name || availableStaff.staffId;
+          firstTask.updatedAt = new Date();
+
+          // persist order update
+          await this._setOrder(fbOrder.orderId, { workflowTasks: fbOrder.workflowTasks, status: fbOrder.status });
+
+          // increment staff workload
+          const staffDoc = await this._getStaffById(availableStaff.staffId || availableStaff.id);
+          const newCount = (staffDoc && staffDoc.currentTaskCount ? staffDoc.currentTaskCount : 0) + 1;
+          await firebaseIntegrationService.setDocument('staff', availableStaff.staffId || availableStaff.id, { currentTaskCount: newCount });
+
+          // create notification
+          await this.createStaffNotification({
+            type: 'task_assigned',
+            title: `New ${firstTask.stageName} Task`,
+            message: `Order #${fbOrder.orderId} for ${fbOrder.customerName} has been assigned to you.`,
+            recipientId: availableStaff.staffId || availableStaff.id,
+            orderId: fbOrder.orderId,
+            taskId: firstTask.stageId
+          });
+
+          console.log(`✅ Task auto-assigned to ${availableStaff.name || availableStaff.staffId}`);
+        } else {
+          console.log('⚠️ No available staff found for auto-assignment (Firestore)');
         }
+      }
+
+      // Update customer record in Firestore
+      await this.updateCustomerRecord(orderData);
+
+      // Broadcast event (no-op for now)
+      await this.broadcastUpdate('order_created', { orderId: orderData.orderId, branch: orderData.branch });
+
+      return { success: true, message: 'Order processed (Firestore DataFlow)' };
+    } catch (error) {
+      console.error('❌ processOrderCreation (Firestore) error:', error.message || error);
+      throw error;
     }
-    
-    /**
-     * Process staff task updates and sync back to admin panel
-     */
-    static async processStaffTaskUpdate(staffId, orderId, stageId, updateData) {
-        try {
-            console.log(`🔄 Processing staff task update: ${staffId} -> ${orderId} -> ${stageId}`);
-            
-            const order = await Order.findOne({ orderId });
-            if (!order) throw new Error('Order not found');
-            
-            const taskIndex = order.workflowTasks.findIndex(t => t.stageId === stageId);
-            if (taskIndex === -1) throw new Error('Task not found');
-            
-            const task = order.workflowTasks[taskIndex];
-            const staff = await Staff.findOne({ staffId });
-            
-            // Update task based on action
-            task.status = updateData.status;
-            task.updatedAt = new Date();
-            
-            switch (updateData.status) {
-                case 'started':
-                    task.startedAt = new Date();
-                    break;
-                    
-                case 'paused':
-                    task.pausedAt = new Date();
-                    if (updateData.notes) {
-                        task.notes = (task.notes || '') + `\nPaused: ${updateData.notes}`;
-                    }
-                    break;
-                    
-                case 'resumed':
-                    task.resumedAt = new Date();
-                    break;
-                    
-                case 'completed':
-                    task.completedAt = new Date();
-                    if (updateData.notes) {
-                        task.notes = (task.notes || '') + `\nCompleted: ${updateData.notes}`;
-                    }
-                    if (updateData.qualityRating) {
-                        task.qualityRating = updateData.qualityRating;
-                    }
-                    
-                    // Calculate time spent
-                    if (task.startedAt) {
-                        let timeSpent = new Date() - new Date(task.startedAt);
-                        if (task.pausedAt && task.resumedAt) {
-                            timeSpent -= new Date(task.resumedAt) - new Date(task.pausedAt);
-                        }
-                        task.timeSpent = Math.round(timeSpent / (1000 * 60)); // in minutes
-                    }
-                    
-                    // Update staff workload
-                    if (staff) {
-                        staff.currentTaskCount = Math.max(0, staff.currentTaskCount - 1);
-                        await staff.save();
-                    }
-                    
-                    // Progress to next stage
-                    await this.progressToNextStage(order, stageId);
-                    break;
-            }
-            
-            await order.save();
-            
-            // Broadcast update to admin panel
-            await this.broadcastUpdate('task_updated', {
-                orderId: order.orderId,
-                stageId,
-                status: updateData.status,
-                staffId,
-                staffName: staff?.name,
-                timestamp: new Date().toISOString()
-            });
-            
-            return { success: true, message: `Task ${updateData.status} successfully` };
-            
-        } catch (error) {
-            console.error('❌ Staff task update error:', error);
-            throw error;
+  }
+
+  /**
+   * Get tasks for a staff member (reads orders and filters tasks client-side)
+   */
+   static async getStaffTasks(staffId, includeAvailable = false, adminId = null) {
+    try {
+      const staff = await this._getStaffById(staffId, adminId);
+      if (!staff) throw new Error('Staff not found');
+      const db = this._db(adminId);
+      const fbRes = await db.getCollection('orders', { orderBy: { field: 'createdAt', direction: 'desc' }, limit: 1000 });
+      const orders = fbRes.success ? fbRes.data : [];
+
+      const myTasks = [];
+      const availableTasks = [];
+
+      for (const order of orders) {
+        const tasks = Array.isArray(order.workflowTasks) ? order.workflowTasks : [];
+        for (const task of tasks) {
+          if (task.assignedTo && String(task.assignedTo) === String(staffId) && ['assigned', 'started', 'paused', 'resumed'].includes(task.status)) {
+            myTasks.push({ ...task, orderId: order.orderId, orderDetails: { customerName: order.customerName, garmentType: order.garmentType, measurements: order.measurements || {} } });
+          }
+
+          if (includeAvailable && task.status === 'pending' && (!task.assignedTo) && Array.isArray(staff.workflowStages) && staff.workflowStages.includes(task.stageId)) {
+            availableTasks.push({ ...task, orderId: order.orderId, orderDetails: { customerName: order.customerName, garmentType: order.garmentType } });
+          }
         }
+      }
+
+      return { myTasks, availableTasks, staff };
+    } catch (error) {
+      console.error('❌ getStaffTasks (Firestore) error:', error.message || error);
+      throw error;
     }
-    
-    /**
-     * Progress order to next workflow stage
-     */
-    static async progressToNextStage(order, completedStageId) {
-        try {
-            const settings = await Settings.findOne();
-            if (!settings || !settings.workflowStages) return;
-            
-            const currentStage = settings.workflowStages.find(s => s.id === completedStageId);
-            if (!currentStage) return;
-            
-            const nextStage = settings.workflowStages.find(s => s.order === currentStage.order + 1);
-            
-            if (!nextStage) {
-                // All stages completed
-                order.status = 'completed';
-                order.currentStage = 'completed';
-                await order.save();
-                
-                // Notify admin of completion
-                await this.broadcastUpdate('order_completed', {
-                    orderId: order.orderId,
-                    customerName: order.customerName,
-                    branch: order.branch
-                });
-                
-                console.log(`🎉 Order ${order.orderId} completed all stages!`);
-                return;
-            }
-            
-            // Activate next stage
-            const nextTaskIndex = order.workflowTasks.findIndex(t => t.stageId === nextStage.id);
-            if (nextTaskIndex !== -1) {
-                order.workflowTasks[nextTaskIndex].status = 'pending';
-                order.workflowTasks[nextTaskIndex].updatedAt = new Date();
-                order.currentStage = nextStage.id;
-                
-                // Auto-assign next task
-                const nextStageStaff = await this.findAvailableStaff(nextStage.id, order.branch);
-                
-                if (nextStageStaff) {
-                    order.workflowTasks[nextTaskIndex].status = 'assigned';
-                    order.workflowTasks[nextTaskIndex].assignedTo = nextStageStaff._id;
-                    order.workflowTasks[nextTaskIndex].assignedToName = nextStageStaff.name;
-                    order.workflowTasks[nextTaskIndex].updatedAt = new Date();
-                    
-                    nextStageStaff.currentTaskCount += 1;
-                    await nextStageStaff.save();
-                    
-                    // Create notification for next staff
-                    await this.createStaffNotification({
-                        type: 'task_assigned',
-                        title: `New ${nextStage.name} Task`,
-                        message: `Order #${order.orderId} for ${order.customerName} has been assigned to you.`,
-                        recipientId: nextStageStaff._id,
-                        orderId: order.orderId,
-                        taskId: nextStage.id
-                    });
-                    
-                    console.log(`🔄 Next stage assigned: ${nextStageStaff.name} got ${nextStage.name} for order ${order.orderId}`);
-                }
-                
-                await order.save();
-            }
-            
-        } catch (error) {
-            console.error('❌ Progress to next stage error:', error);
-        }
+  }
+
+  /**
+   * Accept task (Firestore)
+   */
+   static async acceptTask(staffId, orderId, stageId, adminId = null) {
+    try {
+      const staff = await this._getStaffById(staffId, adminId);
+      const order = await this._getOrder(orderId, adminId);
+      if (!staff || !order) throw new Error('Staff or order not found');
+      const idx = (order.workflowTasks || []).findIndex(t => t.stageId === stageId);
+      if (idx === -1) throw new Error('Task not found');
+      const task = order.workflowTasks[idx];
+      if (task.status !== 'pending') throw new Error('Task is not available');
+      task.status = 'assigned';
+      task.assignedTo = staffId;
+      task.assignedToName = staff.name || staffId;
+       task.assignedAt = Ts();
+      task.updatedAt = Ts();
+      await this._setOrder(orderId, { workflowTasks: order.workflowTasks }, adminId);
+      const newCount = (staff.currentTaskCount || 0) + 1;
+     
+      await this._db(adminId).setDocument('staff', staff.id || staffId, { currentTaskCount: newCount });
+      await this.broadcastUpdate('task_accepted', { orderId, stageId, staffId, staffName: staff.name });
+
+      return { success: true, message: 'Task accepted successfully' };
+    } catch (error) {
+      console.error('❌ acceptTask (Firestore) error:', error.message || error);
+      throw error;
     }
-    
-    /**
-     * Send real-time notification to staff mobile app
-     */
-    static async sendRealTimeNotification(staffId, notificationData) {
+  }
+
+  /**
+   * Process staff task update (started/paused/resumed/completed) — Firestore implementation
+   */
+ 
+      static async processStaffTaskUpdate(staffId, orderId, stageId, updateData, adminId = null) {
         try {
-            // In a production environment, this would integrate with:
-            // - Firebase Cloud Messaging (FCM) for push notifications
-            // - WebSocket connections for real-time updates
-            // - SMS notifications as fallback
-            
-            console.log(`📱 Sending real-time notification to staff ${staffId}:`, notificationData);
-            
-            // For now, we'll store it in a way that the mobile app can poll
-            // In production, implement proper push notification service
-            
-            return { success: true, message: 'Notification sent' };
-            
-        } catch (error) {
-            console.error('❌ Send real-time notification error:', error);
-            return { success: false, error: error.message };
-        }
-    }
-    
-    /**
-     * Broadcast updates to all connected clients (admin panels, staff apps)
-     */
-    static async broadcastUpdate(eventType, data) {
-        try {
-            console.log(`📡 Broadcasting update: ${eventType}`, data);
-            
-            // In production, this would use WebSocket connections or Server-Sent Events
-            // to push real-time updates to all connected clients
-            
-            // For now, we'll log the event for debugging
-            const updateEvent = {
-                type: eventType,
-                data,
-                timestamp: new Date().toISOString()
-            };
-            
-            // Store recent events for polling-based clients
-            // In production, use Redis or similar for better performance
-            
-            return updateEvent;
-            
-        } catch (error) {
-            console.error('❌ Broadcast update error:', error);
-        }
-    }
-    
-    /**
-     * Get staff tasks with real-time data
-     */
-    static async getStaffTasks(staffId, includeAvailable = false) {
-        try {
-            const staff = await Staff.findOne({ staffId });
-            if (!staff) throw new Error('Staff not found');
-            
-            const staffIdStr = staff._id.toString();
-            
-            // Get assigned tasks
-            const assignedOrders = await Order.find({
-                'workflowTasks': {
-                    $elemMatch: {
-                        assignedTo: staff._id,
-                        status: { $in: ['assigned', 'started', 'paused', 'resumed'] }
-                    }
-                }
-            });
-            
-            const myTasks = [];
-            assignedOrders.forEach(order => {
-                order.workflowTasks.forEach(task => {
-                    if (task.assignedTo && task.assignedTo.toString() === staffIdStr && 
-                        ['assigned', 'started', 'paused', 'resumed'].includes(task.status)) {
-                        
-                        myTasks.push({
-                            ...task.toObject(),
-                            orderId: order.orderId,
-                            customerName: order.customerName,
-                            customerPhone: order.customerPhone,
-                            garmentType: order.garmentType,
-                            deliveryDate: order.deliveryDate,
-                            measurements: order.measurements,
-                            designNotes: order.designNotes,
-                            designImages: order.designImages || []
-                        });
-                    }
-                });
-            });
-            
-            let availableTasks = [];
-            if (includeAvailable) {
-                // Get available tasks for this staff's workflow stages
-                const availableOrders = await Order.find({
-                    'workflowTasks': {
-                        $elemMatch: {
-                            stageId: { $in: staff.workflowStages },
-                            status: 'pending',
-                            assignedTo: null
-                        }
-                    }
-                });
-                
-                availableOrders.forEach(order => {
-                    order.workflowTasks.forEach(task => {
-                        if (task.status === 'pending' && 
-                            staff.workflowStages.includes(task.stageId) && 
-                            !task.assignedTo) {
-                            
-                            availableTasks.push({
-                                ...task.toObject(),
-                                orderId: order.orderId,
-                                customerName: order.customerName,
-                                customerPhone: order.customerPhone,
-                                garmentType: order.garmentType,
-                                deliveryDate: order.deliveryDate,
-                                measurements: order.measurements,
-                                designNotes: order.designNotes,
-                                designImages: order.designImages || []
-                            });
-                        }
-                    });
-                });
-            }
-            
-            return {
-                myTasks,
-                availableTasks,
-                staff: {
-                    id: staff._id,
-                    staffId: staff.staffId,
-                    name: staff.name,
-                    role: staff.role,
-                    workflowStages: staff.workflowStages,
-                    currentTaskCount: staff.currentTaskCount,
-                    isAvailable: staff.isAvailable
-                }
-            };
-            
-        } catch (error) {
-            console.error('❌ Get staff tasks error:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Accept available task and assign to staff
-     */
-    static async acceptTask(staffId, orderId, stageId) {
-        try {
-            const staff = await Staff.findOne({ staffId });
-            const order = await Order.findOne({ orderId });
-            
-            if (!staff || !order) {
-                throw new Error('Staff or order not found');
-            }
-            
-            const taskIndex = order.workflowTasks.findIndex(t => t.stageId === stageId);
-            if (taskIndex === -1) {
-                throw new Error('Task not found');
-            }
-            
-            const task = order.workflowTasks[taskIndex];
-            if (task.status !== 'pending') {
-                throw new Error('Task is not available');
-            }
-            
-            // Assign task to staff
-            task.status = 'assigned';
-            task.assignedTo = staff._id;
+          const order = await this._getOrder(orderId, adminId);
+          if (!order) throw new Error('Order not found');
+          const taskIndex = (order.workflowTasks || []).findIndex(t => t.stageId === stageId);
+          if (taskIndex === -1) throw new Error('Task not found');
+          const staff = await this._getStaffById(staffId, adminId);
+          if (!staff) throw new Error('Staff not found');
+          const task = order.workflowTasks[taskIndex];
+          if (!task.assignedTo && ['started','resumed'].includes(updateData.status)) {
+            task.assignedTo = staffId;
             task.assignedToName = staff.name;
-            task.updatedAt = new Date();
-            
-            // Update staff workload
-            staff.currentTaskCount += 1;
-            
-            await staff.save();
-            await order.save();
-            
-            // Broadcast update
-            await this.broadcastUpdate('task_accepted', {
-                orderId: order.orderId,
-                stageId,
-                staffId,
-                staffName: staff.name
-            });
-            
-            console.log(`✅ Task accepted: ${staff.name} accepted ${task.stageName} for order ${orderId}`);
-            
-            return { success: true, message: 'Task accepted successfully' };
-            
-        } catch (error) {
-            console.error('❌ Accept task error:', error);
-            throw error;
-        }
+            staff.currentTaskCount = (staff.currentTaskCount || 0) + 1;
+ 
+            await this._db(adminId).setDocument('staff', staff.id || staffId, { currentTaskCount: staff.currentTaskCount });
+          }
+          if (task.assignedTo && String(task.assignedTo) !== String(staffId)) {
+            throw new Error('Staff is not assigned to this task');
+          }
+          task.status = updateData.status;
+          task.updatedAt = Ts();
+          if (updateData.notes) task.notes = updateData.notes;
+          if (updateData.qualityRating) task.qualityRating = updateData.qualityRating;
+          if (updateData.status === 'started') task.startedAt = Ts();
+          if (updateData.status === 'paused') task.pausedAt = Ts();
+          if (updateData.status === 'resumed') task.resumedAt = Ts();
+          if (updateData.status === 'completed') {
+            task.completedAt = Ts();
+            if (task.startedAt) task.timeSpent = Math.round((Date.now() - toDate(task.startedAt).getTime()) / 60000);
+            staff.currentTaskCount = Math.max(0, (staff.currentTaskCount || 0) - 1);
+            await this._db(adminId).setDocument('staff', staff.id || staffId, { currentTaskCount: staff.currentTaskCount });
+            await this.progressToNextStage(order, stageId, adminId);
+          }
+          await this._setOrder(orderId, { workflowTasks: order.workflowTasks }, adminId);
+
+      await this.broadcastUpdate('task_updated', { orderId, stageId, status: updateData.status, staffId, staffName: staff.name });
+
+      return { success: true, message: `Task ${updateData.status} successfully` };
+    } catch (error) {
+      console.error('❌ processStaffTaskUpdate (Firestore) error:', error.message || error);
+      throw error;
     }
+  }
+
+  /**
+   * Progress to next workflow stage (Firestore)
+   */
+  
+        static async progressToNextStage(order, completedStageId, adminId = null) {
+          try {
+            const db = this._db(adminId);
+            const fbSettings = await db.getCollection('settings', { limit: 1 });
+            const settings = (fbSettings.success && fbSettings.data?.length > 0) ? fbSettings.data[0] : null;
+            if (!settings || !Array.isArray(settings.workflowStages)) return;
+
+            const normalize = v => String(v || '').trim().toLowerCase();
+            const currentStage = settings.workflowStages.find(s => normalize(s.id) === normalize(completedStageId));
+            if (!currentStage) return;
+
+            const nextStage = settings.workflowStages.find(s => Number(s.order) === Number(currentStage.order) + 1);
+            if (!nextStage) {
+              await this._setOrder(order.orderId, { status: 'completed', currentStage: 'completed' }, adminId);
+              await this.broadcastUpdate('order_completed', { orderId: order.orderId });
+              return;
+            }
+
+            const nextTaskIndex = (order.workflowTasks || []).findIndex(t => normalize(t.stageId) === normalize(nextStage.id));
+            if (nextTaskIndex === -1) return;
+
+            // Just set to pending — NO auto-assignment, staff picks up from Available Tasks
+            order.workflowTasks[nextTaskIndex].status = 'pending';
+                  order.workflowTasks[nextTaskIndex].updatedAt = Ts();
+            order.currentStage = nextStage.id;
+
+            await this._setOrder(order.orderId, { workflowTasks: order.workflowTasks, currentStage: order.currentStage }, adminId);
+            console.log(`▶️ Stage '${nextStage.name}' set to pending for order ${order.orderId}`);
+    } catch (error) {
+      console.error('❌ Progress to next stage error (Firestore):', error.message || error);
+    }
+  }
+
+  static async sendRealTimeNotification(staffId, notificationData) {
+    try {
+      // Store notification in Firestore so staff app can pick it up
+      await this.createStaffNotification({ recipientId: staffId, ...notificationData });
+      return { success: true, message: 'Notification queued' };
+    } catch (error) {
+      console.error('❌ sendRealTimeNotification (Firestore) error:', error.message || error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async broadcastUpdate(eventType, data) {
+    try {
+      console.log(`📡 Broadcasting update: ${eventType}`, data);
+      // Persist a recent event so polling clients can read it if needed
+      const id = `event_${Date.now()}`;
+      await firebaseIntegrationService.setDocument('events', id, { type: eventType, data, timestamp: new Date() });
+      return { type: eventType, data, timestamp: new Date().toISOString() };
+    } catch (error) {
+      console.error('❌ broadcastUpdate (Firestore) error:', error.message || error);
+    }
+  }
 }
 
 module.exports = DataFlowService;

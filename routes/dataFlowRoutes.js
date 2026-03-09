@@ -14,6 +14,21 @@ const router = express.Router();
 /**
  * Create order with automatic staff assignment and real-time sync
  */
+ const jwt = require('jsonwebtoken');
+const JWT_SECRET = 'sapthala_boutique_secret_2024';
+
+// AFTER
+function getAdminId(req) {
+  try {
+    const token = (req.headers['authorization'] || '').replace('Bearer ', '');
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.adminId) return decoded.adminId;
+    }
+  } catch(e) {}
+  // Fallback: query param (for GET requests from staff portal)
+  return req.query.adminId || null;
+}
 router.post('/admin/orders/create', async (req, res) => {
     try {
         console.log('📥 Admin creating order with staff sync...');
@@ -36,6 +51,13 @@ router.post('/admin/orders/create', async (req, res) => {
             designNotes: req.body.designNotes || req.body.designDescription || '',
             designImages: Array.isArray(req.body.designImages) ? req.body.designImages : []
         };
+
+        // Server-side validation of mandatory fields
+        try {
+            DataFlowService.validateOrderPayload(orderData);
+        } catch (err) {
+            return res.status(400).json({ success: false, error: err.message });
+        }
 
         // Create workflow tasks based on selected stages
         const requestedStages = req.body.workflow || ['dyeing', 'cutting', 'stitching', 'finishing', 'quality-check', 'ready-to-deliver'];
@@ -223,7 +245,9 @@ router.get('/admin/staff/workload', async (req, res) => {
 router.get('/staff/:staffId/tasks', async (req, res) => {
     try {
         const { staffId } = req.params;
-        const result = await DataFlowService.getStaffTasks(staffId, true);
+   
+        const adminId = getAdminId(req);
+        const result = await DataFlowService.getStaffTasks(staffId, true, adminId);
         
         res.json({
             success: true,
@@ -246,7 +270,9 @@ router.post('/staff/:staffId/accept-task', async (req, res) => {
         const { staffId } = req.params;
         const { orderId, stageId } = req.body;
         
-        const result = await DataFlowService.acceptTask(staffId, orderId, stageId);
+   
+        const adminId = getAdminId(req);
+        const result = await DataFlowService.acceptTask(staffId, orderId, stageId, adminId);
         res.json(result);
 
     } catch (error) {
@@ -269,7 +295,9 @@ router.post('/staff/:staffId/update-task', async (req, res) => {
             qualityRating
         };
         
-        const result = await DataFlowService.processStaffTaskUpdate(staffId, orderId, stageId, updateData);
+ 
+        const adminId = getAdminId(req);
+        const result = await DataFlowService.processStaffTaskUpdate(staffId, orderId, stageId, updateData, adminId);
         res.json(result);
 
     } catch (error) {

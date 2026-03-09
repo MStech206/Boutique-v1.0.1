@@ -1,105 +1,121 @@
 @echo off
 setlocal enabledelayedexpansion
 color 0A
-title SAPTHALA - Complete System
+title SAPTHALA BOUTIQUE - System Launcher
 
 :MENU
 cls
 echo.
-echo ========================================================
+echo ============================================================
 echo   SAPTHALA BOUTIQUE MANAGEMENT SYSTEM
-echo ========================================================
+echo   Firebase-Integrated Multi-Panel System
+echo ============================================================
 echo.
-echo   [1] Start Complete System
+echo   LAUNCH OPTIONS:
+echo   [1] Start Complete System (Recommended)
 echo   [2] Backend Server Only
-echo   [3] Open Super Admin
-echo   [4] Open Admin Panel
-echo   [5] Open Staff Portal
-echo   [6] Flutter Mobile App
-echo   [7] Test System
-echo   [8] Kill Port 3000
-echo   [9] Reset Admin Password
+echo   [3] Super Admin Panel
+echo   [4] Admin Panel
+echo   [5] Staff Portal
+echo.
+echo   MANAGEMENT:
+echo   [8] Test System Health
+echo   [9] Firebase Setup
+echo   [C] Kill Port 3000
+echo   [R] Reset Admin Password
+echo.
 echo   [0] Exit
 echo.
-echo ========================================================
-set /p choice="Enter choice (0-9): "
+echo ============================================================
+set /p choice="Enter choice: "
 
-if "%choice%"=="1" goto START_ALL
-if "%choice%"=="2" goto BACKEND
-if "%choice%"=="3" goto SUPER_ADMIN
-if "%choice%"=="4" goto ADMIN
-if "%choice%"=="5" goto STAFF
-if "%choice%"=="6" goto FLUTTER
-if "%choice%"=="7" goto TEST
-if "%choice%"=="8" goto KILL_PORT
-if "%choice%"=="9" goto RESET_PASSWORD
-if "%choice%"=="0" exit
+if /i "%choice%"=="1" goto START_ALL
+if /i "%choice%"=="2" goto BACKEND
+if /i "%choice%"=="3" goto SUPER_ADMIN
+if /i "%choice%"=="4" goto ADMIN
+if /i "%choice%"=="5" goto STAFF
+if /i "%choice%"=="8" goto TEST
+if /i "%choice%"=="9" goto FIREBASE_SETUP
+if /i "%choice%"=="C" goto KILL_PORT
+if /i "%choice%"=="R" goto RESET_PASSWORD
+if /i "%choice%"=="0" exit /b 0
 goto MENU
 
 :START_ALL
 cls
 echo.
-echo ========================================================
+echo ============================================================
 echo   STARTING SAPTHALA BOUTIQUE SYSTEM
-echo ========================================================
+echo ============================================================
 echo.
 
-REM Step 1: Fix HTML files
-echo [1/5] Preparing files...
-call :FIX_HTML_FILES
-echo       ✓ Files ready
+echo [1/6] Checking Node.js...
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo       X Node.js not found! Please install Node.js
+    pause
+    goto MENU
+)
+echo       OK Node.js ready
 
-REM Step 2: Check MongoDB
-echo [2/5] Checking MongoDB...
+echo [2/6] Checking Firebase...
+if exist "firebase-credentials.json" (
+    echo       OK Firebase credentials found
+    set "GOOGLE_APPLICATION_CREDENTIALS=%CD%\firebase-credentials.json"
+) else (
+    echo       ! Firebase credentials not found (optional)
+)
+if exist ".env.firebase" (
+    for /f "usebackq tokens=1,* delims==" %%A in (".env.firebase") do (
+        if "%%A"=="GOOGLE_APPLICATION_CREDENTIALS" (
+            if not "%%B"=="" (
+                set "GOOGLE_APPLICATION_CREDENTIALS=%%B"
+                echo       Using credentials from .env.firebase
+            )
+        )
+    )
+)
+
+echo [3/6] Checking MongoDB...
 sc query MongoDB >nul 2>&1
 if errorlevel 1 (
-    echo       Starting MongoDB...
-    net start MongoDB >nul 2>&1
+    echo       ! MongoDB not running (using Firebase only)
+) else (
+    echo       OK MongoDB available
 )
-echo       ✓ MongoDB ready
 
-REM Step 3: Clear port
-echo [3/5] Clearing port 3000...
+echo [4/6] Clearing port 3000...
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr :3000') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 timeout /t 2 /nobreak >nul
-echo       ✓ Port cleared
+echo       OK Port cleared
 
-REM Step 4: Install or check dependencies
-echo [4/5] Checking dependencies...
+echo [5/6] Checking dependencies...
 if not exist "node_modules" (
-    echo       Installing npm packages...
+    echo       Installing packages...
     call npm install >nul 2>&1
 )
-echo       ✓ Dependencies ready
+echo       OK Dependencies ready
 
-REM Step 5: Build super-admin if needed
-echo [5/5] Building super-admin panel...
-if not exist "Boutique-app\super-admin-panel\dist\index.html" (
-    echo       Building React app...
-    cd /d "Boutique-app\super-admin-panel" 2>nul
-    if not exist "node_modules" npm install >nul 2>&1
-    npm run build >nul 2>&1
-    cd /d "%~dp0" 2>nul
-    echo       ✓ Build complete
-) else (
-    echo       ✓ Already built
+:: Run normalization/fixes (safe, idempotent)
+if exist "scripts\normalize-roles.js" (
+    echo [*] Normalizing MongoDB roles...
+    node scripts\normalize-roles.js 2>nul
 )
 
-REM Start server
-echo.
-echo Starting backend server...
-start "SAPTHALA Backend" cmd /k "title SAPTHALA Backend Server && node server.js"
+if exist "scripts\fix-firestore-admin-roles.js" (
+    echo [*] Normalizing Firestore roles...
+    node scripts\fix-firestore-admin-roles.js 2>nul
+)
+
+echo [6/6] Starting backend server...
+start "SAPTHALA Backend" cmd /k "title SAPTHALA Backend && node server.js"
 timeout /t 8 /nobreak >nul
 
-REM Verify connection
-echo Verifying connection...
-timeout /t 1 /nobreak >nul
-
-REM Open panels
 echo.
 echo Opening admin panels...
+timeout /t 2 /nobreak >nul
 start "" "http://localhost:3000"
 timeout /t 1 /nobreak >nul
 start "" "http://localhost:3000/super-admin"
@@ -107,56 +123,47 @@ timeout /t 1 /nobreak >nul
 start "" "http://localhost:3000/staff"
 
 echo.
-echo ========================================================
+echo ============================================================
 echo   SYSTEM STARTED SUCCESSFULLY!
-echo ========================================================
+echo ============================================================
 echo.
-echo   ADMIN PANEL:      http://localhost:3000
+echo   SUPER ADMIN:    http://localhost:3000/super-admin
+echo   Email: mstechno2323@gmail.com (Firebase Auth)
+echo.
+echo   ADMIN PANEL:    http://localhost:3000
 echo   Username: admin   Password: sapthala@2029
 echo.
-echo   SUPER ADMIN:      http://localhost:3000/super-admin
-echo   Username: superadmin   Password: superadmin@2029
+echo   STAFF PORTAL:   http://localhost:3000/staff
+echo   Staff ID + PIN: 1234
 echo.
-echo   STAFF PORTAL:     http://localhost:3000/staff
-echo   PIN: 1234
+echo   DATABASE: Firebase Firestore (Primary)
+echo   FALLBACK: MongoDB (If available)
 echo.
-echo ========================================================
+echo ============================================================
 echo.
-pause
-goto MENU
+echo System started! Opening browser in 3 seconds...
+timeout /t 3 /nobreak >nul
+exit /b 0
 
 :BACKEND
 cls
 echo.
-echo Preparing to start backend server...
+echo ============================================================
+echo   STARTING BACKEND SERVER
+echo ============================================================
 echo.
 
-echo [1/3] Checking MongoDB...
-sc query MongoDB >nul 2>&1
-if errorlevel 1 (
-    net start MongoDB >nul 2>&1
-)
-
-echo [2/3] Clearing port 3000...
+echo Checking port 3000...
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr :3000') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 timeout /t 2 /nobreak >nul
 
-echo [3/3] Installing dependencies...
-if not exist "node_modules" (
-    call npm install >nul 2>&1
-)
-
-echo.
-echo ========================================================
-echo   STARTING BACKEND SERVER
-echo ========================================================
 echo.
 echo Backend will be available at: http://localhost:3000
 echo Press Ctrl+C to stop the server
 echo.
-echo ========================================================
+echo ============================================================
 echo.
 
 timeout /t 2 /nobreak >nul
@@ -177,35 +184,21 @@ goto MENU
 start "" "http://localhost:3000/staff"
 goto MENU
 
-:FLUTTER
-cls
-echo Starting Flutter App...
-echo.
-cd /d "Boutique-flutter" 2>nul
-if exist "lib\main.dart" (
-    flutter run
-) else (
-    echo Flutter project not found!
-)
-cd /d "%~dp0" 2>nul
-pause
-goto MENU
-
 :TEST
 cls
 echo.
-echo ========================================================
-echo   SYSTEM TEST
-echo ========================================================
+echo ============================================================
+echo   SYSTEM HEALTH CHECK
+echo ============================================================
 echo.
 
 echo Testing endpoints...
 timeout /t 1 /nobreak >nul
 
-curl -s -o nul -w "Admin Panel:     http://localhost:3000                [%%{http_code}]\n" http://localhost:3000
-curl -s -o nul -w "Super Admin:     http://localhost:3000/super-admin    [%%{http_code}]\n" http://localhost:3000/super-admin
-curl -s -o nul -w "Staff Portal:    http://localhost:3000/staff          [%%{http_code}]\n" http://localhost:3000/staff
-curl -s -o nul -w "API Health:      http://localhost:3000/api/settings   [%%{http_code}]\n" http://localhost:3000/api/settings
+curl -s -o nul -w "Admin Panel:     http://localhost:3000                [%%{http_code}]\n" http://localhost:3000 2>nul
+curl -s -o nul -w "Super Admin:     http://localhost:3000/super-admin    [%%{http_code}]\n" http://localhost:3000/super-admin 2>nul
+curl -s -o nul -w "Staff Portal:    http://localhost:3000/staff          [%%{http_code}]\n" http://localhost:3000/staff 2>nul
+curl -s -o nul -w "API Health:      http://localhost:3000/api/settings   [%%{http_code}]\n" http://localhost:3000/api/settings 2>nul
 
 echo.
 echo All tests complete!
@@ -213,15 +206,42 @@ echo.
 pause
 goto MENU
 
+:FIREBASE_SETUP
+cls
+echo.
+echo ============================================================
+echo   FIREBASE SETUP
+echo ============================================================
+echo.
+echo Running Firebase setup wizard...
+echo.
+
+if exist "setup-firebase-integration.js" (
+    node setup-firebase-integration.js
+) else (
+    echo X Setup script not found
+)
+
+echo.
+pause
+goto MENU
+
 :KILL_PORT
 cls
 echo.
-echo Killing processes on port 3000...
+echo ============================================================
+echo   KILLING PORT 3000
+echo ============================================================
+echo.
+
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr :3000') do (
     set pid=%%a
     taskkill /F /PID !pid! >nul 2>&1
+    echo Killed process: !pid!
 )
-echo Done!
+
+echo.
+echo OK All processes on port 3000 terminated
 echo.
 timeout /t 2 /nobreak >nul
 goto MENU
@@ -229,22 +249,17 @@ goto MENU
 :RESET_PASSWORD
 cls
 echo.
-echo Resetting admin password...
+echo ============================================================
+echo   RESET ADMIN PASSWORD
+echo ============================================================
+echo.
+
 if exist "reset-admin-password.js" (
     node reset-admin-password.js
 ) else (
-    echo Script not found!
+    echo X Script not found
 )
+
 echo.
 pause
 goto MENU
-
-:FIX_HTML_FILES
-if not exist ".backups" mkdir ".backups"
-for %%f in (sapthala-admin-clean.html super-admin.html staff-portal.html) do (
-    if exist "%%f" (
-        copy "%%f" ".backups\%%f.bak" >nul 2>&1
-    )
-)
-exit /b
-

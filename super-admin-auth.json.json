@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "boutique-staff-app",
+  "private_key_id": "764da7cfe9f32f31579e19fa959d1e6c1bbfa7d7",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC5nbcfm4ZQGdZ8\nqZ/G9U2v+72qVfo4fT3bbDGSaWo615V/GN+Cfcq7Bcl0y3LIah98SYGMb6mNkH+T\nqOCOmnjCcdzrk3BvRTGw4oV31Ikq0Aq+IzaDVlMZAwyWeKv9TEXnCyv8o7C9jAlw\noT/a9c7cixWIGIMm9vQgURqpncSrkkQqutjch/zzLrB03SlbOJKGeHu7CRlHzSkf\nYSRMuU06uUVG6O2nXka4mr1NM3dC2ZasweFxTHRXaRxRLTKiUMhS/HRFBMcNJPSf\nTVK8I0Nr82skQ69EXuiPfC3TybYPIuOQVRHD0j14jLikeRuAI1miyZ7ge5gadeJG\nhWrEbn6/AgMBAAECggEAAzg5ApxYHRPMxIbNI+rllYWLHwGYVdpI9EhmfQ8aX51c\nlULL93wKbr9hujE8yJJGq/sebOyhlUZ70c3B/Z5bNTbl9DevfesNc7aRRlMrVl8b\ncl/BUt4bPORiUIMxVd3G8C7opdxt5roDAFnp57/XGqABNJt3WggBdu9fbumIOB9l\n6BUTrx/KBnvJVdzYoKDBAnZD3xQUriZQV6mp6sp73trOxYp8rCHBjyT0jzCmjtwW\nrSfOXse4HgwhVOcKxFVVwSEfo8y/CrLPECmf+CbsSA4+alaCKlrFRZ6zYSb10UaE\nSPFIy1JEWjRKqTcgUUlRxtjTXj8Ic2lbgcvCbIM68QKBgQDqrOhQTd5ZkY/u7PKG\nyX/ATBwH42vFJIQ0zE0v4yZLS6OEhvxeB10/y1KdcN0MbKtCLTMc8Egsc/l5OUcr\nANbxbomrNA8UhRLuoRSaw/xOuZT4QzVGb1Fv8xGWJgmF0no1l2JuNhiyX3hyp4zk\nFLrcEo0f1iYwXBBPbM42/oPQmQKBgQDKe5L66ZxxZqq7dFvGMaBuaqqyPqp4MVLa\nNPM4ceQuGLgN/ThBKrRarEJCzwdUWiBfRx/geL1ENnQOQVNs4qKhanf3hjnXygl4\nMynNA1YTINkM7wK8aVjr5kMu2DyUXzbNrAbw4qK4wc6+Gr8umA3YuynbQVd5qNIp\nkssYY0hpFwKBgQDBPex25AgqXVDWf8sd7qMB6CpU3JKL3gv3phwRSMzpx7k4kicS\nDqJcu8Kl3qBHcNx9O9cRB1OHN2DAz8eow6I7YLiAf/fC/+mdEoty/duvv+XJoR4n\nh9bZhqB+sYe56J21r5jgBC/GAhOe5hWAYwmT2rrW8nKz87uCi6grZN2KUQKBgEJ5\nx4tw3tesKSlZzjeHW3BkvJ3ATR8gsl7JO4Cwg4VOwD53f9yFNKkAHNDqPzHGVRJy\nu1hqy1h1uCxl7gm1bkcoOTKecqcRwYIg6fxQuBWXlyrT3UYWIAdylWPvwhPEHq3v\naGf1QA8AMevfxBx79y/MYrWFAj8C2dykQOFE1yUJAoGAbBj/TCl2WGyf+f7a1Jim\nSF25TzVtefhMK4asvfw7rLv70VDHMxwyjmSlkbA3Tdh6ZDPeXqf1hljnv8gI2z3a\n/iHqzNZF8Tgb3MoIGeTyXEZQRW4OhsTcJqZph5EOpRbr8Y3ai2vg+GBt8U666Hly\n2vhTSg1PQkf6xC9JcuSj8Yo=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@boutique-staff-app.iam.gserviceaccount.com",
+  "client_id": "109939923278342256314",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40boutique-staff-app.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

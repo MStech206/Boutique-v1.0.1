@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAPTHALA Boutique Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; }
+        
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+        }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        
+        .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+        
+        .tab-content { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        
+        .sidebar-tab {
+            background: none; border: none; color: #fff; font-size: 17px; font-weight: 500; 
+            padding: 18px 0 18px 36px; text-align: left; cursor: pointer; outline: none; 
+            transition: background 0.2s, color 0.2s; display: flex; align-items: center; 
+            gap: 12px; border-radius: 0 18px 18px 0;
+        }
+        .sidebar-tab.active, .sidebar-tab:hover {
+            background: rgba(255,255,255,0.13); color: #ffe066;
+        }
+        
+        .btn-primary, .btn-secondary {
+            padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold;
+            font-size: 16px; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+        .btn-secondary { background: #f3f4f6; color: #374151; border: 2px solid #d1d5db; }
+        
+        .hidden { display: none !important; }
+        
+        .login-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background: linear-gradient(135deg, #7c183c 0%, #b22234 100%);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        
+        .login-box {
+            background: white; border-radius: 24px; padding: 48px 36px 36px 36px; width: 100%; max-width: 410px;
+            box-shadow: 0 24px 64px rgba(124,24,60,0.18); text-align: center;
+        }
+        
+        .login-input {
+            padding: 16px 22px; border: 2px solid #e2e8f0; border-radius: 14px;
+            font-size: 17px; transition: all 0.3s; background: #f9fafb; width: 100%; margin-bottom: 20px;
+        }
+        
+        .login-btn {
+            padding: 16px; background: linear-gradient(135deg, #b22234 0%, #7c183c 100%);
+            color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: bold;
+            cursor: pointer; transition: all 0.3s; width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <h1 style="color: #7c183c; margin-bottom: 30px;">SAPTHALA Admin</h1>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="username" class="login-input" placeholder="Username" required>
+                <input type="password" id="password" class="login-input" placeholder="Password" required>
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="hidden">
+        <div class="header">
+            <div class="header-left">
+                <h1>SAPTHALA</h1>
+                <p>Professional Boutique Admin Portal</p>
+            </div>
+            <button class="btn-secondary" onclick="logout()">Logout</button>
+        </div>
+
+        <div style="display: flex; min-height: 80vh;">
+            <!-- Sidebar -->
+            <nav id="sidebar" style="width: 230px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; display: flex; flex-direction: column; align-items: stretch; padding: 0; box-shadow: 2px 0 16px rgba(102,126,234,0.08); border-radius: 18px; margin: 18px 18px 18px 0;">
+                <button class="sidebar-tab" onclick="showTab('dashboard')"><span>📊</span> Dashboard</button>
+                <button class="sidebar-tab" onclick="showTab('orders')"><span>📦</span> Orders</button>
+                <button class="sidebar-tab" onclick="showTab('customers')"><span>👥</span> Customers</button>
+                <button class="sidebar-tab" onclick="showTab('reports')"><span>📊</span> Reports</button>
+            </nav>
+            
+            <div class="container" style="flex:1;">
+                <div class="tab-content">
+                    <!-- Dashboard Tab -->
+                    <div id="dashboard" class="tab-panel active">
+                        <h2>Dashboard</h2>
+                        <div id="dashboardStats">
+                            <p>Total Orders: <span id="totalOrders">0</span></p>
+                            <p>Total Revenue: <span id="totalRevenue">₹0</span></p>
+                            <p>Database Status: <span id="dbStatus">Checking...</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Orders Tab -->
+                    <div id="orders" class="tab-panel">
+                        <h2>Orders Management</h2>
+                        <div id="ordersList">Loading orders...</div>
+                    </div>
+
+                    <!-- Customers Tab -->
+                    <div id="customers" class="tab-panel">
+                        <h2>Customer Management</h2>
+                        <div id="customersList">Loading customers...</div>
+                    </div>
+
+                    <!-- Reports Tab -->
+                    <div id="reports" class="tab-panel">
+                        <h2>Reports</h2>
+                        <div style="margin-bottom: 20px;">
+                            <label>Branch: 
+                                <select id="reportBranch" onchange="loadReports()">
+                                    <option value="">All Branches</option>
+                                    <option value="MAIN">Main Branch</option>
+                                    <option value="JUBILEE">Jubilee Hills</option>
+                                </select>
+                            </label>
+                            <label>From: <input type="date" id="reportFromDate" onchange="loadReports()"></label>
+                            <label>To: <input type="date" id="reportToDate" onchange="loadReports()"></label>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <button onclick="exportReportsPDF()" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 10px;">Export PDF</button>
+                            <button onclick="exportReportsCSV()" style="padding: 8px 16px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 10px;">Export CSV</button>
+                            <button onclick="exportReportsExcel()" style="padding: 8px 16px; background: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer;">Export Excel</button>
+                        </div>
+                        
+                        <div id="reportsTable">Loading reports...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // HTML Entity Decoder Function
+        function decodeHtmlEntities(text) {
+            if (!text || typeof text !== 'string') return text;
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        }
+
+        // Database connection fallback system
+        async function initializeDatabaseConnection() {
+            try {
+                const response = await fetch('/api/health');
+                if (response.ok) {
+                    console.log('✅ Database connection established');
+                    document.getElementById('dbStatus').textContent = 'Connected';
+                    document.getElementById('dbStatus').style.color = '#10b981';
+                    return true;
+                } else {
+                    throw new Error('Database connection failed');
+                }
+            } catch (error) {
+                console.warn('⚠️ Database unreachable, using offline mode:', error);
+                document.getElementById('dbStatus').textContent = 'Offline Mode';
+                document.getElementById('dbStatus').style.color = '#f59e0b';
+                initializeOfflineMode();
+                return false;
+            }
+        }
+
+        function initializeOfflineMode() {
+            // Show offline notification
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; font-weight: bold;';
+            notification.innerHTML = '⚠️ Offline Mode<br><span style="font-size: 12px; font-weight: normal;">Database not connected. Using local data.</span>';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 500);
+            }, 5000);
+            
+            // Initialize demo data
+            if (!localStorage.getItem('sapthala_orders')) {
+                initializeDemoOrders();
+            }
+            if (!localStorage.getItem('sapthala_customers')) {
+                initializeDemoCustomers();
+            }
+        }
+
+        function initializeDemoOrders() {
+            const demoOrders = [
+                {
+                    id: 'ORD-001',
+                    orderId: 'ORD-001',
+                    customerName: 'John Doe',
+                    customerPhone: '9876543210',
+                    garmentType: 'Shirt',
+                    totalAmount: 5000,
+                    status: 'pending',
+                    branch: 'MAIN',
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: 'ORD-002',
+                    orderId: 'ORD-002',
+                    customerName: 'Sarah Khan',
+                    customerPhone: '9876543220',
+                    garmentType: 'Saree',
+                    totalAmount: 22030,
+                    status: 'completed',
+                    branch: 'JUBILEE',
+                    createdAt: new Date().toISOString()
+                }
+            ];
+            localStorage.setItem('sapthala_orders', JSON.stringify(demoOrders));
+            console.log('✅ Demo orders initialized');
+        }
+
+        function initializeDemoCustomers() {
+            const demoCustomers = [
+                { name: 'John Doe', phone: '9876543210', email: 'john@example.com', address: 'Mumbai, MH', totalOrders: 1, totalSpent: 5000 },
+                { name: 'Sarah Khan', phone: '9876543220', email: 'sarah@example.com', address: 'Delhi, DL', totalOrders: 1, totalSpent: 22030 }
+            ];
+            localStorage.setItem('sapthala_customers', JSON.stringify(demoCustomers));
+            console.log('✅ Demo customers initialized');
+        }
+
+        // Authentication Functions
+        async function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Simple demo login - in production, this should validate against server
+            if (username && password) {
+                localStorage.setItem('sapthala_logged_in', 'true');
+                localStorage.setItem('sapthala_user', JSON.stringify({ username, role: 'admin' }));
+                showMainApp();
+            } else {
+                alert('Please enter username and password');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('sapthala_logged_in');
+            localStorage.removeItem('sapthala_user');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            updateDashboardStats();
+        }
+
+        // Tab Functions
+        function showTab(tabName) {
+            // Hide all tab panels
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.style.display = 'none');
+            // Remove active from all sidebar tabs
+            document.querySelectorAll('.sidebar-tab').forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab
+            const panel = document.getElementById(tabName);
+            if (panel) panel.style.display = 'block';
+            
+            // Set active on sidebar
+            const sidebarBtn = Array.from(document.querySelectorAll('.sidebar-tab')).find(btn => {
+                return btn.textContent.toLowerCase().includes(tabName.toLowerCase());
+            });
+            if (sidebarBtn) sidebarBtn.classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabName === 'orders') {
+                loadOrders();
+            } else if (tabName === 'customers') {
+                loadCustomers();
+            } else if (tabName === 'reports') {
+                loadReports();
+            }
+        }
+
+        function updateDashboardStats() {
+            try {
+                const orders = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
+                const totalOrders = orders.length;
+                const totalRevenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+                
+                document.getElementById('totalOrders').textContent = totalOrders;
+                document.getElementById('totalRevenue').textContent = '₹' + totalRevenue.toLocaleString();
+            } catch (error) {
+                console.error('Error updating dashboard stats:', error);
+            }
+        }
+
+        function loadOrders() {
+            try {
+                const orders = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
+                let html = '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:12px;text-align:left;">Order ID</th><th style="padding:12px;text-align:left;">Customer</th><th style="padding:12px;text-align:right;">Amount</th><th style="padding:12px;text-align:center;">Status</th></tr></thead><tbody>';
+                
+                orders.forEach(order => {
+                    const orderId = decodeHtmlEntities(order.orderId || '');
+                    const customerName = decodeHtmlEntities(order.customerName || '');
+                    const amount = order.totalAmount || 0;
+                    const status = decodeHtmlEntities(order.status || '');
+                    
+                    html += `<tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:12px;">${orderId}</td>
+                        <td style="padding:12px;">${customerName}</td>
+                        <td style="padding:12px;text-align:right;">₹${amount.toLocaleString()}</td>
+                        <td style="padding:12px;text-align:center;">${status}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('ordersList').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                document.getElementById('ordersList').innerHTML = '<div style="color:red;">Failed to load orders</div>';
+            }
+        }
+
+        function loadCustomers() {
+            try {
+                const customers = JSON.parse(localStorage.getItem('sapthala_customers') || '[]');
+                let html = '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:12px;text-align:left;">Name</th><th style="padding:12px;text-align:left;">Phone</th><th style="padding:12px;text-align:right;">Total Spent</th></tr></thead><tbody>';
+                
+                customers.forEach(customer => {
+                    const name = decodeHtmlEntities(customer.name || '');
+                    const phone = customer.phone || '';
+                    const totalSpent = customer.totalSpent || 0;
+                    
+                    html += `<tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:12px;">${name}</td>
+                        <td style="padding:12px;">${phone}</td>
+                        <td style="padding:12px;text-align:right;">₹${totalSpent.toLocaleString()}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('customersList').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading customers:', error);
+                document.getElementById('customersList').innerHTML = '<div style="color:red;">Failed to load customers</div>';
+            }
+        }
+
+        function loadReports() {
+            try {
+                const orders = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
+                const branch = document.getElementById('reportBranch').value;
+                const fromDate = document.getElementById('reportFromDate').value;
+                const toDate = document.getElementById('reportToDate').value;
+                
+                let filteredOrders = orders;
+                
+                if (branch) {
+                    filteredOrders = filteredOrders.filter(order => order.branch === branch);
+                }
+                
+                if (fromDate) {
+                    filteredOrders = filteredOrders.filter(order => new Date(order.createdAt) >= new Date(fromDate));
+                }
+                
+                if (toDate) {
+                    filteredOrders = filteredOrders.filter(order => new Date(order.createdAt) <= new Date(toDate));
+                }
+                
+                let html = `<div style="margin-bottom:20px;">
+                    <h3>Report Summary</h3>
+                    <p>Total Orders: ${filteredOrders.length}</p>
+                    <p>Total Revenue: ₹${filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0).toLocaleString()}</p>
+                </div>`;
+                
+                html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:12px;text-align:left;">Order ID</th><th style="padding:12px;text-align:left;">Customer</th><th style="padding:12px;text-align:left;">Branch</th><th style="padding:12px;text-align:right;">Amount</th><th style="padding:12px;text-align:center;">Status</th></tr></thead><tbody>';
+                
+                filteredOrders.forEach(order => {
+                    const orderId = decodeHtmlEntities(order.orderId || '');
+                    const customerName = decodeHtmlEntities(order.customerName || '');
+                    const branch = order.branch || '';
+                    const amount = order.totalAmount || 0;
+                    const status = decodeHtmlEntities(order.status || '');
+                    
+                    html += `<tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:12px;">${orderId}</td>
+                        <td style="padding:12px;">${customerName}</td>
+                        <td style="padding:12px;">${branch}</td>
+                        <td style="padding:12px;text-align:right;">₹${amount.toLocaleString()}</td>
+                        <td style="padding:12px;text-align:center;">${status}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('reportsTable').innerHTML = html;
+                
+                // Store current data for export
+                window.currentReportsData = filteredOrders;
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                document.getElementById('reportsTable').innerHTML = '<div style="color:red;">Failed to load reports</div>';
+            }
+        }
+
+        // Export functions
+        function exportReportsPDF() {
+            if (!window.currentReportsData || window.currentReportsData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+            
+            const content = window.currentReportsData.map(order => {
+                const orderId = decodeHtmlEntities(order.orderId || '');
+                const customerName = decodeHtmlEntities(order.customerName || '');
+                const amount = order.totalAmount || 0;
+                return `${orderId} - ${customerName} - ₹${amount}`;
+            }).join('\n');
+            
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reports_${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportReportsCSV() {
+            if (!window.currentReportsData || window.currentReportsData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+            
+            const headers = ['Order ID', 'Customer', 'Branch', 'Amount', 'Status'];
+            const csvContent = [headers.join(',')];
+            
+            window.currentReportsData.forEach(order => {
+                const orderId = decodeHtmlEntities(order.orderId || '');
+                const customerName = decodeHtmlEntities(order.customerName || '');
+                const branch = order.branch || '';
+                const amount = order.totalAmount || 0;
+                const status = decodeHtmlEntities(order.status || '');
+                
+                const row = [orderId, customerName, branch, amount, status];
+                csvContent.push(row.join(','));
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportReportsExcel() {
+            exportReportsCSV(); // For simplicity, use CSV format for Excel
+        }
+
+        // Initialize everything when DOM loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeDatabaseConnection();
+            
+            // Check if user is already logged in
+            const isLoggedIn = localStorage.getItem('sapthala_logged_in');
+            if (isLoggedIn === 'true') {
+                showMainApp();
+            }
+        });
+    </script>
+</body>
+</html>
