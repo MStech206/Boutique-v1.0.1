@@ -1,1 +1,24 @@
 node_modules
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# Build folders
+build/
+ios/Pods/
+android/.gradle/
+
+# Flutter pub cache
+flutter_pub_cache/
+
+# VS Code
+.vscode/
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
