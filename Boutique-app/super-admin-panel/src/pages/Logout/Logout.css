@@ -1,0 +1,18 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* full height of sidebar */
+}
+
+.sidebar-nav {
+  flex-grow: 1; /* takes all remaining space */
+}
+
+.logout-btn {
+  margin: 10px;
+  padding: 10px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  cursor: pointer;
+}

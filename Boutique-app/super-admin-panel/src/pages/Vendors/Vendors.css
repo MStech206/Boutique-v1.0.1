@@ -1,0 +1,71 @@
+.vendors-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.page-title {
+  font-size: 1.8rem;
+  font-weight: bold;
+}
+
+/* Stats Cards */
+.stats-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+}
+
+.stats-cards .card {
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+
+/* Add/Edit Form */
+.form-card {
+  background-color: #f8f9fa;
+}
+
+.form-card label {
+  font-weight: bold;
+}
+
+/* Vendors Table */
+.vendors-table {
+  padding: 15px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 12px;
+  color: white;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.status-badge.active {
+  background-color: #198754; /* green */
+}
+
+.status-badge.inactive {
+  background-color: #ffc107; /* yellow */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stats-cards {
+    flex-direction: column;
+  }
+  .stats-cards .card {
+    width: 100%;
+  }
+}

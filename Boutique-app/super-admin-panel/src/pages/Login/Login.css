@@ -1,0 +1,25 @@
+/* Force full screen and center content */
+.login-container {
+  min-height: 100vh;
+  width: 100vw;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background-color: #f8f9fa;
+  margin: 0;
+  padding: 0;
+}
+
+/* Card responsiveness */
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+}
+
+/* Prevent app layout from affecting login */
+body {
+  overflow: hidden;
+}

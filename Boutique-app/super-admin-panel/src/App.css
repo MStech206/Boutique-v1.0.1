@@ -1,0 +1,34 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+.app-wrapper {
+  display: flex;
+  height: 100vh;      /* full viewport height */
+  width: 100vw;       /* full viewport width */
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  background-color: #1e293b;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  flex-shrink: 0;     /* prevents shrinking */
+}
+
+/* Main content fills remaining width */
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background-color: #f8f9fa;
+  overflow-y: auto;    /* scroll if content taller than screen */
+  min-width: 0;        /* critical for flex items */
+}

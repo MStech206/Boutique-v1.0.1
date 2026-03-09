@@ -1,0 +1,68 @@
+.users-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.user-form, .users-list {
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+}
+
+.user-form form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.user-form input, .user-form select {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.user-form button {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: none;
+  background-color: #0d6efd;
+  color: white;
+  cursor: pointer;
+}
+
+.user-form button[type="button"] {
+  background-color: #6c757d;
+}
+
+.users-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-list th, .users-list td {
+  padding: 8px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.users-list button {
+  margin-right: 5px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.users-list button:first-child {
+  background-color: #198754;
+  color: white;
+}
+
+.users-list button:last-child {
+  background-color: #dc3545;
+  color: white;
+}
