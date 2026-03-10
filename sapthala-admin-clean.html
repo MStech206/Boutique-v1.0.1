@@ -1219,6 +1219,11 @@
                         </div><!-- END pricing-left -->
 
                         <div class="pricing-right">
+                            <div class="form-group">
+                            <label style="font-size: 16px; font-weight: bold; color: #374151; margin-bottom: 8px; display: block;">🧵 Trial Date</label>
+                            <input type="date" id="trialDate" style="width: 100%; padding: 14px; border: 2px solid #d1d5db; border-radius: 10px; font-size: 16px; font-weight: bold;" oninput="validateTrialDate()">
+                            <div id="trialDateHint" style="margin-top:4px;font-size:12px;color:#6b7280;">Optional — must be before delivery date</div>
+                            </div>
                             <!-- Delivery Date -->
                             <div class="form-group">
                                 <label style="font-size: 16px; font-weight: bold; color: #374151; margin-bottom: 8px; display: block;">📅 Delivery Date *</label>
@@ -1226,12 +1231,12 @@
                             </div>
 
                             <!-- Workflow Stages -->
-                            <div style="margin-top: 25px; background: white; padding: 20px; border-radius: 12px; border: 2px solid #e2e8f0;">
-                                <label style="font-size: 16px; font-weight: bold; color: #374151; margin-bottom: 6px; display: block;">🔄 Workflow Stages</label>
-                                <div style="display: grid; gap: 6px;">
+                           <div style="margin-top: 12px; background: white; padding: 10px 12px; border-radius: 12px; border: 2px solid #e2e8f0;">
+    <label style="font-size: 16px; font-weight: bold; color: #374151; margin-bottom: 4px; display: block;">🔄 Workflow Stages</label>
+    <div style="display: grid; gap: 2px;">
 
                                     <!-- DYEING -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="dyeing" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">🎨 Dyeing</span>
@@ -1239,7 +1244,7 @@
                                     </div>
 
                                     <!-- CUTTING -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="cutting" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">✂️ Cutting</span>
@@ -1254,7 +1259,7 @@
                                     </div>
 
                                     <!-- STITCHING -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="stitching" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">🧵 Stitching</span>
@@ -1269,7 +1274,7 @@
                                     </div>
 
                                     <!-- KHAKHA -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="khakha" style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">🔗 Khakha</span>
@@ -1277,7 +1282,7 @@
                                     </div>
 
                                     <!-- MAGGAM -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;border:1px solid #fde68a;background:#fffbeb;transition:background 0.2s;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;border:1px solid #fde68a;background:#fffbeb;transition:background 0.2s;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="maggam" style="transform:scale(1.2);accent-color:#f59e0b;flex-shrink:0;">
                                             <div>
@@ -1295,7 +1300,7 @@
                                     </div>
 
                                     <!-- PAINTING -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="painting" style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">🎨 Painting</span>
@@ -1303,7 +1308,7 @@
                                     </div>
 
                                     <!-- FINISHING -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;border:1px solid #e0f2fe;background:#f8fbff;transition:background 0.2s;" onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f8fbff'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="finishing" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">✅ Finishing</span>
@@ -1318,7 +1323,7 @@
                                     </div>
 
                                     <!-- QUALITY CHECK -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="quality-check" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">🔍 Quality Check</span>
@@ -1326,7 +1331,7 @@
                                     </div>
 
                                     <!-- READY TO DELIVER -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:8px;;transition:background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='transparent'">
                                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;">
                                             <input type="checkbox" data-stage="ready-to-deliver" checked style="transform:scale(1.2);accent-color:#3b82f6;flex-shrink:0;">
                                             <span style="font-weight:600;color:#374151;">📦 Ready to Deliver</span>
@@ -1344,9 +1349,9 @@
                         <!-- PAYMENT SUMMARY CARD — Full width, below both columns      -->
                         <!-- Shows only after first garment selected                     -->
                         <!-- ========================================================== -->
-                        <div id="paymentSummaryCard" style="display:none;margin-top:24px;background:#f8fafc;border:2px solid #6366f1;border-radius:16px;padding:28px;">
+<div id="paymentSummaryCard" style="display:none;margin-top:12px;background:#f8fafc;border:2px solid #6366f1;border-radius:16px;padding:16px;">
 
-                            <h4 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #6366f1;">
+<h4 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #6366f1;">
                                 🧾 Order Summary & Payment
                             </h4>
 
@@ -1354,7 +1359,7 @@
                             <div id="cartItemsDisplay" style="margin-bottom:20px;"></div>
 
                             <!-- ── PRICE BREAKDOWN ── -->
-                            <div class="price-breakdown" style="margin-bottom:20px;">
+<div class="price-breakdown" style="margin-bottom:10px;">
                                 <div class="price-item">
                                     <span>🛒 Previously Added Items:</span>
                                     <span id="cartItemsTotal" style="font-weight:700;color:#6366f1;">₹0</span>
@@ -1411,24 +1416,29 @@
                             </div>
 
                             <!-- ── ADVANCE PAYMENT + BALANCE DUE (side by side) ── -->
-                            <div style="display:flex; gap:12px; margin-bottom:20px; align-items:stretch;">
-                            <div style="flex:1;display:flex;flex-direction:column;">
-                                <label style="font-size:15px;font-weight:bold;color:#374151;margin-bottom:8px;display:block;">💳 Advance Payment *</label>
-                                <input type="number" id="advancePayment" placeholder="Enter advance" min="0" required oninput="calculateTotal(); updateMinAdvanceHint();" onchange="calculateTotal(); updateMinAdvanceHint();"
-                                    style="flex:1;width:100%;padding:14px;border:2px solid #d1d5db;border-radius:10px;font-size:16px;font-weight:bold;text-align:center;box-sizing:border-box;min-height:56px;">
+<div style="display:flex; gap:12px; margin-bottom:10px; align-items:stretch;">
+                            
+                            <div style="flex:1;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #10b981;border-radius:10px;padding:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:56px;">
+                                <span style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:4px;">💳 Advance Payment *</span>
+                                <input type="number" id="advancePayment" placeholder="0" min="0" required 
+                                    oninput="calculateTotal(); updateMinAdvanceHint();" 
+                                    onchange="calculateTotal(); updateMinAdvanceHint();"
+                                    style="border:none;background:transparent;font-size:26px;font-weight:800;color:#065f46;text-align:center;outline:none;width:100%;padding:0;">
                                 <div id="minAdvanceHint" style="margin-top:6px;padding:7px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:12px;color:#92400e;display:none;">
                                     ⚠️ Min: <strong id="minAdvanceAmount">₹0</strong> (15%)
                                 </div>
                             </div>
+
                             <div style="flex:1;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #10b981;border-radius:10px;padding:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:56px;">
                                 <span style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:4px;">💰 Balance Due</span>
                                 <span id="balanceDue" style="font-size:26px;font-weight:800;color:#dc2626;">₹0</span>
                             </div>
+
                         </div>
 
                             <!-- ── PAYMENT MODE ── -->
-                            <div style="background:white;border:2px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:16px;">
-                                <label style="font-size:15px;font-weight:700;color:#374151;margin-bottom:12px;display:block;">💳 Payment Mode</label>
+                            <div style="background:white;border:2px solid #e2e8f0;border-radius:14px;padding:10px 14px;margin-bottom:10px;">
+    <label style="font-size:15px;font-weight:700;color:#374151;margin-bottom:6px;display:block;">💳 Payment Mode</label>
                                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
                                     <label id="pm-cash" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border:2px solid #e2e8f0;border-radius:10px;cursor:pointer;transition:all 0.2s;font-weight:600;font-size:13px;color:#374151;" onclick="selectPaymentMode('cash')">
                                         <input type="radio" name="paymentMode" value="cash" style="display:none;">
@@ -1446,7 +1456,7 @@
                             </div>
 
                             <!-- ── PAYMENT REMARKS ── -->
-                            <div style="background:white;border:2px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:16px;">
+                            <div style="background:white;border:2px solid #e2e8f0;border-radius:14px;padding:10px 14px;margin-bottom:10px;">
                                 <label style="font-size:15px;font-weight:700;color:#374151;margin-bottom:8px;display:block;">📝 Payment Remarks</label>
                                 <textarea id="paymentRemarks" placeholder="Add notes about payment (e.g. partial UPI paid, remaining cash)..." rows="3"
                                     style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:14px;resize:vertical;font-family:inherit;"></textarea>
@@ -1465,7 +1475,8 @@
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" onclick="resetOrderForm()">Reset All</button>
                     <button type="button" onclick="addAnotherItem()" style="padding:15px 30px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:12px;font-weight:bold;font-size:16px;cursor:pointer;transition:all 0.3s;">➕ Add Another Item</button>
-                    <button type="button" class="btn-primary" onclick="createOrder()">✅ Create Order & Send to Staff</button>
+                    <button type="button" id="createOrderBtn" class="btn-primary" onclick="createOrder()">✅ Create Order & Send to Staff</button>
+
                 </div>
                 
                 <!-- PDF Actions -->
@@ -2783,7 +2794,8 @@
                                             measurements,
                                             designDescription: document.getElementById('designDescription').value.trim(),
                                             designNotes: document.getElementById('designNotes').value.trim(),
-                                            designImages: currentOrder.images || [],
+                                             designImages: (currentOrder.images || []).map(img => img.url || img).filter(Boolean),
+                                            _imageFiles: (currentOrder.images || []).filter(img => img.file),
                                             deliveryDate: document.getElementById('deliveryDate').value,
                                             workflow,
                                             stageTimeLimits,
@@ -4274,47 +4286,35 @@
             measurementFields.appendChild(customField);
         }
 
-        function handleImageUpload(event) {
-            const files = Array.from(event.target.files);
-            const preview = document.getElementById('imagePreview');
-            
-            if (files.length > 5) {
-                alert('❌ Maximum 5 images allowed!');
-                event.target.value = '';
-                return;
-            }
-            
-            const maxSize = 5 * 1024 * 1024;
-            const oversizedFiles = files.filter(file => file.size > maxSize);
-            if (oversizedFiles.length > 0) {
-                alert(`❌ Each image must be under 5MB!`);
-                event.target.value = '';
-                return;
-            }
-            
-            preview.innerHTML = '';
-            currentOrder.images = [];
-            
-            files.forEach((file) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const img = document.createElement('img');
-                        img.src = e.target.result;
-                        img.title = file.name;
-                        preview.appendChild(img);
-                        
-                        // Store only filename, not base64 data
-                        currentOrder.images.push({ name: file.name, size: file.size });
-                    };
-                    reader.readAsDataURL(file);
+  
+
+                function handleImageUpload(event) {
+                    const files = Array.from(event.target.files);
+                    if (files.length > 5) { alert('Max 5 images allowed'); event.target.value = ''; return; }
+                    const preview = document.getElementById('imagePreview');
+                    preview.innerHTML = '';
+                    currentOrder.images = [];
+                    files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) { alert(`${file.name} exceeds 5MB`); return; }
+                        if (!file.type.startsWith('image/')) return;
+                        currentOrder.images.push({ name: file.name, file: file });
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.title = file.name;
+                            img.style.cssText = 'width:70px;height:70px;object-fit:cover;border-radius:8px;margin:4px;border:2px solid #10b981;';
+                            preview.appendChild(img);
+                        };
+                        reader.readAsDataURL(file);
+                    });
                 }
-            });
-        }
 
                           window.calculateTotal = function calculateTotal() {
                                             // Base price from selected garment
-                                            const basePrice = currentOrder.garment ? (currentOrder.garment.price || 0) : 0;
+                                           const activeBtn = document.querySelector('.garment-btn.active');
+                                            const domPrice = activeBtn ? (parseFloat(activeBtn.dataset.price || activeBtn.dataset.cost || '0') || 0) : 0;
+                                            const basePrice = currentOrder.garment ? (currentOrder.garment.price || domPrice || 0) : domPrice;
 
                                             // Standard add-ons
                                             let addonTotal = 0;
@@ -4422,7 +4422,20 @@
                                                 document.getElementById('discountDisplay')?.classList.add('hidden');
                                             }
                                         };
-                             
+                             function validateTrialDate() {
+                            const trial = document.getElementById('trialDate').value;
+                            const delivery = document.getElementById('deliveryDate').value;
+                            const hint = document.getElementById('trialDateHint');
+                            if (trial && delivery && trial >= delivery) {
+                                document.getElementById('trialDate').style.border = '2px solid #ef4444';
+                                hint.textContent = '⚠️ Trial date must be before delivery date';
+                                hint.style.color = '#dc2626';
+                            } else {
+                                document.getElementById('trialDate').style.border = '2px solid #d1d5db';
+                                hint.textContent = 'Optional — must be before delivery date';
+                                hint.style.color = '#6b7280';
+                            }
+                        }
 
                             function updateMinAdvanceHint() {
                                 const total = parseInt(document.getElementById('totalAmount').textContent.replace('₹', '').replace(',', '')) || 0;
@@ -4532,6 +4545,8 @@
         async function createOrder() {
             if (isCreatingOrder) return;
             isCreatingOrder = true;
+            const createBtn = document.getElementById('createOrderBtn');
+            if (createBtn) { createBtn.disabled = true; createBtn.textContent = '⏳ Creating order...'; }
 
             try {
                 // Validate form
@@ -4539,6 +4554,7 @@
                 const customerPhone = document.getElementById('customerPhone').value.trim();
                 const designDescription = document.getElementById('designDescription').value.trim();
                 const deliveryDate = document.getElementById('deliveryDate').value;
+                const trialDate = document.getElementById('trialDate').value || null;
                 const advancePayment = parseFloat(document.getElementById('advancePayment').value) || 0;
 
                 // Defensive: if currentOrder.garment is not set (script conflict), try to recover from active UI button
@@ -4644,9 +4660,45 @@
                             const advancePaid = advancePayment;
                             const balanceDue = parseInt(document.getElementById('balanceDue').textContent.replace(/[₹,]/g, '')) || 0;
 
-                            // Build the "current item" snapshot
-                            const currentItemSnapshot = snapshotCurrentItem();
+                            // Upload images to Firebase Storage first, then snapshot
+                               const uploadItemImages = async (imageFiles) => {
+                                if (!imageFiles || imageFiles.length === 0) return [];
+                                return Promise.all(imageFiles.map(async (img) => {
+                                    if (!img.file) return img.url || null;
+                                    try {
+                                        const fd = new FormData();
+                                        fd.append('image', img.file);
+                                        const r = await fetch('/api/upload-image', {
+                                            method: 'POST',
+                                            headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token')}` },
+                                            body: fd
+                                        });
+                                        const d = await r.json();
+                                        return d.url || null;
+                                    } catch(e) {
+                                        console.warn('Upload error for', img.name, e);
+                                        return null;
+                                    }
+                                })).then(urls => urls.filter(Boolean));
+                            };
 
+                            // Upload current item images
+                            const uploadBtn = document.getElementById('createOrderBtn');
+                            if (uploadBtn) uploadBtn.textContent = '⏳ Uploading images...';
+                            const currentItemUrls = await uploadItemImages(currentOrder.images || []);
+
+                            // Upload cart items images (stored as _imageFiles)
+                            const cartItems = getCartFromStorage();
+                            for (const cartItem of cartItems) {
+                                if (cartItem._imageFiles && cartItem._imageFiles.length > 0) {
+                                    cartItem.designImages = await uploadItemImages(cartItem._imageFiles);
+                                }
+                            }
+                            if (uploadBtn) uploadBtn.textContent = '📋 Saving order...';
+
+                            const currentItemSnapshot = snapshotCurrentItem();
+                            // Patch current item snapshot with uploaded URLs
+                            currentItemSnapshot.designImages = currentItemUrls;
                             // Merge cart + current item
                             const allItems = [...getCartFromStorage(), currentItemSnapshot];
 
@@ -4663,6 +4715,7 @@
                                 designNotes: item.designDescription,
                                 designImages: item.designImages || [],
                                 deliveryDate: item.deliveryDate,
+                                trialDate: trialDate,
                                 workflow: item.workflow,
                                 stageTimeLimits: item.stageTimeLimits,
                                 addons: item.addons,
@@ -4742,6 +4795,8 @@
                 alert('❌ Failed to create order: ' + error.message);
             } finally {
                 isCreatingOrder = false;
+                const btn = document.getElementById('createOrderBtn');
+                if (btn) { btn.disabled = false; btn.textContent = '✅ Create Order & Send to Staff'; }
             }
         }
 
@@ -5220,7 +5275,7 @@
                                         if (!d) return 0;
                                         return Math.min(100, ((Date.now() - d.getTime()) / (48 * 3600000)) * 100);
                                     }
-                                    function efUpdateBalance(oid) {
+                                   window.efUpdateBalance = function(oid) {
                                     var t = parseFloat(document.getElementById('ef-total-' + oid)?.value) || 0;
                                     var a = parseFloat(document.getElementById('ef-advance-' + oid)?.value) || 0;
                                     var el = document.getElementById('ef-bal-' + oid);
@@ -5245,7 +5300,16 @@
                                             const total = order.totalAmount || order.pricing?.total || 0;
                                             const advance = order.advanceAmount || order.advance || order.pricing?.advance || 0;
                                             const balance = order.balanceAmount ?? order.balance ?? (total - advance);
-                                            const delivVal = order.deliveryDate ? (order.deliveryDate.toString().includes('T') ? order.deliveryDate.split('T')[0] : order.deliveryDate) : '';
+                                            const toDateStr = (raw) => {
+                                            if (!raw) return '';
+                                            if (raw._seconds) return new Date(raw._seconds * 1000).toISOString().split('T')[0];
+                                            if (raw.seconds) return new Date(raw.seconds * 1000).toISOString().split('T')[0];
+                                            if (typeof raw.toDate === 'function') return raw.toDate().toISOString().split('T')[0];
+                                            const d = new Date(raw);
+                                            return isNaN(d) ? '' : d.toISOString().split('T')[0];
+                                        };
+                                        const delivVal = toDateStr(order.deliveryDate);
+                                        const trialVal = toDateStr(order.trialDate);
 
                                             return `
                                             <div id="order-card-${oid}" style="border:2px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:12px;background:white;border-left:5px solid ${barColor};">
@@ -5280,7 +5344,9 @@
                                                                 ${['pending','assigned','in_progress','completed','delivered','cancelled'].map(s => `<option value="${s}" ${status===s?'selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
                                                             </select></div>
                                                         <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Delivery Date</label>
-                                                            <input type="date" id="ef-delivery-${oid}" value="${delivVal}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                                                           <input type="date" id="ef-delivery-${oid}" value="${delivVal}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                                                            <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Trial Date</label>
+                                                            <input type="date" id="ef-trial-${oid}" value="${trialVal}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                                                         <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Branch</label>
                                                             <input id="ef-branch-${oid}" value="${order.branch || ''}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                                                         <div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Design Notes</label>
@@ -5473,7 +5539,8 @@
                                         totalAmount:    newTotal,
                                         advanceAmount:  newAdvance,
                                         balanceAmount:  Math.max(0, newTotal - newAdvance),
-                                        deliveryDate:   document.getElementById('ef-delivery-' + oid)?.value           || orderSnapshot.deliveryDate   || '',
+                                        deliveryDate: document.getElementById('ef-delivery-' + oid)?.value || orderSnapshot.deliveryDate || '',
+                                        trialDate: document.getElementById('ef-trial-' + oid)?.value || orderSnapshot.trialDate || null,
                                         branch:         document.getElementById('ef-branch-' + oid)?.value?.trim()     || orderSnapshot.branch         || '',
                                         designNotes:    document.getElementById('ef-notes-' + oid)?.value?.trim()      || orderSnapshot.designNotes    || '',
                                         paymentMode:    document.getElementById('ef-paymode-' + oid)?.value            || orderSnapshot.paymentMode    || '',

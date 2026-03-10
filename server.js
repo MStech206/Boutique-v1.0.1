@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -417,7 +418,10 @@ try {
     const adminSdkPath = path.join(__dirname, 'firebase-credentials.json');
     if (fs.existsSync(adminSdkPath)) {
       const svc = require(adminSdkPath);
-      admin.initializeApp({ credential: admin.credential.cert(svc) });
+     admin.initializeApp({
+      credential: admin.credential.cert(svc),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${svc.project_id}.appspot.com`
+    });
       firebaseAdmin = admin;
       console.log('✅ Firebase Admin initialized from firebase-credentials.json (boutique-staff-app)');
     } else {
@@ -2970,14 +2974,16 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
                         });
                       }
 
-                      const { selectedWorkflowStages, measurements, ...restBody } = req.body;
-                      const merged = {
+                     const { selectedWorkflowStages, measurements, ...restBody } = req.body;
+                    const merged = {
                         ...existing,
                         ...restBody,
                         measurements: safeMeasurements,
                         workflowTasks,
+                        deliveryDate: restBody.deliveryDate ? new Date(restBody.deliveryDate) : existing.deliveryDate,
+                        trialDate: restBody.trialDate ? new Date(restBody.trialDate) : (existing.trialDate || null),
                         updatedAt: new Date()
-                      };
+                    };
 
                       await clientDB(req).setDocument('orders', docId, merged);
                       console.log(`✅ Order updated in Firestore: ${orderId}`);
@@ -3247,6 +3253,7 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       advanceAmount: Number(req.body.pricing?.advance || 0),
       balanceAmount: Number(req.body.pricing?.balance || 0),
       deliveryDate: req.body.deliveryDate ? new Date(req.body.deliveryDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      trialDate: req.body.trialDate ? new Date(req.body.trialDate) : null,
       branch: req.body.branch || 'SAPTHALA.MAIN',
       status: 'pending',
       currentStage: null, // will be set after determining workflow
@@ -3515,6 +3522,40 @@ await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId })
     }, 500);
   }
 });
+            const multer = require('multer');
+            const cloudinary = require('cloudinary').v2;
+            const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+               app.post('/api/upload-image', authenticateToken, imageUpload.single('image'), async (req, res) => {
+                try {
+                    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+                    // Configure fresh on each request to ensure env vars are loaded
+                    cloudinary.config({
+                        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                        api_key: process.env.CLOUDINARY_API_KEY,
+                        api_secret: process.env.CLOUDINARY_API_SECRET
+                    });
+
+                    const adminId = req.user.adminId;
+
+                        // Upload to Cloudinary with auto compression
+                        const result = await new Promise((resolve, reject) => {
+                            cloudinary.uploader.upload_stream(
+                                {
+                                    folder: `boutique/${adminId}`,
+                                    transformation: [{ width: 600, crop: 'limit', quality: 55, fetch_format: 'auto' }]
+                                },
+                                (error, result) => error ? reject(error) : resolve(result)
+                            ).end(req.file.buffer);
+                        });
+
+                        res.json({ url: result.secure_url });
+                    } catch (err) {
+                        console.error('Image upload error:', err);
+                        res.status(500).json({ error: 'Upload failed: ' + err.message });
+                    }
+                });
                    
 // Share an order PDF and optionally send WhatsApp message
                 app.post('/api/share-order-pdf', async (req, res) => {
@@ -3844,7 +3885,15 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                         orderId: order.orderId,
                         customerName: order.customerName || '',
                         garmentType: order.garmentType || '',
-                        deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate().toISOString() : (order.deliveryDate || null),
+                        deliveryDate: (() => {
+                        const d = order.deliveryDate;
+                        if (!d) return null;
+                        if (typeof d.toDate === 'function') return d.toDate().toISOString();           // Firestore Timestamp with method
+                        if (d._seconds !== undefined) return new Date(d._seconds * 1000).toISOString();  
+                        if (d.seconds !== undefined) return new Date(d.seconds * 1000).toISOString();    
+                        if (typeof d === 'string') return d;                                               
+                        return new Date(d).toISOString();
+                      })(),
                         customerPhone: order.customerPhone || '',
                         measurements: order.measurements || task.measurementsData || {},
                         designNotes: task.designNotes || order.designNotes || '',
@@ -3897,8 +3946,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                       orderId: order.orderId,
                       customerName: order.customerName || '',
                       garmentType: order.garmentType || '',
-                      deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate().toISOString() : (order.deliveryDate || null),
-                      customerPhone: order.customerPhone || '',
+                      deliveryDate: (() => { const d = order.deliveryDate; if (!d) return null; if (typeof d.toDate === 'function') return d.toDate().toISOString(); if (d._seconds !== undefined) 
+                      return new Date(d._seconds * 1000).toISOString(); if (d.seconds !== undefined) 
+                      return new Date(d.seconds * 1000).toISOString(); if (typeof d === 'string') 
+                      return d; return new Date(d).toISOString(); })(),                      
+                    customerPhone: order.customerPhone || '',
                       measurements: order.measurements || task.measurementsData || {},
                       designNotes: task.designNotes || order.designNotes || '',
                       images: order.designImages || task.designImages || []
@@ -3933,10 +3985,14 @@ const tasks = (order.workflowTasks || []).map(t =>
   );
   const docId = order.id || order._id || orderId;
   await db.updateDocument('orders', docId, { workflowTasks: tasks });
-      invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
+          invalidateCache([
+      `staff_tasks_${adminId}`,
+      `staff_tasks_${adminId}_${staffId}`,
+      `staff_available_${adminId}`,
+      `staff_available_${adminId}_${staffId}`
+    ]);
       console.log(`✅ Task assigned: ${stageId} → ${staffId} on order ${orderId} (${adminId})`);
-    invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
-    res.json({ success: true });
+     res.json({ success: true });
   } catch (error) {
     console.error('Accept task error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -3944,105 +4000,110 @@ const tasks = (order.workflowTasks || []).map(t =>
 });
 
           app.post('/api/staff/:staffId/update-task', authenticateToken, async (req, res) => {
-            try {
-               const { staffId } = req.params;
-              const { orderId, stageId, status, notes, qualityRating } = req.body;
-              const adminId = req.user.adminId;
-              if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
+  try {
+    const { staffId } = req.params;
+    const { orderId, stageId, status, notes, qualityRating } = req.body;
+    const adminId = req.user.adminId;
+    if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
 
-              console.log(`🔄 Task update: ${staffId} -> ${orderId} -> ${stageId} -> ${status} (${adminId})`);
+    console.log(`🔄 Task update: ${staffId} -> ${orderId} -> ${stageId} -> ${status} (${adminId})`);
 
-              const db = firebaseIntegrationService.forClient(adminId);
-              const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
-              const order = orderRes?.data?.[0];
-              if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    const db = firebaseIntegrationService.forClient(adminId);
+    const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
+    const order = orderRes?.data?.[0];
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
 
-              const docId = order.id;
-              if (!docId) return res.status(500).json({ success: false, error: 'Order document ID missing' });
+    // FIX 1: fallback to orderId if order.id is missing
+    const docId = order.id || order.orderId;
+    if (!docId) return res.status(500).json({ success: false, error: 'Order document ID missing' });
 
-              console.log(`🔍 docId: ${docId}, orderId: ${order.orderId}`);
+    console.log(`🔍 docId: ${docId}, orderId: ${order.orderId}`);
 
-              const now = new Date();
+    const now = new Date().toISOString();
 
-              // Step 1: find the index of the task being updated BEFORE mutating anything
-              const targetIdx = (order.workflowTasks || []).findIndex(t => t.stageId === stageId);
-              if (targetIdx === -1) return res.status(404).json({ success: false, error: 'Task not found for stageId: ' + stageId });
+    const targetIdx = (order.workflowTasks || []).findIndex(t => t.stageId === stageId);
+    if (targetIdx === -1) return res.status(404).json({ success: false, error: 'Task not found for stageId: ' + stageId });
 
-              // Step 2: build updated tasks array
-              const tasks = (order.workflowTasks || []).map((t, i) => {
-                if (i !== targetIdx) return t;
-                const updated = {
-                  ...t,
-                  status,
-                  notes: notes || t.notes,
-                  qualityRating: qualityRating || t.qualityRating,
-                  updatedAt: now.toISOString(),
-                };
-                if (status === 'started' && !t.startedAt)  updated.startedAt  = now.toISOString();
-                if (status === 'paused')                    updated.pausedAt   = now.toISOString();
-                if (status === 'resumed')                   updated.startedAt  = t.startedAt || now.toISOString();
-                if (status === 'completed') {
-                  updated.completedAt = now.toISOString();
-                  updated.timeSpent   = t.startedAt ? Math.round((now - new Date(t.startedAt)) / 60000) : 0;
-                }
-                return updated;
-              });
+    // FIX 2: safe serializer that handles Firestore Timestamps, Dates, and strings
+    const safeSerialize = (val) => {
+      if (!val) return val;
+      if (typeof val === 'string') return val;
+      if (val instanceof Date) return val.toISOString();
+      if (val && typeof val.toDate === 'function') return val.toDate().toISOString(); // Firestore Timestamp
+      return val;
+    };
 
-              // Step 3: serialize all Date objects (safety net for any remaining Date values)
-              const serializeDates = (taskList) => taskList.map(t => {
-                const s = { ...t };
-                ['createdAt', 'updatedAt', 'startedAt', 'completedAt', 'pausedAt', 'resumedAt', 'assignedAt'].forEach(f => {
-                  if (s[f] instanceof Date) s[f] = s[f].toISOString();
-                });
-                return s;
-              });
+    const serializeTask = (t) => {
+      const s = { ...t };
+      ['createdAt', 'updatedAt', 'startedAt', 'completedAt', 'pausedAt', 'resumedAt', 'assignedAt'].forEach(f => {
+        s[f] = safeSerialize(s[f]);
+      });
+      return s;
+    };
 
-              // Step 4: handle completed — find next stage using the ORIGINAL order tasks (not mutated array)
-              if (status === 'completed') {
-                // Search for the next waiting/pending task AFTER the completed one in the ORIGINAL task list
-                const nextIdx = (order.workflowTasks || []).findIndex(
-                  (t, i) => i > targetIdx && (t.status === 'waiting' || t.status === 'pending')
-                );
+    // Build updated tasks array
+    const tasks = (order.workflowTasks || []).map((t, i) => {
+      const base = serializeTask(t); // FIX 3: serialize ALL tasks, not just the target
+      if (i !== targetIdx) return base;
+      const updated = { ...base, status, notes: notes || base.notes, qualityRating: qualityRating || base.qualityRating, updatedAt: now };
+      if (status === 'started' && !base.startedAt) updated.startedAt = now;
+      if (status === 'paused')                     updated.pausedAt  = now;
+      if (status === 'resumed')                    updated.startedAt = base.startedAt || now;
+      if (status === 'completed') {
+        updated.completedAt = now;
+        updated.timeSpent = base.startedAt ? Math.round((Date.now() - new Date(base.startedAt).getTime()) / 60000) : 0;
+      }
+      return updated;
+    });
 
-                let nextStageId = null;
-                if (nextIdx !== -1) {
-                  tasks[nextIdx] = { ...tasks[nextIdx], status: 'pending', updatedAt: now.toISOString() };
-                  nextStageId = order.workflowTasks[nextIdx].stageId; // read stageId from original
-                }
+    if (status === 'completed') {
+      // Find next task that is still waiting or pending AFTER the completed one
+      const nextIdx = (order.workflowTasks || []).findIndex(
+        (t, i) => i > targetIdx && (t.status === 'waiting' || t.status === 'pending')
+      );
 
-                const updatePayload = {
-                  workflowTasks: serializeDates(tasks),
-                  currentStage: nextStageId || 'completed',
-                  status: nextStageId ? 'in-progress' : 'completed',
-                };
+      let nextStageId = null;
+      if (nextIdx !== -1) {
+        tasks[nextIdx] = { ...tasks[nextIdx], status: 'pending', updatedAt: now };
+        nextStageId = order.workflowTasks[nextIdx].stageId;
+      }
 
-                console.log(`🔍 Writing to docId: ${docId} — currentStage: ${updatePayload.currentStage}, nextStage: ${nextStageId}`);
+      const updatePayload = {
+        workflowTasks: tasks,
+        currentStage: nextStageId || 'completed',
+        status: nextStageId ? 'in_progress' : 'completed',
+        updatedAt: now,
+      };
 
-                const updateResult = await db.updateDocument('orders', docId, updatePayload);
-                console.log(`🔍 updateDocument result:`, JSON.stringify(updateResult));
+      console.log(`🔍 Writing to docId: ${docId} — currentStage: ${updatePayload.currentStage}, nextStage: ${nextStageId}`);
+      const updateResult = await db.updateDocument('orders', docId, updatePayload);
+      console.log(`🔍 updateDocument result:`, JSON.stringify(updateResult));
 
-                invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`, `orders_list_`]);
-                console.log(`✅ Stage completed: ${stageId} → next: ${nextStageId || 'completed'} on order ${orderId} (${adminId})`);
-                return res.json({ success: true, nextStage: nextStageId, currentStage: nextStageId || 'completed' });
-              }
+      // FIX 4: invalidate all cache key variants
+      invalidateCache([
+        `staff_tasks_${adminId}`,
+        `staff_available_${adminId}`,
+        `staff_available_${adminId}_${staffId}`,
+        `orders_list_`
+      ]);
 
-              // Step 5: handle all other statuses (started, paused, resumed)
-              const updatePayload = {
-                workflowTasks: serializeDates(tasks),
-              };
+      console.log(`✅ Stage completed: ${stageId} → next: ${nextStageId || 'completed'} on order ${orderId} (${adminId})`);
+      return res.json({ success: true, nextStage: nextStageId, currentStage: nextStageId || 'completed' });
+    }
 
-              const updateResult = await db.updateDocument('orders', docId, updatePayload);
-              console.log(`🔍 updateDocument result (${status}):`, JSON.stringify(updateResult));
+    // Non-completed status update
+    const updateResult = await db.updateDocument('orders', docId, { workflowTasks: tasks, updatedAt: now });
+    console.log(`🔍 updateDocument result (${status}):`, JSON.stringify(updateResult));
 
-              invalidateCache([`staff_tasks_${adminId}`, `staff_available_${adminId}`]);
-              console.log(`✅ Task ${status}: ${stageId} on order ${orderId} (${adminId})`);
-              return res.json({ success: true });
+invalidateCache([`staff_tasks_${adminId}`, `staff_tasks_${adminId}_${staffId}`, `staff_available_${adminId}`, `staff_available_${adminId}_${staffId}`]);
+    console.log(`✅ Task ${status}: ${stageId} on order ${orderId} (${adminId})`);
+    return res.json({ success: true });
 
-            } catch (error) {
-              console.error('Update task error:', error);
-              res.status(500).json({ success: false, error: error.message });
-            }
-          });
+  } catch (error) {
+    console.error('Update task error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 // Helper function to progress to next stage
       async function progressToNextStage(order, completedStageId, db) {
         try {

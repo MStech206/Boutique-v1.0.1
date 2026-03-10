@@ -261,9 +261,9 @@
         }
 
         /* Task details modal (mobile-friendly) */
-        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 99999; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: flex-end; justify-content: center; z-index: 99999; padding: 0; }
         .modal-backdrop.show { display: flex; }
-        .modal-card { background: white; border-radius: 12px; width: 94%; max-width: 760px; max-height: 92vh; overflow-y: auto; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+        .modal-card { background: white; border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto; padding: 20px 18px 24px; box-shadow: 0 -8px 40px rgba(0,0,0,0.3); }
         .modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
         .modal-title { font-size:18px; font-weight:700; color:#111827; }
         .modal-body { font-size:14px; color:#374151; }
@@ -422,7 +422,7 @@
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="loadTasks()" title="Refresh Tasks"></button>
+    <button class="refresh-btn" onclick="loadTasks(true)" title="Refresh Tasks"></button>
 
     <script>
         // API base: prefer host's API on port 3000; support Android emulator (10.0.2.2)
@@ -720,7 +720,7 @@
                      
                         <div class="task-info"> ${task.customerName || task.orderDetails?.customerName || 'Customer'}</div>
                         <div class="task-info"> ${task.garmentType || task.orderDetails?.garmentType || 'Garment'}</div>
-                        <div class="task-info"> ${toJsDate(task.deliveryDate) ? toJsDate(task.deliveryDate).toLocaleDateString() : 'No delivery date'}</div>
+                        ${toJsDate(task.deliveryDate) ? '🗓 Delivery: ' + toJsDate(task.deliveryDate).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : 'No delivery date'}
                         ${timeInfo ? `<div class="task-info" style="color:#059669;font-weight:bold;"> ${timeInfo}</div>` : ''}
                         <div class="task-actions">
                             ${getTaskActions(task)}
@@ -730,13 +730,18 @@
             }).join('');
         }
         
-        function toJsDate(v) {
-            if (!v) return null;
-            if (v.seconds !== undefined) return new Date(v.seconds * 1000); // Firestore Timestamp
-            if (typeof v.toDate === 'function') return v.toDate();
-            const d = new Date(v);
-            return isNaN(d) ? null : d;
-        }
+       function toJsDate(v) {
+    if (!v) return null;
+    if (typeof v.toDate === 'function') return v.toDate();
+    if (v._seconds !== undefined) return new Date(v._seconds * 1000);  // ← ADD THIS
+    if (v.seconds !== undefined) return new Date(v.seconds * 1000);
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {     // ← ADD THIS — plain date string fix for IST timezone
+        const [y, m, d] = v.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+    const d = new Date(v);
+    return isNaN(d) ? null : d;
+}
         function getTimeInfo(task) {
             if (task.status === 'started' && task.startedAt) {
                 const start = toJsDate(task.startedAt);
@@ -814,7 +819,7 @@
 
                 const modal = document.getElementById('taskDetailsModal');
                 const title = modal.querySelector('.modal-title');
-                const body = modal.querySelector('.modal-body');
+                 const body = modal.querySelector('.modal-body');
 
                 title.textContent = `${task.stageName || 'Task'} — ${task.orderId || ''}`;
 
@@ -834,7 +839,17 @@
                 }
 
                 // Photos
-                let photos = task.images || task.orderDetails?.images || task.designImages || [];
+                let rawPhotos = (task.images && task.images.length > 0) ? task.images
+                    : (task.designImages && task.designImages.length > 0) ? task.designImages
+                    : (task.orderDetails?.images && task.orderDetails.images.length > 0) ? task.orderDetails.images
+                    : [];
+                const resolveImgUrl = (src) => {
+                    if (!src) return null;
+                    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) return src;
+                    return `${window.location.origin}/uploads/${src}`;
+                };
+                let photos = rawPhotos.map(resolveImgUrl).filter(Boolean);
+
                 let photosHtml = '<div class="section-title">📸 Photos</div>';
                 if (!photos || photos.length === 0) {
                     photosHtml += '<div style="margin-top:8px;color:#6b7280;">No photos available</div>';
@@ -859,12 +874,14 @@
                 `;
 
                 document.getElementById('taskDetailsBackdrop').classList.add('show');
-                document.getElementById('taskDetailsModal').classList.add('show');
             } catch (err) {
                 console.warn('viewTaskDetails failed', err);
                 alert('Unable to show task details');
             }
         }
+            function closeTaskModal() {
+                document.getElementById('taskDetailsBackdrop').classList.remove('show');
+            }
 
         function openLargePhoto(src) {
             const imgWin = window.open('', '_blank');
@@ -966,17 +983,18 @@
     </script>
 
     <!-- Task Details Modal -->
-    <div id="taskDetailsBackdrop" class="modal-backdrop" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');"></div>
-    <div id="taskDetailsModal" class="modal-card" style="display:none;">
+   <div id="taskDetailsBackdrop" class="modal-backdrop" onclick="if(event.target===this)closeTaskModal();">
+    <div id="taskDetailsModal" class="modal-card">
         <div class="modal-header">
             <div class="modal-title">Task Details</div>
-            <button class="modal-close" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">✕</button>
+            <button class="modal-close" onclick="closeTaskModal()">✕</button>
         </div>
         <div class="modal-body">Loading...</div>
         <div class="modal-actions">
-            <button class="task-btn" onclick="document.getElementById('taskDetailsBackdrop').classList.remove('show'); document.getElementById('taskDetailsModal').classList.remove('show');">Close</button>
+            <button class="task-btn" style="width:100%;padding:12px;background:#6366f1;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;" onclick="closeTaskModal()">Close</button>
         </div>
     </div>
+</div>
 
     <script>
         // small helper to toggle modal-card visibility (keeps markup outside main script)

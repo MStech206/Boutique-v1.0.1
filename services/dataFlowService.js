@@ -228,11 +228,40 @@ class DataFlowService {
         const tasks = Array.isArray(order.workflowTasks) ? order.workflowTasks : [];
         for (const task of tasks) {
           if (task.assignedTo && String(task.assignedTo) === String(staffId) && ['assigned', 'started', 'paused', 'resumed'].includes(task.status)) {
-            myTasks.push({ ...task, orderId: order.orderId, orderDetails: { customerName: order.customerName, garmentType: order.garmentType, measurements: order.measurements || {} } });
+            myTasks.push({ 
+              ...task, 
+              orderId: order.orderId,
+              deliveryDate: (() => {
+                  const d = order.deliveryDate;
+                  if (!d) return null;
+                  if (typeof d.toDate === 'function') return d.toDate().toISOString();
+                  if (d._seconds !== undefined) return new Date(d._seconds * 1000).toISOString();
+                  if (d.seconds !== undefined) return new Date(d.seconds * 1000).toISOString();
+                  if (typeof d === 'string') return d;
+                  return new Date(d).toISOString();
+              })(),
+              customerName: order.customerName || '',
+              garmentType: order.garmentType || '',
+              orderDetails: { customerName: order.customerName, garmentType: order.garmentType, deliveryDate: order.deliveryDate,
+                 measurements: order.measurements || {},images: order.designImages || [], designNotes: order.designNotes || '' }     });
           }
 
           if (includeAvailable && task.status === 'pending' && (!task.assignedTo) && Array.isArray(staff.workflowStages) && staff.workflowStages.includes(task.stageId)) {
-            availableTasks.push({ ...task, orderId: order.orderId, orderDetails: { customerName: order.customerName, garmentType: order.garmentType } });
+           availableTasks.push({ 
+            ...task, 
+            orderId: order.orderId,
+            deliveryDate: (() => {
+                const d = order.deliveryDate;
+                if (!d) return null;
+                if (typeof d.toDate === 'function') return d.toDate().toISOString();
+                if (d._seconds !== undefined) return new Date(d._seconds * 1000).toISOString();
+                if (d.seconds !== undefined) return new Date(d.seconds * 1000).toISOString();
+                if (typeof d === 'string') return d;
+                return new Date(d).toISOString();
+            })(),
+            customerName: order.customerName || '',
+            garmentType: order.garmentType || '',
+          orderDetails: { customerName: order.customerName, garmentType: order.garmentType, deliveryDate: order.deliveryDate, images: order.designImages || [], designNotes: order.designNotes || '' }        });
           }
         }
       }
@@ -311,7 +340,7 @@ class DataFlowService {
             await this._db(adminId).setDocument('staff', staff.id || staffId, { currentTaskCount: staff.currentTaskCount });
             await this.progressToNextStage(order, stageId, adminId);
           }
-          await this._setOrder(orderId, { workflowTasks: order.workflowTasks }, adminId);
+         await this._setOrder(orderId, { workflowTasks: order.workflowTasks }, adminId);
 
       await this.broadcastUpdate('task_updated', { orderId, stageId, status: updateData.status, staffId, staffName: staff.name });
 
@@ -328,36 +357,46 @@ class DataFlowService {
   
         static async progressToNextStage(order, completedStageId, adminId = null) {
           try {
-            const db = this._db(adminId);
-            const fbSettings = await db.getCollection('settings', { limit: 1 });
-            const settings = (fbSettings.success && fbSettings.data?.length > 0) ? fbSettings.data[0] : null;
-            if (!settings || !Array.isArray(settings.workflowStages)) return;
-
             const normalize = v => String(v || '').trim().toLowerCase();
-            const currentStage = settings.workflowStages.find(s => normalize(s.id) === normalize(completedStageId));
-            if (!currentStage) return;
 
-            const nextStage = settings.workflowStages.find(s => Number(s.order) === Number(currentStage.order) + 1);
-            if (!nextStage) {
-              await this._setOrder(order.orderId, { status: 'completed', currentStage: 'completed' }, adminId);
-              await this.broadcastUpdate('order_completed', { orderId: order.orderId });
+            // Find next stage directly from the order's own workflowTasks array
+            // This is reliable regardless of what's in settings
+            const tasks = order.workflowTasks || [];
+            const currentIdx = tasks.findIndex(t => normalize(t.stageId) === normalize(completedStageId));
+            
+            if (currentIdx === -1) {
+              console.warn(`⚠️ progressToNextStage: stageId '${completedStageId}' not found in workflowTasks`);
               return;
             }
 
-            const nextTaskIndex = (order.workflowTasks || []).findIndex(t => normalize(t.stageId) === normalize(nextStage.id));
-            if (nextTaskIndex === -1) return;
+            // Find the next task that is still waiting or pending
+            const nextIdx = tasks.findIndex((t, i) => i > currentIdx && (t.status === 'waiting' || t.status === 'pending'));
 
-            // Just set to pending — NO auto-assignment, staff picks up from Available Tasks
-            order.workflowTasks[nextTaskIndex].status = 'pending';
-                  order.workflowTasks[nextTaskIndex].updatedAt = Ts();
-            order.currentStage = nextStage.id;
+            if (nextIdx === -1) {
+              // No next stage — workflow complete
+              await this._setOrder(order.orderId, { status: 'completed', currentStage: 'completed' }, adminId);
+              console.log(`✅ Workflow completed for order ${order.orderId}`);
+              return;
+            }
 
-            await this._setOrder(order.orderId, { workflowTasks: order.workflowTasks, currentStage: order.currentStage }, adminId);
-            console.log(`▶️ Stage '${nextStage.name}' set to pending for order ${order.orderId}`);
-    } catch (error) {
-      console.error('❌ Progress to next stage error (Firestore):', error.message || error);
-    }
-  }
+            const nextStageId = tasks[nextIdx].stageId;
+
+            // Update next task to pending
+            order.workflowTasks[nextIdx].status = 'pending';
+            order.workflowTasks[nextIdx].updatedAt = new Date().toISOString();
+            order.currentStage = nextStageId;
+
+            await this._setOrder(order.orderId, {
+              workflowTasks: order.workflowTasks,
+              currentStage: nextStageId,
+              status: 'in_progress'
+            }, adminId);
+
+            console.log(`▶️ Next stage '${nextStageId}' set to pending, currentStage updated for order ${order.orderId}`);
+          } catch (error) {
+            console.error('❌ Progress to next stage error (Firestore):', error.message || error);
+          }
+        }
 
   static async sendRealTimeNotification(staffId, notificationData) {
     try {
