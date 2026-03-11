@@ -477,7 +477,7 @@
                     }
 
                     try {
-                        const res = await fetch(`${window.location.origin}/api/public/branches?adminId=${encodeURIComponent(ADMIN_ID)}`);
+                        const res = await fetch(`${window.location.origin}/api/public/branches?adminId=${encodeURIComponent(ADMIN_ID)}&nocache=1`);
                         if (!res.ok) throw new Error('Failed to fetch branches');
                         const list = await res.json();
 
