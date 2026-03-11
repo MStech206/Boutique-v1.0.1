@@ -28,7 +28,7 @@ function Clients() {
   // Edit Admin modal state
   const [showEditAdminModal, setShowEditAdminModal] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState(null);
-  const [editAdminForm, setEditAdminForm] = useState({ name: "", email: "", password: "" });
+  const [editAdminForm, setEditAdminForm] = useState({ username: "", password: "" });
   const [editAdminError, setEditAdminError] = useState("");
   const [editAdminLoading, setEditAdminLoading] = useState(false);
 
@@ -143,7 +143,7 @@ function Clients() {
     setEditAdminError("");
     setEditAdminLoading(true);
     try {
-      const payload = { name: editAdminForm.name, email: editAdminForm.email };
+      const payload = { username: editAdminForm.username.trim() };
       if (editAdminForm.password.trim()) payload.newPassword = editAdminForm.password;
       await api.put(`/super-admin/admins/${editingAdmin.id}/details`, payload);
       setShowEditAdminModal(false);
@@ -321,27 +321,18 @@ function Clients() {
                   </p>
                 )}
 
-                <label>Name</label>
+                <label>Username</label>
                 <input
                   type="text"
-                  value={editAdminForm.name}
-                  onChange={e => setEditAdminForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="Full Name"
-                />
-
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={editAdminForm.email}
-                  onChange={e => setEditAdminForm(p => ({ ...p, email: e.target.value }))}
-                  placeholder="Email"
+                  value={editAdminForm.username}
+                  onChange={e => setEditAdminForm(p => ({ ...p, username: e.target.value }))}
+                  placeholder="Username"
+                  autoComplete="off"
                 />
 
                 <label>
                   New Password{" "}
-                  <span className="muted" style={{ fontSize: 11 }}>
-                    (leave blank to keep current)
-                  </span>
+                  <span className="muted" style={{ fontSize: 11 }}>(leave blank to keep current)</span>
                 </label>
                 <input
                   type="password"

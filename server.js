@@ -308,7 +308,10 @@ process.on('uncaughtException', (error) => {
   try {
     console.log('🔥 Starting Firebase initialization...');
     
-    const firebaseInitialized = await firebaseIntegrationService.initialize();
+    const firebaseInitialized = await Promise.race([
+    firebaseIntegrationService.initialize(),
+    new Promise(resolve => setTimeout(() => resolve(false), 10000))
+]);
 
     // If Firebase is unavailable, fall back to MongoDB so the server still starts in dev.
     if (!firebaseInitialized) {
@@ -365,13 +368,13 @@ process.on('uncaughtException', (error) => {
     }
 
     console.log('About to call app.listen()...');
-    const server = app.listen(PORT, '127.0.0.1', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 SAPTHALA Boutique Server running on port ${PORT}`);
       console.log(`📱 Admin Panel: http://localhost:${PORT}`);
       console.log(`🔗 API Base: http://localhost:${PORT}/api`);
       console.log(`🔥 Firebase: Connected and Active`);
       console.log(`✅ Server is ready to accept requests`);
-      console.log(`🔌 LISTENING ON 127.0.0.1:${PORT}`);
+      console.log(`🔌 LISTENING ON 0.0.0.0:${PORT}`);
       console.log(`🔔 THIS MESSAGE APPEARS FROM WITHIN THE LISTEN CALLBACK`);
     });
     
@@ -1077,41 +1080,80 @@ app.get('/api/admin/orders/firebase/list', authenticateToken, async (req, res) =
                       res.status(500).json({ error: 'Failed to fetch sub-admins' });
                     }
                   });
-                  app.get('/api/super-admin/clients/:clientId/main-admin', authenticateToken, async (req, res) => {
-                    try {
-                      if (!SUPER_ADMIN_GUARD(req, res)) return;
-                      const { clientId } = req.params;
-                      const snap = await db().collection('users')
-                        .where('clientId', '==', clientId)
+                 // GET main-admin — query by adminId (set on all users created via AddAdmin)
+                app.get('/api/super-admin/clients/:clientId/main-admin', authenticateToken, async (req, res) => {
+                  try {
+                    if (!SUPER_ADMIN_GUARD(req, res)) return;
+                    const { clientId } = req.params;
+
+                    let doc, data;
+
+                    // Primary: query by adminId field
+                    const snap = await db().collection('users')
+                    .where('adminId', '==', clientId)
+                    .where('role', '==', 'admin')
+                    .limit(1).get();
+
+                    if (!snap.empty) {
+                      doc  = snap.docs[0];
+                      data = doc.data();
+                    } else {
+                      // Fallback: old docs may use adminId instead of clientId
+                      const snap2 = await db().collection('users')
+                        .where('adminId', '==', clientId)
                         .where('role', '==', 'admin').limit(1).get();
-                      if (snap.empty) return res.status(404).json({ error: 'No main admin found' });
-                      const doc = snap.docs[0];
-                      const data = doc.data();
-                      delete data.password;
-                      res.json({ success: true, admin: { id: doc.id, ...data } });
-                    } catch (err) {
-                      console.error('Main admin fetch error:', err);
-                      res.status(500).json({ error: 'Failed to fetch main admin' });
-                    }
-                  });
-                  app.put('/api/super-admin/admins/:adminId/details', authenticateToken, async (req, res) => {
-                    try {
-                      if (!SUPER_ADMIN_GUARD(req, res)) return;
-                      const { adminId } = req.params;
-                      const { name, email, newPassword } = req.body;
-                      const docRef = db().collection('users').doc(adminId);
-                      if (!(await docRef.get()).exists) return res.status(404).json({ error: 'Admin not found' });
-                      const updates = { name, email, updatedAt: new Date() };
-                      if (newPassword && newPassword.trim().length >= 6) {
-                        updates.password = await require('bcryptjs').hash(newPassword, 10);
+                      if (!snap2.empty) {
+                        doc  = snap2.docs[0];
+                        data = doc.data();
+                      } else {
+                        return res.status(404).json({ error: 'No main admin found' });
                       }
-                      await docRef.update(updates);
-                      res.json({ success: true });
-                    } catch (err) {
-                      console.error('Update admin details error:', err);
-                      res.status(500).json({ error: 'Failed to update admin' });
                     }
-                  });
+
+                    delete data.password;
+                    res.json({ success: true, admin: { id: doc.id, username: doc.id, ...data } });
+                  } catch (err) {
+                    console.error('Main admin fetch error:', err);
+                    res.status(500).json({ error: 'Failed to fetch main admin' });
+                  }
+                });
+
+                // PUT — update username (renames doc) and/or password
+                app.put('/api/super-admin/admins/:adminId/details', authenticateToken, async (req, res) => {
+                try {
+                  if (!SUPER_ADMIN_GUARD(req, res)) return;
+                  const { adminId } = req.params;          // current doc ID (= current username)
+                  const { username: newUsername, newPassword } = req.body;
+
+                  const oldRef  = db().collection('users').doc(adminId);
+                  const oldSnap = await oldRef.get();
+                  if (!oldSnap.exists) return res.status(404).json({ error: 'Admin not found' });
+
+                  const updates = { updatedAt: new Date() };
+                  if (newPassword && newPassword.trim().length >= 6) {
+                    updates.password = await require('bcryptjs').hash(newPassword.trim(), 10);
+                  }
+
+                  const trimmed = newUsername?.trim();
+                  if (trimmed && trimmed !== adminId) {
+                    // Username changed — doc ID must change too (login uses doc ID as username)
+                    const taken = await db().collection('users').doc(trimmed).get();
+                    if (taken.exists) return res.status(400).json({ error: 'Username already taken' });
+
+                    await db().collection('users').doc(trimmed).set({
+                      ...oldSnap.data(), ...updates, username: trimmed
+                    });
+                    await oldRef.delete();
+                  } else {
+                    await oldRef.update(updates);
+                  }
+
+                  res.json({ success: true });
+                } catch (err) {
+                  console.error('Update admin details error:', err);
+                  res.status(500).json({ error: 'Failed to update admin' });
+                }
+              });
 
                     // ── CLIENT ORDERS CHART (orders per day for a given month) ────
                     app.get('/api/super-admin/clients/:clientId/orders-chart', authenticateToken, async (req, res) => {
@@ -1337,11 +1379,11 @@ app.post('/api/admin/login', async (req, res) => {
       }
     }
     // allow default admin credentials if no user record or password mismatch
-    if (!isValidPassword) {
-      if (searchUsername === 'admin' && password === 'sapthala@2029') {
-        isValidPassword = true;
-      }
-    }
+            if (!isValidPassword && !user.password) {
+          if (searchUsername === 'admin' && password === 'sapthala@2029') {
+            isValidPassword = true;
+          }
+        }
 
     if (!isValidPassword) {
       if (isMongoConnected()) {

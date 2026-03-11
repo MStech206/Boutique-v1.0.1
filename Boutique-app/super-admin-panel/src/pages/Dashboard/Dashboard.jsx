@@ -228,7 +228,9 @@ function Dashboard() {
   const selectedClientLabel = clients.find(
     c => (c.id || c.adminId) === selectedClient
   )?.boutiqueName || selectedClient;
-
+    const totalOrdersThisMonth = ordersChartData
+        ? ordersChartData.datasets[0].data.reduce((a, b) => a + b, 0)
+        : null;
   if (loading) {
     return (
       <div className="dashboard">
@@ -372,6 +374,28 @@ function Dashboard() {
             />
           </div>
         </div>
+        {!chartLoading && totalOrdersThisMonth !== null && (
+  <div className="mb-3 mt-1">
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        background: "rgba(13,110,253,0.07)",
+        border: "1px solid rgba(13,110,253,0.2)",
+        borderRadius: 10,
+        padding: "7px 18px",
+        fontSize: 14,
+        color: "#0a58ca",
+      }}
+    >
+      📦 Total orders in{" "}
+      {new Date(selectedMonth + "-02").toLocaleString("en-IN", { month: "long", year: "numeric" })}
+      :&nbsp;
+      <strong style={{ fontSize: 16 }}>{totalOrdersThisMonth}</strong>
+    </span>
+  </div>
+)}
 
         {chartLoading ? (
           <p className="text-muted text-center py-4 mb-0">Loading chart…</p>
