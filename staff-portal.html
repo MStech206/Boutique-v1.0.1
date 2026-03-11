@@ -350,7 +350,7 @@
         <div id="loginScreen" class="card">
 
             <div style="text-align:center;margin-bottom:20px;">
-                <img src="img/ap logo.jpg" alt="BOUTHIQUE Logo" style="width:120px;height:120px;object-fit:contain;">
+                <img src="img/ap%20logo.jpg" alt="BOUTHIQUE Logo" style="width:120px;height:120px;object-fit:contain;">
             </div>
             <h1 style="font-size:32px;">BOUTHIQUE</h1>
             <p class="subtitle">Designer Workshop - Staff Portal</p>
@@ -427,12 +427,17 @@
     <script>
         // API base: prefer host's API on port 3000; support Android emulator (10.0.2.2)
        let API_BASE = '';
-                    try {
-                        const host = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? location.hostname : (location.hostname === '10.0.2.2' ? '10.0.2.2' : location.hostname);
-                        API_BASE = `http://${host}:3000/api`;
-                    } catch (e) {
-                        API_BASE = 'http://localhost:3000/api';
-                    }
+            try {
+                if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                    API_BASE = 'http://localhost:3000/api';
+                } else if (location.hostname === '10.0.2.2') {
+                    API_BASE = 'http://10.0.2.2:3000/api';
+                } else {
+                    API_BASE = '/api';
+                }
+            } catch (e) {
+                API_BASE = '/api';
+            }
 
                     // Resolve adminId from URL: /staff?adminId=sapthala-designer-workshop
                     
