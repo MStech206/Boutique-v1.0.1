@@ -7,8 +7,9 @@ import { getFirebaseToken } from "../firebase";
 // ==============================
 const api = axios.create({
     // Use same-origin API by default so dev server (node) or packaged server handles /api
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
-
+    baseURL: window.location.hostname === 'localhost'
+    ? 'http://localhost:3000/api'
+    : '/api',
     withCredentials: false // Firebase → no cookies
 });
 

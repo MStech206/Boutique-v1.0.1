@@ -71,11 +71,12 @@ window.location.replace("/super-admin/#/login");
 // ==============================
 // ✅ AXIOS INSTANCE
 // ==============================
-const api = axios.create({
-    baseURL: "http://localhost:3000/api",
-    withCredentials: false, // JWT/Firebase → no cookies
-});
-
+            const api = axios.create({
+                baseURL: window.location.hostname === 'localhost'
+                    ? 'http://localhost:3000/api'
+                    : '/api',
+                withCredentials: false
+            });
 // ==============================
 // ✅ REQUEST INTERCEPTOR
 // ==============================
