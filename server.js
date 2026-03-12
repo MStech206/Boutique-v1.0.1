@@ -290,6 +290,18 @@ app.get(['/staff', '/staff/*'], (req, res) => {
   }
 });
 
+     async function sendAdminNotification(adminId, title, body, data = {}) {
+    try {
+        const db = firebaseIntegrationService.forClient(adminId);
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,6)}`;
+        await db.setDocument('notifications', notifId, {
+            adminId, title, body, data, read: false, createdAt: new Date()
+        });
+        console.log(`🔔 Notification saved: ${title}`);
+    } catch(err) {
+        console.warn('⚠️ Notification save failed:', err.message);
+    }
+}
 // Catch any unhandled promise rejections - MUST BE FIRST
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ UNHANDLED REJECTION:', reason);
@@ -302,7 +314,7 @@ process.on('uncaughtException', (error) => {
   console.error('Stack:', error.stack);
   process.exit(1);
 });
-
+      
 // Connect to Firebase (Primary Database)
 (async () => {
   try {
@@ -1664,7 +1676,8 @@ app.delete('/api/admin/sub-admins/:id', authenticateToken, async (req, res) => {
     const snap = await db.getDocument('users', req.params.id);
     if (!snap.success || !snap.data) return res.status(404).json({ error: 'Sub-admin not found' });
     const subAdmin = snap.data;
-    // Delete only from client subcollection
+      // Delete from BOTH flat /users collection AND client subcollection
+    await firebaseIntegrationService.deleteDocument('users', req.params.id);
     await db.deleteDocument('users', req.params.id);
     // Cascade: delete staff + branch in same client subcollection
     if (subAdmin.branch) {
@@ -1815,7 +1828,7 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
                     location: d.location || '',
                     adminId: resolvedAdminId  
                   }));
-                  setCache(cacheKey, branches, 30 * 60 * 1000);
+                  setCache(cacheKey, branches,  60 * 1000);
                   return res.json(branches);
                 }
                 console.warn('⚠️ Firestore public branches fetch failed:', fb.error);
@@ -2877,6 +2890,53 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
+            // GET notifications
+            app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
+              try {
+                  const db = firebaseIntegrationService.forClient(req.user.adminId);
+                  const result = await db.getCollection('notifications', {
+                      where: [['adminId', '==', req.user.adminId]],
+                      limit: 30
+                  });
+                  const notifications = (result.data || []).sort((a, b) => {
+                      const ta = a.createdAt?._seconds || new Date(a.createdAt || 0).getTime() / 1000;
+                      const tb = b.createdAt?._seconds || new Date(b.createdAt || 0).getTime() / 1000;
+                      return tb - ta;
+                  });
+                  res.json({ notifications });
+              } catch(err) { res.status(500).json({ error: err.message }); }
+          });
+
+            // Mark one read
+            app.put('/api/admin/notifications/:id/read', authenticateToken, async (req, res) => {
+                try {
+                    const db = firebaseIntegrationService.forClient(req.user.adminId);
+                    await db.updateDocument('notifications', req.params.id, { read: true });
+                    res.json({ success: true });
+                } catch(err) { res.status(500).json({ error: err.message }); }
+            });
+
+            // Mark all read
+            app.put('/api/admin/notifications/read-all', authenticateToken, async (req, res) => {
+                try {
+                    const db = firebaseIntegrationService.forClient(req.user.adminId);
+                   const result = await db.getCollection('notifications', {
+                    where: [['adminId', '==', req.user.adminId], ['read', '==', false]]
+                });
+                    await Promise.all((result.data || []).map(n =>
+                        db.updateDocument('notifications', n.id, { read: true })
+                    ));
+                    res.json({ success: true });
+                } catch(err) { res.status(500).json({ error: err.message }); }
+            });
+             // Delete notification
+             app.delete('/api/admin/notifications/:id', authenticateToken, async (req, res) => {
+                try {
+                    const db = firebaseIntegrationService.forClient(req.user.adminId);
+                    await db.deleteDocument('notifications', req.params.id);
+                    res.json({ success: true });
+                } catch(err) { res.status(500).json({ error: err.message }); }
+            });
 
 // Get single order with full timeline
 app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
@@ -3284,7 +3344,8 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 
           // Process all orders in loop
           const groupId = isMultiple ? `GRP-${Date.now()}` : null;
-          const results = [];
+           const results = [];
+          let lastOrderData = null;
           for (let _i = 0; _i < orderList.length; _i++) {
             req.body = { ...orderList[_i], linkedOrderGroup: groupId || orderList[_i].linkedOrderGroup };
             // ---- rest of single order logic runs below for each item ----
@@ -3517,8 +3578,8 @@ await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId })
     };
 
     results.push({ orderId: orderData.orderId, garmentType: orderData.garmentType, status: 'created' });
+  lastOrderData = orderData;
 } // end for loop
-
       invalidateCache(['orders_list_', 'public_orders_']);
       res.json({
         success: true,
@@ -3535,14 +3596,14 @@ await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId })
         const settings = await getAppSettings({ req }) || { companyName: 'SAPTHALA', phone: '7794021608', email: 'hello@sapthala.com', address: '', defaultTheme: 'default' };
         // Attach theme if provided in request
         const theme = req.body.theme || settings.defaultTheme || 'default';
-        const pdfOrder = Object.assign({}, orderData, { theme });
+                const pdfOrder = Object.assign({}, lastOrderData, { theme });
 
         const result = await EnhancedPDFService.generateAndSavePDFFiles(pdfOrder, settings);
         if (result && result.success) {
-          console.log('✅ Themed PDF created for order', order.orderId);
+                    console.log('✅ Themed PDF created for order', lastOrderData.orderId);
           // Update order with pdf path
           try {
-            await Order.findByIdAndUpdate(order._id, { $set: { pdfPath: result.pdfPath || result.htmlPath } });
+            await Order.findByIdAndUpdate(lastOrderData._id, { $set: { pdfPath: result.pdfPath || result.htmlPath } });
           } catch (e) { console.warn('Could not update order pdfPath:', e.message); }
         } else {
           console.warn('PDF generation returned error:', result && result.error);
@@ -3550,8 +3611,11 @@ await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId })
 
         // Send WhatsApp message (will return wa.me link if Twilio not configured)
         try {
-          const message = NotificationService.generateCustomerMessage(orderData, theme);
-          const notifyResult = await NotificationService.sendWhatsAppToCustomer(orderData.customerPhone || orderData.customer?.phone, message, result && (result.pdfPath || result.htmlPath));
+         const message = NotificationService.generateCustomerMessage(lastOrderData, theme);
+          const waPhone = (lastOrderData.customerPhone || lastOrderData.customer?.phone || '').replace(/\D/g, '');
+          const waLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+          console.log('📱 WhatsApp share link:', waLink);
+          const notifyResult = await NotificationService.sendWhatsAppToCustomer(lastOrderData.customerPhone || lastOrderData.customer?.phone, message, result && (result.pdfPath || result.htmlPath));
           console.log('📨 WhatsApp notification result:', notifyResult);
         } catch (e) {
           console.error('❌ Failed to send WhatsApp notification:', e.message);
@@ -4135,6 +4199,15 @@ const tasks = (order.workflowTasks || []).map(t =>
       ]);
 
       console.log(`✅ Stage completed: ${stageId} → next: ${nextStageId || 'completed'} on order ${orderId} (${adminId})`);
+              try {
+              if (!nextStageId) {
+                  await sendAdminNotification(adminId,
+                      '🎉 Order Fully Completed!',
+                      `All stages done for Order #${orderId} — ${order.customerName || 'Customer'} — Ready for delivery`,
+                      { orderId, type: 'order_complete' }
+                  );
+              }
+          } catch(e) { console.warn('Notification trigger error:', e.message); }
       return res.json({ success: true, nextStage: nextStageId, currentStage: nextStageId || 'completed' });
     }
 
@@ -4185,47 +4258,7 @@ invalidateCache([`staff_tasks_${adminId}`, `staff_tasks_${adminId}_${staffId}`, 
         }
       }
 
-// Get Staff Notifications
-        app.get('/api/staff/:staffId/notifications', async (req, res) => {
-          try {
-            const { staffId } = req.params;
-            const { adminId } = req.query;
-            if (!adminId) return res.status(400).json({ error: 'adminId is required' });
-
-            const db = firebaseIntegrationService.forClient(adminId);
-            const staffRes = await db.getCollection('staff', {
-              where: [['staffId', '==', staffId]], limit: 1
-            });
-            const staff = staffRes?.data?.[0];
-            if (!staff) return res.status(404).json({ error: 'Staff not found' });
-
-            // Fetch notifications scoped to this client
-            const notifRes = await db.getCollection('notifications', {
-              where: [['recipientStaffId', '==', staffId]],
-              orderBy: { field: 'sentAt', direction: 'desc' },
-              limit: 10
-            });
-            res.json(notifRes?.data || []);
-          } catch (error) {
-            console.error('Get notifications error:', error);
-            res.status(500).json({ error: 'Failed to fetch notifications' });
-          }
-        });
-
-// Mark Notification as Read
-app.post('/api/notifications/:id/read', async (req, res) => {
-  try {
-    const { id } = req.params;
-    await Notification.findByIdAndUpdate(id, {
-      isRead: true,
-      readAt: new Date()
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Mark notification read error:', error);
-    res.status(500).json({ error: 'Failed to mark notification as read' });
-  }
-});
+        
 
 // ==================== REPORTS ROUTES ====================
 

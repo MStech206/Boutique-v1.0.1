@@ -539,72 +539,72 @@
     </script>
     <script>
         // Initialize demo orders with assigned staff
-        function initializeDemoOrders() {
-            const demoOrders = [
-                {
-                    id: 'ORD-1707492000001',
-                    orderId: 'ORD-DEMO-001',
-                    customer: { name: 'John Doe', phone: '9876543210', address: 'Mumbai, MH' },
-                    customerName: 'John Doe',
-                    customerPhone: '9876543210',
-                    garmentType: 'Shirt',
-                    measurements: { chest: '38', length: '28' },
-                    designNotes: 'Blue colored shirt with custom collar',
-                    pricing: { total: 5000, advance: 2500, balance: 2500 },
-                    deliveryDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
-                    status: 'pending',
-                    branch: 'SAPTHALA.MAIN',
-                    createdAt: new Date().toISOString(),
-                    progress: 0,
-                    assignedStaff: [
-                        { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' },
-                        { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
-                    ]
-                },
-                {
-                    id: 'ORD-1707492000002',
-                    orderId: 'ORD-DEMO-002',
-                    customer: { name: 'Sarah Khan', phone: '9876543220', address: 'Delhi, DL' },
-                    customerName: 'Sarah Khan',
-                    customerPhone: '9876543220',
-                    garmentType: 'Saree',
-                    measurements: { length: '180', blouse_chest: '36' },
-                    designNotes: 'Traditional silk saree with embroidery',
-                    pricing: { total: 22030, advance: 11000, balance: 11030 },
-                    deliveryDate: new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0],
-                    status: 'pending',
-                    branch: 'SAPTHALA.MAIN',
-                    createdAt: new Date().toISOString(),
-                    progress: 0,
-                    assignedStaff: [
-                        { staffId: 'STAFF-001', name: 'Raj Kumar', phone: '9876543210', role: 'dyer' },
-                        { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
-                    ]
-                },
-                {
-                    id: 'ORD-1707492000003',
-                    orderId: 'ORD-DEMO-003',
-                    customer: { name: 'Rajesh Sharma', phone: '9876543230', address: 'Bangalore, KA' },
-                    customerName: 'Rajesh Sharma',
-                    customerPhone: '9876543230',
-                    garmentType: 'Pants',
-                    measurements: { waist: '34', length: '32' },
-                    designNotes: 'Formal black pants with slim fit',
-                    pricing: { total: 2662, advance: 1331, balance: 1331 },
-                    deliveryDate: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
-                    status: 'pending',
-                    branch: 'SAPTHALA.MAIN',
-                    createdAt: new Date().toISOString(),
-                    progress: 0,
-                    assignedStaff: [
-                        { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' }
-                    ]
-                }
-            ];
+        // function initializeDemoOrders() {
+        //     const demoOrders = [
+        //         {
+        //             id: 'ORD-1707492000001',
+        //             orderId: 'ORD-DEMO-001',
+        //             customer: { name: 'John Doe', phone: '9876543210', address: 'Mumbai, MH' },
+        //             customerName: 'John Doe',
+        //             customerPhone: '9876543210',
+        //             garmentType: 'Shirt',
+        //             measurements: { chest: '38', length: '28' },
+        //             designNotes: 'Blue colored shirt with custom collar',
+        //             pricing: { total: 5000, advance: 2500, balance: 2500 },
+        //             deliveryDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+        //             status: 'pending',
+        //             branch: 'SAPTHALA.MAIN',
+        //             createdAt: new Date().toISOString(),
+        //             progress: 0,
+        //             assignedStaff: [
+        //                 { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' },
+        //                 { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
+        //             ]
+        //         },
+        //         {
+        //             id: 'ORD-1707492000002',
+        //             orderId: 'ORD-DEMO-002',
+        //             customer: { name: 'Sarah Khan', phone: '9876543220', address: 'Delhi, DL' },
+        //             customerName: 'Sarah Khan',
+        //             customerPhone: '9876543220',
+        //             garmentType: 'Saree',
+        //             measurements: { length: '180', blouse_chest: '36' },
+        //             designNotes: 'Traditional silk saree with embroidery',
+        //             pricing: { total: 22030, advance: 11000, balance: 11030 },
+        //             deliveryDate: new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0],
+        //             status: 'pending',
+        //             branch: 'SAPTHALA.MAIN',
+        //             createdAt: new Date().toISOString(),
+        //             progress: 0,
+        //             assignedStaff: [
+        //                 { staffId: 'STAFF-001', name: 'Raj Kumar', phone: '9876543210', role: 'dyer' },
+        //                 { staffId: 'STAFF-003', name: 'Amit Patel', phone: '9876543212', role: 'tailor' }
+        //             ]
+        //         },
+        //         {
+        //             id: 'ORD-1707492000003',
+        //             orderId: 'ORD-DEMO-003',
+        //             customer: { name: 'Rajesh Sharma', phone: '9876543230', address: 'Bangalore, KA' },
+        //             customerName: 'Rajesh Sharma',
+        //             customerPhone: '9876543230',
+        //             garmentType: 'Pants',
+        //             measurements: { waist: '34', length: '32' },
+        //             designNotes: 'Formal black pants with slim fit',
+        //             pricing: { total: 2662, advance: 1331, balance: 1331 },
+        //             deliveryDate: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
+        //             status: 'pending',
+        //             branch: 'SAPTHALA.MAIN',
+        //             createdAt: new Date().toISOString(),
+        //             progress: 0,
+        //             assignedStaff: [
+        //                 { staffId: 'STAFF-002', name: 'Priya Singh', phone: '9876543211', role: 'cutter' }
+        //             ]
+        //         }
+        //     ];
             
-            localStorage.setItem('sapthala_orders', JSON.stringify(demoOrders));
-            console.log('✅ Demo orders initialized with assigned staff');
-        }
+        //     localStorage.setItem('sapthala_orders', JSON.stringify(demoOrders));
+        //     console.log('✅ Demo orders initialized with assigned staff');
+        // }
         // Defensive global wrappers: ensure basic UI actions work
         (function(){
             // Provide a safe, global showTab that falls back when the main script fails to load
@@ -899,13 +899,14 @@
                 <input type="text" id="username" class="login-input" placeholder="👤 Username" required>
                 <input type="password" id="password" class="login-input" placeholder="🔒 Password" required>
                 <button type="submit" class="login-btn">🚀 Login to Dashboard</button>
+              <!--  
                 <button type="button" class="login-btn" style="margin-top:12px; background: linear-gradient(135deg,#10b981 0%, #059669 100%);" onclick="bypassLogin()">⚠️ Skip to Dashboard (Bypass)</button>
+            -->
             </form>
             
             <div class="login-footer">
                 <p>📞 Contact: 7794021608 | 📧 sapthalaredddydesigns@gmail.com</p>
-                <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">Default: admin / 1234</p>
-            </div>
+             </div>
         </div>
     </div>
 
@@ -944,9 +945,26 @@
                 <option value="christmas">🎄 Christmas</option>
             </select>
             <span id="firestoreStatus" style="padding:6px 10px;border-radius:8px;background:#fde68a;color:#92400e;font-weight:700;margin-left:8px;font-size:13px;">Firestore: unknown</span>
-            <button class="btn-secondary" onclick="logout()">Logout</button>
-        </div>
-    </div>
+         
+
+            
+            <div style="position:relative;display:inline-block;">
+                <button onclick="toggleNotifications()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:20px;position:relative;box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+                    🔔
+                    <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:white;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;align-items:center;justify-content:center;">0</span>
+                </button>
+                <div id="notifDropdown" style="display:none;position:absolute;top:50px;right:0;width:380px;max-height:500px;overflow-y:auto;background:#ffffff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:9999;padding:0;border:1px solid #e2e8f0;">
+                    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:700;font-size:15px;color:white;">🔔 Notifications</span>
+                    <button onclick="markAllRead()" style="font-size:12px;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600;">Mark all read</button>
+                </div>
+                <div id="notifList" style="padding:12px;background:#ffffff;border-radius:0 0 16px 16px;">Loading...</div>
+                </div>
+            </div>
+            
+                        <button class="btn-secondary" onclick="logout()">Logout</button>
+                    </div>
+                </div>
 
 
         <div style="display: flex; flex: 1; min-height: 0; overflow: hidden;">
@@ -1501,7 +1519,9 @@
                     <button id="orderFilterPending"  onclick="setOrderFilter('pending')"   style="padding:7px 18px;border-radius:20px;border:2px solid #f59e0b;background:white;color:#f59e0b;font-weight:600;cursor:pointer;font-size:13px;">⏳ Pending</button>
                     <button id="orderFilterProgress" onclick="setOrderFilter('in_progress')" style="padding:7px 18px;border-radius:20px;border:2px solid #3b82f6;background:white;color:#3b82f6;font-weight:600;cursor:pointer;font-size:13px;">🔄 In Progress</button>
                     <button id="orderFilterCompleted" onclick="setOrderFilter('completed')" style="padding:7px 18px;border-radius:20px;border:2px solid #10b981;background:white;color:#10b981;font-weight:600;cursor:pointer;font-size:13px;">✅ Completed</button>
-                 <!-- Delivered button omitted for now since it is not specified in the requirements.  Can be added later if the feature is required.
+                
+                    <!-- Delivered button omitted for now since it is not specified in the requirements.  Can be added later if the feature is required.
+
                      <button id="orderFilterDelivered" onclick="setOrderFilter('delivered')" style="padding:7px 18px;border-radius:20px;border:2px solid #8b5cf6;background:white;color:#8b5cf6;font-weight:600;cursor:pointer;font-size:13px;">🚚 Delivered</button>
                      -->
                      <span id="orderFilterBadge" style="display:none;padding:5px 12px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;"></span>
@@ -2232,7 +2252,116 @@
                 } catch (e) { console.warn('Could not apply sub-admin default branch', e); }
             } catch (e) { console.warn('Could not populate global branch filters', e); }
         }
-        
+                        async function loadNotifications() {
+                    try {
+                        const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                        const res = await fetch('/api/admin/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
+                        const data = await res.json();
+                        const notifs = data.notifications || [];
+                        const unread = notifs.filter(n => !n.read).length;
+                        const badge = document.getElementById('notifBadge');
+                        if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
+                        else { badge.style.display = 'none'; }
+                        const list = document.getElementById('notifList');
+                        if (notifs.length === 0) { 
+                            list.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#94a3b8;">🔕 No notifications yet</div>'; 
+                            return; 
+                        }
+                        const now = new Date();
+                        list.innerHTML = notifs.map(n => {
+                            const deliveryDate = n.data?.deliveryDate || n.deliveryDate;
+                            const isExpired = deliveryDate && new Date(deliveryDate._seconds ? deliveryDate._seconds*1000 : deliveryDate) < now;
+                            const cardBg = isExpired ? 'linear-gradient(135deg,#fff1f2,#fee2e2)' : (n.read ? '#f1f5f9' : 'linear-gradient(135deg,#eef2ff,#f5f3ff)');
+                            const borderColor = isExpired ? '#f87171' : (n.read ? '#cbd5e1' : '#6366f1');
+                            const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
+                            const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
+                            const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
+                            return `
+                            <div style="
+                                padding:14px 16px;
+                                border-radius:12px;
+                                margin-bottom:8px;
+                                background:${cardBg};
+                                border-left:4px solid ${borderColor};
+                                border:1px solid ${borderSolid};
+                                position:relative;
+                            ">
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                    <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
+                                        <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
+                                        <div style="font-size:13px;color:${bodyColor};margin-top:2px;line-height:1.4;">${n.body}</div>
+                                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                            🕐 ${new Date(n.createdAt?._seconds ? n.createdAt._seconds*1000 : n.createdAt).toLocaleString()}
+                                            ${isExpired ? '<span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">⚠ EXPIRED</span>' : ''}
+                                            ${!n.read && !isExpired ? '<span style="background:#6366f1;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
+                                        </div>
+                                    </div>
+                                    <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;line-height:1;flex-shrink:0;" onmouseover="this.style.color='#ef4444';this.style.background='#fee2e2'" onmouseout="this.style.color='#94a3b8';this.style.background='none'">🗑</button>
+                                </div>
+                            </div>`;
+                        }).join('');
+                        // Show popup only once per notification (dedup by id)
+                        const newComplete = notifs.find(n => !n.read && n.data?.type === 'order_complete');
+                        if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
+                            sessionStorage.setItem('popup_' + newComplete.id, '1');
+                            showOrderCompletePopup(newComplete);
+                        }
+                    } catch(e) { console.warn('Notifications error:', e); }
+                            // Poll every 30 seconds for new notifications
+                        setInterval(loadNotifications, 30000);
+                        // Load once on page ready
+                        setTimeout(loadNotifications, 3000);
+                        }
+
+                function toggleNotifications() {
+                    const dd = document.getElementById('notifDropdown');
+                    const isOpen = dd.style.display === 'block';
+                    dd.style.display = isOpen ? 'none' : 'block';
+                    if (!isOpen) loadNotifications();
+                }
+
+                async function markRead(id) {
+                    const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                    await fetch(`/api/admin/notifications/${id}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+                    loadNotifications();
+                }
+
+                async function markAllRead() {
+                    const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                    await fetch('/api/admin/notifications/read-all', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+                    loadNotifications();
+                }
+                async function deleteNotification(id) {
+                    const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                    await fetch(`/api/admin/notifications/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                    loadNotifications();
+                }
+
+                function showOrderCompletePopup(notif) {
+                    const existing = document.getElementById('orderCompletePopup');
+                    if (existing) existing.remove();
+                    const popup = document.createElement('div');
+                    popup.id = 'orderCompletePopup';
+                    popup.style.cssText = 'position:fixed;top:80px;right:30px;background:linear-gradient(135deg,#10b981,#059669);color:white;padding:20px 24px;border-radius:16px;box-shadow:0 8px 40px rgba(16,185,129,0.4);z-index:99999;max-width:340px;animation:slideIn 0.3s ease;';
+                    popup.innerHTML = `
+                        <div style="font-size:28px;margin-bottom:8px;">🎉</div>
+                        <div style="font-weight:700;font-size:16px;margin-bottom:4px;">${notif.title}</div>
+                        <div style="font-size:13px;opacity:0.9;margin-bottom:12px;">${notif.body}</div>
+                        <div style="display:flex;gap:8px;">
+                            <button onclick="markRead('${notif.id}');document.getElementById('orderCompletePopup').remove();" 
+                                style="flex:1;background:white;color:#059669;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;">
+                                ✓ Got it
+                            </button>
+                            <button onclick="document.getElementById('orderCompletePopup').remove();"
+                                style="background:rgba(255,255,255,0.2);color:white;border:none;border-radius:8px;padding:8px;cursor:pointer;">
+                                ✕
+                            </button>
+                        </div>`;
+                    document.body.appendChild(popup);
+                    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 10000);
+                }
+
+                
         function logout() {
             localStorage.removeItem('sapthala_logged_in');
             document.getElementById('mainApp').classList.add('hidden');
@@ -4752,6 +4881,7 @@
                             const result = await response.json();
                             if (result.success) {
                                 alert(`✅ ${ordersToCreate.length} order(s) created successfully and assigned to staff!`);
+                                openPostOrderWindow(ordersToCreate[0], customerName, customerPhone, deliveryDate, trialDate);
                                 clearCart();
                                 resetOrderForm();
                                 showTab('orders');
@@ -4775,6 +4905,7 @@
                     }
                     if (allOk) {
                         alert(`✅ ${ordersToCreate.length} order(s) created!`);
+                        openPostOrderWindow(ordersToCreate[0], customerName, customerPhone, deliveryDate, trialDate);
                         clearCart(); resetOrderForm(); showTab('orders'); return;
                     }
                     // Final offline fallback
@@ -6479,7 +6610,91 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                 alert('❌ Failed to generate PDF: ' + error.message);
             }
         }
+ 
+        async function openPostOrderWindow(order, custName, custPhone, delivDate, trialDt) {
+            try {
+                const phone = (custPhone || '').replace(/\D/g, '');
+                const msg = `Hello ${custName}! 👗\n\nYour order has been placed at Sapthala Designer Workshop.\n\n` +
+                    `📦 Order Details:\n` +
+                    `• Garment: ${order.garmentType || ''}\n` +
+                    `• Total Amount: ₹${order.totalAmount || 0}\n` +
+                    `• Advance Paid: ₹${order.advanceAmount || 0}\n` +
+                    `• Balance Due: ₹${(order.totalAmount - order.advanceAmount) || 0}\n` +
+                    `• Delivery Date: ${delivDate ? new Date(delivDate).toLocaleDateString('en-IN') : 'TBD'}\n` +
+                    (trialDt ? `• Trial Date: ${new Date(trialDt).toLocaleDateString('en-IN')}\n` : '') +
+                    `\nThank you for choosing us! 🙏`;
+                const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 
+                // Build PDF preview HTML same as previewPDF() but with Download + WhatsApp buttons
+                const themeName = localStorage.getItem('sapthala_current_theme') || 'default';
+                const templateMap = {
+                    default:'default-invoice-template.html', newYear:'newyear-invoice-template.html',
+                    sankranti:'sankranthi-invoice-template.html', holi:'holi-invoice-template.html',
+                    ramadan:'ramzan-invoice-template.html', diwali:'diwali-invoice-template.html',
+                    ganesh:'ganesh-chaturthi-invoice-template.html', independence:'independence-day-invoice-template.html',
+                    christmas:'christmas-invoice-template.html', navaratri:'navaratri-invoice-template.html',
+                    luxury:'luxury-invoice-template.html', modern:'modern-invoice-template.html', elegant:'elegant-invoice-template.html',
+                };
+                let templateHtml = '';
+                try {
+                    const r = await fetch('/invoice-theme/' + (templateMap[themeName] || 'default-invoice-template.html'));
+                    templateHtml = r.ok ? await r.text() : '';
+                } catch(e) {}
+                if (!templateHtml) {
+                    try { const r2 = await fetch('/invoice-theme/default-invoice-template.html'); templateHtml = await r2.text(); } catch(e) {}
+                }
+
+                const grandTotal = order.totalAmount || 0;
+                const advance = order.advanceAmount || 0;
+                const balance = Math.max(0, grandTotal - advance);
+                const invoiceNo = order.orderId || `INV-${Date.now()}`;
+                const invoiceDate = new Date().toLocaleDateString('en-IN');
+
+                const imgMap = {
+                    'sapthala logo.PNG':'sapthala%20logo.PNG','Chirstmas.PNG':'Chirstmas.PNG',
+                    'Diwali.png':'Diwali.png','ganesh maharaj-Photoroom.png':'ganesh%20maharaj-Photoroom.png',
+                    'holi image-Photoroom.png':'holi%20image-Photoroom.png','Independence day.png':'Independence%20day.png',
+                    'Navratri.png':'Navratri.png','new year.png':'new%20year.png','new year 2.png':'new%20year%202.png',
+                    'Ramzan.png':'Ramzan.png','sankranthi.png':'sankranthi.png',
+                };
+                let html = templateHtml
+                    .replace(/src="(?:\.\/|\/)?([^"]+\.(png|PNG|jpg|JPG|jpeg|JPEG))"/gi, (m, f) => `src="/invoice-theme/${imgMap[f]||encodeURIComponent(f)}"`)
+                    .replace(/\[Customer Name\]/g, custName)
+                    .replace(/\[Phone Number\]/g, custPhone)
+                    .replace(/\[Invoice Number\]/g, invoiceNo)
+                    .replace(/\[Invoice Date\]/g, invoiceDate);
+
+                const itemRow = `<tr><td>1</td><td style="text-align:left;padding:8px;"><strong>${order.garmentType||'Custom'}</strong>${delivDate?`<br><small>Delivery: ${delivDate}</small>`:''}</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">${grandTotal}</td><td class="amount">${grandTotal}</td></tr>`;
+                html = html.replace(/<tr>\s*<td>1<\/td>\s*<td>\[Item Name\]<\/td>[\s\S]*?<\/tr>/, itemRow);
+
+                const injectScript = `<script>
+                (function(){
+                    var gt=${grandTotal},adv=${advance},bal=${balance};
+                    var e;
+                    e=document.getElementById('subTotal');   if(e)e.innerText=gt.toLocaleString('en-IN');
+                    e=document.getElementById('grandTotal'); if(e)e.innerText=gt.toLocaleString('en-IN');
+                    e=document.getElementById('balance');    if(e)e.innerText=bal.toLocaleString('en-IN');
+                    document.querySelectorAll('p').forEach(function(p){
+                        if(p.innerHTML.includes('Received:')) p.innerHTML='<strong>Received:</strong> \u20B9 ${advance.toLocaleString('en-IN')}';
+                    });
+                    // Action buttons
+                    var bar=document.createElement('div');
+                    bar.style.cssText='position:fixed;top:0;left:0;right:0;background:#fff;padding:12px 20px;display:flex;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;';
+                    bar.innerHTML='<button onclick="window.print()" style="flex:1;padding:10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">📄 Download / Print PDF</button>'
+                        +'<a href="${waUrl}" target="_blank" style="flex:1;padding:10px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;">📱 Share on WhatsApp</a>';
+                    document.body.insertBefore(bar, document.body.firstChild);
+                    document.body.style.marginTop='60px';
+                })();
+                <\/script>`;
+                html = html.replace('</body>', injectScript + '\n</body>');
+
+                const tab = window.open('', '_blank');
+                if (tab) { tab.document.write(html); tab.document.close(); }
+                else alert('⚠️ Popup blocked. Please allow popups for this site.\n\nWhatsApp link:\n' + waUrl);
+            } catch(e) {
+                console.error('openPostOrderWindow error:', e);
+            }
+        }
         async function shareViaWhatsApp() {
             try {
                 const orderData = collectOrderData();

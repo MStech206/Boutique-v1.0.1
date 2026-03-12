@@ -284,28 +284,46 @@ router.post('/staff/:staffId/accept-task', async (req, res) => {
 /**
  * Update task status (start, pause, resume, complete)
  */
-router.post('/staff/:staffId/update-task', async (req, res) => {
+       router.post('/staff/:staffId/update-task', async (req, res) => {
     try {
         const { staffId } = req.params;
         const { orderId, stageId, status, notes, qualityRating } = req.body;
-        
-        const updateData = {
-            status,
-            notes,
-            qualityRating
-        };
-        
- 
+        const updateData = { status, notes, qualityRating };
         const adminId = getAdminId(req);
-        const result = await DataFlowService.processStaffTaskUpdate(staffId, orderId, stageId, updateData, adminId);
-        res.json(result);
+
+        await DataFlowService.processStaffTaskUpdate(staffId, orderId, stageId, updateData, adminId);
+
+        // After update, re-fetch order to check if ALL stages are done
+        if (status === 'completed' && adminId) {
+            try {
+                const updatedOrder = await DataFlowService._getOrder(orderId, adminId);
+                const allDone = updatedOrder && updatedOrder.currentStage === 'completed';
+                if (allDone) {
+                    const firebaseService = require('../firebase-integration-service');
+                    const db = firebaseService.forClient(adminId);
+                    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,6)}`;
+                    await db.setDocument('notifications', notifId, {
+                        adminId,
+                        title: '🎉 Order Fully Completed!',
+                        body: `All stages done for Order #${orderId} — ${updatedOrder.customerName || 'Customer'} — Ready for delivery`,
+                        data: { orderId, type: 'order_complete' },
+                        read: false,
+                        createdAt: new Date()
+                    });
+                    console.log(`🔔 Notification saved — Order #${orderId} complete (admin: ${adminId})`);
+                }
+            } catch(e) {
+                console.warn('⚠️ Notification save failed:', e.message);
+            }
+        }
+
+        res.json({ success: true, message: `Task ${status} successfully` });
 
     } catch (error) {
         console.error('❌ Update task error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 /**
  * Get staff notifications
  */

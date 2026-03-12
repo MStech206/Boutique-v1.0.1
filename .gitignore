@@ -13,7 +13,7 @@ build/
 .pub/
 .flutter-plugins
 .flutter-plugins-dependencies
-
+.env
 # Flutter cache
 flutter_pub_cache/
 
