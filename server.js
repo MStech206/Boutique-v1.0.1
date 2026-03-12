@@ -193,7 +193,8 @@ async function getAppSettings(options = {}) {
   }
 
   // Cache result (could be null) for 10 minutes
-  setCache(cacheKey, settings, 10 * 60 * 1000);
+    setCache(cacheKey, settings, 60 * 60 * 1000);
+
   return settings;
 }
 
@@ -297,9 +298,22 @@ app.get(['/staff', '/staff/*'], (req, res) => {
         await db.setDocument('notifications', notifId, {
             adminId, title, body, data, read: false, createdAt: new Date()
         });
-        console.log(`🔔 Notification saved: ${title}`);
+       invalidateCache([`notifs_${adminId}`]);
+        _ssePush(adminId, { type: 'notification', title, body, data });
+        console.log(`🔔 Notification saved + pushed via SSE: ${title}`);
     } catch(err) {
         console.warn('⚠️ Notification save failed:', err.message);
+    }
+}
+
+// ── SSE client registry for real-time push ───────────────────────────────
+const _sseClients = new Map(); // adminId → Set<res>
+function _ssePush(adminId, payload) {
+    const clients = _sseClients.get(adminId);
+    if (!clients || clients.size === 0) return;
+    const msg = `data: ${JSON.stringify(payload)}\n\n`;
+    for (const c of [...clients]) {
+        try { c.write(msg); } catch(e) { clients.delete(c); }
     }
 }
 // Catch any unhandled promise rejections - MUST BE FIRST
@@ -464,7 +478,7 @@ function canonicalizeRole(r) {
 
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token || null;
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
@@ -1555,6 +1569,7 @@ app.post('/api/admin/sub-admins', authenticateToken, async (req, res) => {
     await clientDB(req).setDocument('users', username, subAdminData);
 
     console.log(`✅ Sub-admin created in Firestore: ${username} for branch ${branchId} (adminId: ${adminId})`);
+        invalidateCache([`admin_sub_admins_${adminId}`, `staff_list_${adminId}`, `branches_all`, `public_branches_${adminId}`]);
     res.json({ success: true, subAdmin: { username, branch: branchId, role: 'sub-admin', permissions: subAdminData.permissions } });
   } catch (error) {
     console.error('Create sub-admin error:', error);
@@ -1687,7 +1702,7 @@ app.delete('/api/admin/sub-admins/:id', authenticateToken, async (req, res) => {
       }
       await db.deleteDocument('branches', subAdmin.branch);
     }
-    invalidateCache([`admin_sub_admins_${adminId}`, `branches_all`, `public_branches_${adminId}`]);
+        invalidateCache([`admin_sub_admins_${adminId}`, `branches_all`, `public_branches_${adminId}`, `staff_list_${adminId}`]);
     console.log(`✅ Sub-admin deleted: ${req.params.id}`);
     res.json({ success: true, message: 'Sub-admin and associated branch deleted successfully' });
   } catch (error) {
@@ -1719,7 +1734,7 @@ app.get('/api/branches', authenticateToken, async (req, res) => {
           location: d.location || (d.branch && d.branch.location) || ''
         }));
         const responseBody = { success: true, branches, dataSource: 'Firebase Firestore (real-time)' };
-        setCache(cacheKey, responseBody, 30 * 60 * 1000);
+        setCache(cacheKey, responseBody, 5 * 60 * 1000);
         return res.json(responseBody);
       }
       console.warn('⚠️ Firestore branches fetch failed — falling back to MongoDB:', fbRes.error);
@@ -1858,6 +1873,9 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
     }
 
     const filters = {};
+     const _staffCacheKey = `staff_list_${adminId}_${branch||'all'}`;
+    const _staffCached = req.query.nocache !== '1' && getCache(_staffCacheKey);
+    if (_staffCached) return res.json(_staffCached);
     if (branch) filters.where = [['branch', '==', branch]];
 
      
@@ -1887,7 +1905,7 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
       isAvailable:    s.isAvailable !== undefined ? s.isAvailable : true,
       workflowStages: s.workflowStages || []
     }));
-
+    setCache(_staffCacheKey, out,   5 * 60 * 1000);
     res.json(out);
   } catch (error) {
     console.error('❌ Get staff error:', error);
@@ -1948,6 +1966,7 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
             pin, branch, workflowStages, skills, isAvailable: true, adminId, createdAt: new Date() };
           await db.syncStaff(staffDoc);
           console.log(`✅ Staff created: ${name} (${sid}) for ${adminId}`);
+            invalidateCache([`staff_list_${adminId}`]);
           res.json({ success: true, staff: staffDoc });
         } catch (error) {
           console.error('Create staff error:', error);
@@ -1971,6 +1990,7 @@ app.post('/api/admin/festivals', authenticateToken, async (req, res) => {
                 const db = firebaseIntegrationService.forClient(adminId);
                  await db.setDocument('staff', req.params.id, update);
                 console.log(`✅ Staff updated: ${req.params.id} for ${adminId}`);
+                invalidateCache([`staff_list_${adminId}`]);
                 res.json({ success: true });
               } catch (error) {
                 console.error('Update staff error:', error);
@@ -1986,8 +2006,10 @@ app.get('/api/admin/customers', authenticateToken, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied' });
     }
+       const _custCacheKey = `customers_admin_${req.user.adminId}`;
+    const _custCached = req.query.nocache !== '1' && getCache(_custCacheKey);
+    if (_custCached) return res.json(_custCached);
 
-    // Attempt Firestore first when Mongo is not connected or when Firestore has data
     if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
      const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 1000 });
       if (fbRes.success && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
@@ -2001,7 +2023,9 @@ app.get('/api/admin/customers', authenticateToken, async (req, res) => {
           totalSpent: c.totalSpent || 0,
           createdAt: c.createdAt && c.createdAt.toDate ? c.createdAt.toDate() : c.createdAt
         }));
-        return res.json({ success: true, customers: out });
+         const _custResp = Array.isArray(out) ? out : out;
+        setCache(_custCacheKey, { success: true, customers: out }, 5 * 60 * 1000);
+       return res.json(_custResp);
       }
       // if Firestore returned empty or failed, fall through to Mongo if available
       if (!isMongoConnected()) {
@@ -2048,11 +2072,14 @@ app.get('/api/admin/customers', authenticateToken, async (req, res) => {
 // Public: simple customers list for lightweight clients (no auth)
 app.get('/api/public/customers', async (req, res) => {
   try {
-    // Firestore fallback
+    const _pubCustKey = `customers_public_${req.query.adminId||'all'}`;
+    const _pubCustCached = getCache(_pubCustKey);
+    if (_pubCustCached) return res.json(_pubCustCached);
     if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
       const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 500 });
       if (fbRes.success && Array.isArray(fbRes.data)) {
         const out = fbRes.data.map(c => ({ name: c.name, phone: c.phone, totalOrders: c.totalOrders || 0 }));
+        setCache(_pubCustKey, out, 5 * 60 * 1000);
         return res.json(out);
       }
       if (!isMongoConnected()) {
@@ -2072,10 +2099,15 @@ app.get('/api/public/customers', async (req, res) => {
 // Generic customers endpoint (tries to be tolerant)
 app.get('/api/customers', async (req, res) => {
   try {
+    const _custKey2 = `customers_all_${req.query.adminId||'all'}`;
+    const _custCached2 = getCache(_custKey2);
+    if (_custCached2) return res.json(_custCached2);
     if ((!isMongoConnected() && firebaseIntegrationService.initialized) || firebaseIntegrationService.initialized) {
       const fbRes = await clientDB(req).getCollection('customers', { orderBy: { field: 'name', direction: 'asc' }, limit: 500 });
       if (fbRes.success && Array.isArray(fbRes.data)) {
-        return res.json({ success: true, customers: fbRes.data });
+        const _r = { success: true, customers: fbRes.data };
+        setCache(_custKey2, _r, 5 * 60 * 1000);
+        return res.json(_r);
       }
       if (!isMongoConnected()) {
         return res.json({ success: true, customers: [] });
@@ -2891,8 +2923,11 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
   }
 });
             // GET notifications
-            app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
+              app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
               try {
+                  const _nKey = `notifs_${req.user.adminId}`;
+                  const _nCached = getCache(_nKey);
+                  if (_nCached) return res.json(_nCached);
                   const db = firebaseIntegrationService.forClient(req.user.adminId);
                   const result = await db.getCollection('notifications', {
                       where: [['adminId', '==', req.user.adminId]],
@@ -2903,15 +2938,38 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
                       const tb = b.createdAt?._seconds || new Date(b.createdAt || 0).getTime() / 1000;
                       return tb - ta;
                   });
-                  res.json({ notifications });
+                  const _nResp = { notifications };
+                  setCache(_nKey, _nResp, 60 * 1000); // 60s cache — matches 30s poll so max 1 real read/min
+                  res.json(_nResp);
               } catch(err) { res.status(500).json({ error: err.message }); }
           });
+          app.get('/api/admin/notifications/stream', authenticateToken, (req, res) => {
+            const adminId = req.user && req.user.adminId;
+            if (!adminId) return res.status(400).end();
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders();
+            if (!_sseClients.has(adminId)) _sseClients.set(adminId, new Set());
+            _sseClients.get(adminId).add(res);
+            console.log(`📡 SSE connected: ${adminId} (${_sseClients.get(adminId).size} clients)`);
+            const heartbeat = setInterval(() => {
+                try { res.write(': heartbeat\n\n'); } catch(e) { clearInterval(heartbeat); }
+            }, 25000);
+            req.on('close', () => {
+                clearInterval(heartbeat);
+                _sseClients.get(adminId)?.delete(res);
+                console.log(`📡 SSE disconnected: ${adminId}`);
+            });
+        });
 
             // Mark one read
             app.put('/api/admin/notifications/:id/read', authenticateToken, async (req, res) => {
                 try {
                     const db = firebaseIntegrationService.forClient(req.user.adminId);
                     await db.updateDocument('notifications', req.params.id, { read: true });
+                    invalidateCache([`notifs_${req.user.adminId}`]);
                     res.json({ success: true });
                 } catch(err) { res.status(500).json({ error: err.message }); }
             });
@@ -2934,6 +2992,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
                 try {
                     const db = firebaseIntegrationService.forClient(req.user.adminId);
                     await db.deleteDocument('notifications', req.params.id);
+                    invalidateCache([`notifs_${req.user.adminId}`]);
                     res.json({ success: true });
                 } catch(err) { res.status(500).json({ error: err.message }); }
             });
@@ -3094,6 +3153,7 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
 
                       await clientDB(req).setDocument('orders', docId, merged);
                       console.log(`✅ Order updated in Firestore: ${orderId}`);
+                      invalidateCache(['orders_list_', 'public_orders_']);
                       res.json({ success: true, order: merged });
 
                     } catch (error) {
@@ -3251,7 +3311,7 @@ app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
       } catch (propErr) {
         console.warn('Firestore customer-to-order propagation error:', propErr && propErr.message ? propErr.message : propErr);
       }
-
+      invalidateCache([`customers_admin_`, `customers_public_`, `customers_all_`]);
       return res.json({ success: true, customer: { id: customerId, ...updateData } });
     }
 
@@ -3303,7 +3363,7 @@ app.put('/api/admin/customers/:id', authenticateToken, async (req, res) => {
     if (firebaseIntegrationService.initialized) {
      await clientDB(req).setDocument('customers', customerId, { ...updatedCustomer.toObject() });
     }
-
+     invalidateCache([`customers_admin_`, `customers_public_`, `customers_all_`, 'orders_list_']);
     res.json({ success: true, customer: updatedCustomer });
   } catch (error) {
     console.error('Update customer error:', error);
@@ -3386,16 +3446,11 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 
     // Prefer reading workflowStages from Firestore when available, otherwise
     // fall back to MongoDB Settings or use a safe default.
-    let settings = null;
+     let settings = null;
     try {
-      if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
-        const fbSettings = await clientDB(req).getCollection('settings', { limit: 1 });
-        if (fbSettings && fbSettings.success && fbSettings.data && fbSettings.data.length > 0) {
-          settings = fbSettings.data[0];
-        }
-      }
+      settings = await getAppSettings({ req }); // uses 30-min cache, zero extra Firestore reads
     } catch (e) {
-      console.warn('⚠️ Failed to read settings from Firestore (will try Mongo):', e.message || e);
+      console.warn('⚠️ Failed to read settings:', e.message || e);
     }
 
     // Mongo fallback only when connected
@@ -3877,6 +3932,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
               const db = firebaseIntegrationService.forClient(adminId);
               await db.setDocument('staff', req.params.id, { isAvailable, updatedAt: new Date() });
               console.log(`✅ Staff availability updated: ${req.params.id} → ${isAvailable}`);
+               invalidateCache([`staff_list_${adminId}`]);
               res.json({ success: true });
             } catch (error) {
               console.error('Update availability error:', error);
@@ -3892,6 +3948,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
             const db = firebaseIntegrationService.forClient(adminId);
             await db.deleteDocument('staff', req.params.id);
             console.log(`✅ Staff deleted: ${req.params.id}`);
+             invalidateCache([`staff_list_${adminId}`]);
             res.json({ success: true, message: 'Staff deleted successfully' });
           } catch (error) {
             console.error('Delete staff error:', error);

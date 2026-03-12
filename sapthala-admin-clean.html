@@ -494,30 +494,52 @@
                 document.addEventListener('DOMContentLoaded', async () => {
                     try {
                         const _u0 = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
-                    const res = await fetch('/api/public/branches' + (_u0.adminId ? '?adminId=' + encodeURIComponent(_u0.adminId) : (_u0.username ? '?adminId=' + encodeURIComponent(_u0.username) : '')));
+                        const isSubAdmin = _u0.role === 'sub-admin';
+                        const subAdminBranch = (_u0.branch || _u0.branchId || '').toString();
+
+                        const res = await fetch('/api/public/branches' + (_u0.adminId ? '?adminId=' + encodeURIComponent(_u0.adminId) : (_u0.username ? '?adminId=' + encodeURIComponent(_u0.username) : '')) + '&nocache=1');
                         if (!res.ok) return;
                         const branches = await res.json();
-                        const selIds = ['orderBranch','staffBranch','staffFilterBranch','reportBranch'];
+
+                        // Filter to only sub-admin's branch if applicable
+                        const filtered = isSubAdmin && subAdminBranch
+                            ? (branches || []).filter(b => (b.branchId || '').toString() === subAdminBranch)
+                            : (branches || []);
+
+                        const selIds = ['orderBranch', 'staffBranch', 'staffFilterBranch', 'reportBranch'];
                         selIds.forEach(id => {
                             const el = document.getElementById(id);
-                            if (!el) return;
-                            if (el.tagName === 'SELECT') el.innerHTML = '<option value="">All</option>';
+                            if (el && el.tagName === 'SELECT') el.innerHTML = '<option value="">All</option>';
                         });
-                        (branches || []).forEach(b => {
+
+                        filtered.forEach(b => {
                             const display = (b.branchName || b.branchId || b.branch || '').toString();
                             const value = (b.branchId || display).toString();
                             selIds.forEach(id => {
                                 const el = document.getElementById(id);
-                                if (!el) return;
-                                if (el.tagName === 'SELECT') {
-                                    const o = document.createElement('option'); o.value = value; o.textContent = `${display} (${value})`; el.appendChild(o);
-                                }
+                                if (!el || el.tagName !== 'SELECT') return;
+                                const o = document.createElement('option');
+                                o.value = value;
+                                o.textContent = `${display} (${value})`;
+                                el.appendChild(o);
                             });
                             const datalist = document.getElementById('branchesDatalist');
                             if (datalist) {
-                                const d = document.createElement('option'); d.value = display; datalist.appendChild(d);
+                                const d = document.createElement('option');
+                                d.value = display;
+                                datalist.appendChild(d);
                             }
                         });
+
+                        // Lock all selects to sub-admin's branch
+                        if (isSubAdmin && subAdminBranch) {
+                            selIds.forEach(id => {
+                                const el = document.getElementById(id);
+                                if (!el || el.tagName !== 'SELECT') return;
+                                el.value = subAdminBranch;
+                                el.disabled = true;
+                            });
+                        }
                     } catch (e) { console.warn('earlyPopulateBranches failed', e); }
                 });
 
@@ -1918,8 +1940,11 @@
             async deleteStaff(id) { return await this.request(`/staff/${id}`, { method: 'DELETE' }); },
             async createOrder(data) { return await this.request('/orders', { method: 'POST', body: JSON.stringify(data) }); },
             async getDashboard() { return await this.request('/dashboard'); },
-            async getOrders(branch) { 
-                const q = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+            async getOrders(branch, nocache = false) { 
+                const p = new URLSearchParams();
+                if (branch) p.set('branch', branch);
+                if (nocache) p.set('nocache', '1');
+                const q = p.toString() ? `?${p.toString()}` : '';
                 return await this.request(`/admin/orders${q}`); 
             }
             ,
@@ -1960,12 +1985,12 @@
                     throw e;
                 }
             },
-            async getCustomers() {
-                // Try admin customers endpoint first, then fallback to public/customers
+            async getCustomers(nocache = false) {
+                const q = nocache ? '?nocache=1' : '';
                 try {
-                    return await this.request('/admin/customers');
+                    return await this.request(`/admin/customers${q}`);
                 } catch (e) {
-                    try { return await this.request('/customers'); } catch (e2) { return await this.request('/public/customers'); }
+                    try { return await this.request(`/customers${q}`); } catch (e2) { return await this.request(`/public/customers${q}`); }
                 }
             }
         };
@@ -2192,126 +2217,144 @@
         }
 
         async function populateGlobalBranchFilters() {
-            try {
-                const sel = document.getElementById('staffFilterBranch');
-                if (!sel) return;
-                const _u2 = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
-                const res = await fetch('/api/public/branches' + (_u2.adminId ? '?adminId=' + encodeURIComponent(_u2.adminId) : (_u2.username ? '?adminId=' + encodeURIComponent(_u2.username) : '')));
-                if (!res.ok) return;
-                const branches = await res.json();
-                sel.innerHTML = '<option value="">All Branches</option>';
-                const orderBranchSel = document.getElementById('orderBranch');
-                const reportBranchSel = document.getElementById('reportBranch');
-                if (orderBranchSel) orderBranchSel.innerHTML = '<option value="">Choose branch...</option>';
-                const staffBranchDatalist = document.getElementById('branchesDatalist');
-                if (staffBranchDatalist) staffBranchDatalist.innerHTML = '';
-                (branches || []).forEach(b => {
-                    const display = (b.branchName || b.branchId || '').toString();
-                    const value = (b.branchId || display).toString();
-                    const opt = document.createElement('option');
-                    opt.value = value;
-                    opt.textContent = `${display} (${value})`;
-                    sel.appendChild(opt);
-                    if (orderBranchSel) {
-                        const o = document.createElement('option');
-                        o.value = value;
-                        o.textContent = `${display} (${value})`;
-                        orderBranchSel.appendChild(o);
-                    }
-                    if (reportBranchSel) {
-                        const r = document.createElement('option');
-                        r.value = value;
-                        r.textContent = `${display} (${value})`;
-                        reportBranchSel.appendChild(r);
-                    }
-                    if (staffBranchDatalist) {
-                        const d = document.createElement('option');
-                        d.value = display;
-                        staffBranchDatalist.appendChild(d);
-                    }
-                });
-                // If logged-in user is sub-admin, default the order branch to their branch and lock selection
-                try {
-                    const userStr = localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user');
-                    if (userStr) {
-                        const user = JSON.parse(userStr);
-                        if (user && user.role === 'sub-admin' && user.branch) {
-                            if (orderBranchSel) {
-                                // try to find matching option value
-                                const desired = user.branch || user.branchId || user.defaultBranch || '';
-                                Array.from(orderBranchSel.options).forEach(opt => {
-                                    if (opt.value && opt.value.toString().toLowerCase() === desired.toString().toLowerCase()) {
-                                        orderBranchSel.value = opt.value;
-                                    }
-                                });
-                                // prevent sub-admin from changing branch
-                                orderBranchSel.disabled = true;
-                            }
-                        }
-                    }
-                } catch (e) { console.warn('Could not apply sub-admin default branch', e); }
-            } catch (e) { console.warn('Could not populate global branch filters', e); }
+    try {
+        const sel = document.getElementById('staffFilterBranch');
+        if (!sel) return;
+        const _u2 = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
+        const isSubAdmin = _u2.role === 'sub-admin';
+        const subAdminBranch = _u2.branch || _u2.branchId || '';
+
+        const res = await fetch('/api/public/branches' + (_u2.adminId ? '?adminId=' + encodeURIComponent(_u2.adminId) : (_u2.username ? '?adminId=' + encodeURIComponent(_u2.username) : '')) + '&nocache=1');
+        if (!res.ok) return;
+        const branches = await res.json();
+
+        // Filter to only sub-admin's branch if sub-admin
+        const filteredBranches = isSubAdmin && subAdminBranch
+            ? (branches || []).filter(b => (b.branchId || '').toString() === subAdminBranch.toString())
+            : (branches || []);
+
+        sel.innerHTML = '<option value="">All Branches</option>';
+        const orderBranchSel = document.getElementById('orderBranch');
+        const reportBranchSel = document.getElementById('reportBranch');
+        if (orderBranchSel) orderBranchSel.innerHTML = '<option value="">Choose branch...</option>';
+        const staffBranchDatalist = document.getElementById('branchesDatalist');
+        if (staffBranchDatalist) staffBranchDatalist.innerHTML = '';
+
+        filteredBranches.forEach(b => {
+            const display = (b.branchName || b.branchId || '').toString();
+            const value = (b.branchId || display).toString();
+
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = `${display} (${value})`;
+            sel.appendChild(opt);
+
+            if (orderBranchSel) {
+                const o = document.createElement('option');
+                o.value = value;
+                o.textContent = `${display} (${value})`;
+                orderBranchSel.appendChild(o);
+            }
+            if (reportBranchSel) {
+                const r = document.createElement('option');
+                r.value = value;
+                r.textContent = `${display} (${value})`;
+                reportBranchSel.appendChild(r);
+            }
+            if (staffBranchDatalist) {
+                const d = document.createElement('option');
+                d.value = display;
+                staffBranchDatalist.appendChild(d);
+            }
+        });
+
+        // Lock sub-admin to their branch
+        if (isSubAdmin && subAdminBranch) {
+            if (orderBranchSel) {
+                orderBranchSel.value = subAdminBranch;
+                orderBranchSel.disabled = true;
+            }
+            if (reportBranchSel) {
+                reportBranchSel.value = subAdminBranch;
+                reportBranchSel.disabled = true;
+            }
+            if (sel) {
+                sel.value = subAdminBranch;
+                sel.disabled = true;
+            }
         }
+    } catch (e) { console.warn('Could not populate global branch filters', e); }
+}
                         async function loadNotifications() {
-                    try {
-                        const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
-                        const res = await fetch('/api/admin/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
-                        const data = await res.json();
-                        const notifs = data.notifications || [];
-                        const unread = notifs.filter(n => !n.read).length;
-                        const badge = document.getElementById('notifBadge');
-                        if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
-                        else { badge.style.display = 'none'; }
-                        const list = document.getElementById('notifList');
-                        if (notifs.length === 0) { 
-                            list.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#94a3b8;">🔕 No notifications yet</div>'; 
-                            return; 
-                        }
-                        const now = new Date();
-                        list.innerHTML = notifs.map(n => {
-                            const deliveryDate = n.data?.deliveryDate || n.deliveryDate;
-                            const isExpired = deliveryDate && new Date(deliveryDate._seconds ? deliveryDate._seconds*1000 : deliveryDate) < now;
-                            const cardBg = isExpired ? 'linear-gradient(135deg,#fff1f2,#fee2e2)' : (n.read ? '#f1f5f9' : 'linear-gradient(135deg,#eef2ff,#f5f3ff)');
-                            const borderColor = isExpired ? '#f87171' : (n.read ? '#cbd5e1' : '#6366f1');
-                            const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
-                            const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
-                            const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
-                            return `
-                            <div style="
-                                padding:14px 16px;
-                                border-radius:12px;
-                                margin-bottom:8px;
-                                background:${cardBg};
-                                border-left:4px solid ${borderColor};
-                                border:1px solid ${borderSolid};
-                                position:relative;
-                            ">
-                                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                                    <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
-                                        <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
-                                        <div style="font-size:13px;color:${bodyColor};margin-top:2px;line-height:1.4;">${n.body}</div>
-                                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                                            🕐 ${new Date(n.createdAt?._seconds ? n.createdAt._seconds*1000 : n.createdAt).toLocaleString()}
-                                            ${isExpired ? '<span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">⚠ EXPIRED</span>' : ''}
-                                            ${!n.read && !isExpired ? '<span style="background:#6366f1;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
+                        try {
+                            const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                            const res = await fetch('/api/admin/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
+                            const data = await res.json();
+                            const notifs = data.notifications || [];
+                            const unread = notifs.filter(n => !n.read).length;
+                            const badge = document.getElementById('notifBadge');
+                            if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
+                            else { badge.style.display = 'none'; }
+                            const list = document.getElementById('notifList');
+                            if (notifs.length === 0) {
+                                list.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#94a3b8;">🔕 No notifications yet</div>';
+                                return;
+                            }
+                            const now = new Date();
+                            list.innerHTML = notifs.map(n => {
+                                const deliveryDate = n.data?.deliveryDate || n.deliveryDate;
+                                const isExpired = deliveryDate && new Date(deliveryDate._seconds ? deliveryDate._seconds*1000 : deliveryDate) < now;
+                                const cardBg = isExpired ? 'linear-gradient(135deg,#fff1f2,#fee2e2)' : (n.read ? '#f1f5f9' : 'linear-gradient(135deg,#eef2ff,#f5f3ff)');
+                                const borderColor = isExpired ? '#f87171' : (n.read ? '#cbd5e1' : '#6366f1');
+                                const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
+                                const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
+                                const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
+                                return `
+                                <div style="padding:14px 16px;border-radius:12px;margin-bottom:8px;background:${cardBg};border-left:4px solid ${borderColor};border:1px solid ${borderSolid};position:relative;">
+                                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                        <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
+                                            <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
+                                            <div style="font-size:13px;color:${bodyColor};margin-top:2px;line-height:1.4;">${n.body}</div>
+                                            <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+                                                🕐 ${new Date(n.createdAt?._seconds ? n.createdAt._seconds*1000 : n.createdAt).toLocaleString()}
+                                                ${isExpired ? '<span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">⚠ EXPIRED</span>' : ''}
+                                                ${!n.read && !isExpired ? '<span style="background:#6366f1;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
+                                            </div>
                                         </div>
+                                        <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;">🗑</button>
                                     </div>
-                                    <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;line-height:1;flex-shrink:0;" onmouseover="this.style.color='#ef4444';this.style.background='#fee2e2'" onmouseout="this.style.color='#94a3b8';this.style.background='none'">🗑</button>
-                                </div>
-                            </div>`;
-                        }).join('');
-                        // Show popup only once per notification (dedup by id)
-                        const newComplete = notifs.find(n => !n.read && n.data?.type === 'order_complete');
-                        if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
-                            sessionStorage.setItem('popup_' + newComplete.id, '1');
-                            showOrderCompletePopup(newComplete);
-                        }
-                    } catch(e) { console.warn('Notifications error:', e); }
-                            // Poll every 30 seconds for new notifications
-                        setInterval(loadNotifications, 30000);
-                        // Load once on page ready
-                        setTimeout(loadNotifications, 3000);
-                        }
+                                </div>`;
+                            }).join('');
+                            // Popup for new order_complete notifications
+                            const newComplete = notifs.find(n => !n.read && n.data?.type === 'order_complete');
+                            if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
+                                sessionStorage.setItem('popup_' + newComplete.id, '1');
+                                showOrderCompletePopup(newComplete);
+                            }
+                        } catch(e) { console.warn('Notifications error:', e); }
+                    }
+
+                    // SSE — connect ONCE, calls loadNotifications instantly on push
+                    (function connectNotifSSE() {
+                        const _t = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                        if (!_t) return;
+                        const _es = new EventSource(`/api/admin/notifications/stream?token=${encodeURIComponent(_t)}`);
+                        _es.onmessage = function(e) {
+                            try {
+                                const p = JSON.parse(e.data);
+                                if (p.type === 'notification') loadNotifications();
+                            } catch(err) { console.warn('SSE parse error', err); }
+                        };
+                        _es.onerror = function() {
+                            _es.close();
+                            setTimeout(connectNotifSSE, 5000);
+                        };
+                        window._notifSSE = _es;
+                    })();
+
+                    // Fallback poll every 30s only (SSE handles real-time)
+                    setInterval(loadNotifications, 60000);
+                    loadNotifications(); // initial load
 
                 function toggleNotifications() {
                     const dd = document.getElementById('notifDropdown');
@@ -5100,11 +5143,11 @@
 
         // Orders Management
         // loadOrders supports optional filters: { status, branch, orderId }
-        async function loadOrders(filters = {}) {
+        async function loadOrders(filters = {}, nocache = false) {
             try {
                 const branchSel = document.getElementById('staffFilterBranch');
                 const branch = (filters.branch !== undefined) ? filters.branch : (branchSel ? branchSel.value : '');
-                const orders = await api.getOrders(branch);
+                const orders = await api.getOrders(branch, nocache);
 
                 let list = Array.isArray(orders) ? orders : (orders.orders || orders.data || []);
                 if (filters.status) {
@@ -5223,9 +5266,9 @@
         }
 
         // Customers Management
-        async function loadCustomers() {
+        async function loadCustomers(nocache = false) {
             try {
-                const customers = await api.getCustomers();
+                 const customers = await api.getCustomers(nocache);
                 // API may return { success:true, customers: [...] } or an array
                 if (Array.isArray(customers)) {
                     displayCustomers(customers);
@@ -5699,7 +5742,8 @@
                                         const idx = orders.findIndex(o => o.orderId === oid || o.id === oid || o._id === oid);
                                         if (idx !== -1) { orders[idx] = { ...orders[idx], ...updatePayload }; localStorage.setItem('sapthala_orders', JSON.stringify(orders)); }
 
-                                        if (typeof loadOrders === 'function') setTimeout(() => loadOrders().catch(()=>{}), 400);
+                                        if (typeof loadOrders === 'function') setTimeout(() => loadOrders({}, true).catch(()=>{}), 400);
+                                        if (typeof loadReports === 'function') setTimeout(() => loadReports().catch(()=>{}), 600);
                                         document.getElementById('customerEditModal')?.remove(); // just close, don't reopen
                                         alert('✅ Order updated successfully!');
                                     } catch(e) {
@@ -5738,7 +5782,8 @@
                                         localStorage.setItem('sapthala_customers', JSON.stringify(customers));
 
                                         if (typeof loadCustomers === 'function') setTimeout(() => loadCustomers().catch(()=>{}), 400);
-                                        if (typeof loadOrders === 'function') setTimeout(() => loadOrders().catch(()=>{}), 400);
+                                       if (typeof loadCustomers === 'function') setTimeout(() => loadCustomers(true).catch(()=>{}), 400);
+                                        if (typeof loadOrders === 'function') setTimeout(() => loadOrders({}, true).catch(()=>{}), 400);
                                         document.getElementById('customerEditModal')?.remove();
                                         alert('✅ Customer info saved and synced to database!');
                                         setTimeout(() => editCustomer(newPhone), 300);
@@ -5760,7 +5805,7 @@
             `;
             
             try {
-                const response = await fetch('/api/admin/sub-admins', {
+                const response = await fetch('/api/admin/sub-admins?nocache=1', {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token')}` }
                 });
                 
@@ -5906,7 +5951,7 @@
             
             // Enforce frontend branch limit: max 11 unique branches
             try {
-                const checkRes = await fetch('/api/admin/sub-admins', {
+                const checkRes = await fetch('/api/admin/sub-admins?nocache=1', {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('sapthala_token')}` }
                 });
                 if (checkRes.ok) {
@@ -6099,7 +6144,7 @@
         }
 
         // Staff Management
-        async function loadStaff() {
+         async function loadStaff(nocache = false) {
             console.log('🔄 Loading staff members...');
             const staffList = document.getElementById('staffList');
             
@@ -6119,6 +6164,7 @@
                 const params = new URLSearchParams();
                 if (adminId) params.set('adminId', adminId);
                 if (branchVal) params.set('branch', branchVal);
+                if (nocache) params.set('nocache', '1');
                 const q = params.toString() ? `?${params.toString()}` : '';
                 const staff = await api.request(`/staff${q}`);
                 console.log(`✅ Loaded ${staff.length} staff members`);
@@ -6259,8 +6305,9 @@
                     await api.createStaff(formData);
                     alert('✅ Staff created successfully!');
                 }
-                closeStaffModal();
-                loadStaff();
+                 closeStaffModal();
+                setTimeout(() => loadStaff(true).catch(()=>{}), 300);
+                if (typeof loadBranchesList === 'function') setTimeout(() => loadBranchesList(true).catch(()=>{}), 500);
             } catch (error) {
                 alert('❌ Failed to save staff: ' + error.message);
             }
@@ -6435,7 +6482,7 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to delete staff');
                 alert('✅ Staff deleted successfully!');
-                loadStaff();
+                setTimeout(() => loadStaff(true).catch(()=>{}), 300);
             } catch (error) {
                 console.error('❌ Delete staff error:', error);
                 alert('❌ Failed to delete staff: ' + error.message);
