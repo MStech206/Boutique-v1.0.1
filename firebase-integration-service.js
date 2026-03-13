@@ -350,6 +350,7 @@ let query = this._resolveRef(collection, this._activeAdminId || null);
         advanceAmount: order.advanceAmount || 0,
         balanceAmount: order.balanceAmount || 0,
         deliveryDate: order.deliveryDate ? admin.firestore.Timestamp.fromDate(new Date(order.deliveryDate)) : null,
+        trialDate: order.trialDate ? admin.firestore.Timestamp.fromDate(new Date(order.trialDate)) : null,
         branch: order.branch || 'SAPTHALA.MAIN',
         status: order.status || 'pending',
         currentStage: order.currentStage || 'dyeing',

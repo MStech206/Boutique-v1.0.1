@@ -37,7 +37,8 @@ function BoutiqueAdmins() {
     setError(null);
     try {
       const res = await api.get(API_URL);
-      const data = Array.isArray(res.data) ? res.data : (res.data?.admins || []);
+      const raw = Array.isArray(res.data) ? res.data : (res.data?.admins || []);
+      const data = raw.filter(a => a.role === 'admin');
       setAdmins(data);
       setStats([
         { label: "Total Admins", value: data.length, color: "primary" },

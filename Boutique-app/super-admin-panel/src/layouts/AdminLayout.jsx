@@ -22,7 +22,7 @@ function AdminLayout() {
             className="admin-logo"
             style={{ width: '50px', height: '50px', objectFit: 'contain', borderRadius: '8px' }}
           />
-          <span className="admin-title">SAPTHALA Super Admin</span>
+          <span className="admin-title">Super Admin</span>
         </div>
 
         {/* Logout */}

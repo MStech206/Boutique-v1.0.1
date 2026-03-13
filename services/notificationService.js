@@ -57,7 +57,7 @@ class NotificationService {
                     `Phone: ${orderData.customerPhone}\n` +
                     `Garment: ${orderData.garmentType}\n` +
                     `Amount: ₹${orderData.totalAmount}\n` +
-                    `Delivery: ${new Date(orderData.deliveryDate).toLocaleDateString()}\n\n` +
+                    `Delivery: ${orderData.deliveryDate ? (() => { const d = orderData.deliveryDate; const s = (d && d._seconds) ? new Date(d._seconds*1000) : new Date(typeof d === 'string' && d.length === 10 ? d + 'T12:00:00' : d); return isNaN(s) ? 'TBD' : s.toLocaleDateString('en-IN'); })() : 'TBD'}\n\n` +
                     `Please prepare for production.\n\n` +
                     `- SAPTHALA Team`;
 
@@ -103,7 +103,9 @@ class NotificationService {
         const totalAmount = Number(order.totalAmount ?? order.pricing?.total ?? 0);
         const advanceAmount = Number(order.advanceAmount ?? order.advancePayment ?? 0);
         const balanceAmount = totalAmount - advanceAmount;
-        const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'TBD';
+       const deliveryDate = order.deliveryDate
+            ? (() => { const d = order.deliveryDate; const s = (d && d._seconds) ? new Date(d._seconds*1000) : new Date(typeof d === 'string' && d.length === 10 ? d + 'T12:00:00' : d); return isNaN(s) ? 'TBD' : s.toLocaleDateString('en-IN'); })()
+            : 'TBD';
 
         return `${greeting}\n\n` +
             `Dear ${customerName},\n\n` +

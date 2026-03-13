@@ -91,6 +91,12 @@ const JWT_SECRET = 'sapthala_boutique_secret_2024';
     }));
 app.use(express.json({ limit: '50mb' }));
 
+// simple health check used by mobile app; avoids relying on a 404 from
+// hitting the namespace root. Returns 200 when server is alive.
+app.get('/api', (req, res) => {
+  res.json({ ok: true, server: 'Boutique backend' });
+});
+
 // MIME type middleware - MUST be before static middleware
 app.use((req, res, next) => {
   if (req.url.endsWith('.js')) res.type('application/javascript');
@@ -299,7 +305,9 @@ app.get(['/staff', '/staff/*'], (req, res) => {
             adminId, title, body, data, read: false, createdAt: new Date()
         });
        invalidateCache([`notifs_${adminId}`]);
-        _ssePush(adminId, { type: 'notification', title, body, data });
+        const _pushPayload = { type: 'notification', title, body, data };
+        if (data && data.type === 'order_complete') _pushPayload.event = 'order_complete';
+        _ssePush(adminId, _pushPayload);
         console.log(`🔔 Notification saved + pushed via SSE: ${title}`);
     } catch(err) {
         console.warn('⚠️ Notification save failed:', err.message);
@@ -1431,7 +1439,7 @@ app.post('/api/admin/login', async (req, res) => {
     const normalizedRole = canonicalizeRole(user.role || '');
 
     const token = jwt.sign(
-{ id: user._id || user.id, username: user.username, role: normalizedRole, branch: user.branch, permissions: user.permissions, adminId: user.adminId || null },
+{ id: user._id || user.id, username: user.username, role: normalizedRole, branch: user.branch, permissions: user.permissions, adminId: user.adminId || (normalizedRole === 'admin' ? user.username : null) },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -1459,7 +1467,7 @@ app.post('/api/admin/login', async (req, res) => {
         role: normalizedRole, 
         branch: user.branch,
         permissions: user.permissions,
-        adminId: user.adminId || null   
+         adminId: user.adminId || (normalizedRole === 'admin' ? user.username : null)   
       }
     });
   } catch (error) {
@@ -1729,10 +1737,14 @@ app.get('/api/branches', authenticateToken, async (req, res) => {
       const fbRes = await db.getCollection('branches', { orderBy: { field: 'branchName', direction: 'asc' } });
       if (fbRes.success) {
         const branches = (fbRes.data || []).map(d => ({
-          branchId: d.branchId || d.id || '',
-          branchName: d.branchName || d.name || (d.branch && d.branch.name) || '',
-          location: d.location || (d.branch && d.branch.location) || ''
-        }));
+        branchId: d.branchId || d.id || '',
+        branchName: d.branchName || d.name || (d.branch && d.branch.name) || '',
+        location: d.location || (d.branch && d.branch.location) || '',
+        phone: d.phone || '',
+        email: d.email || '',
+        isActive: d.isActive !== false,
+        createdAt: d.createdAt || null
+      }));
         const responseBody = { success: true, branches, dataSource: 'Firebase Firestore (real-time)' };
         setCache(cacheKey, responseBody, 5 * 60 * 1000);
         return res.json(responseBody);
@@ -2188,7 +2200,8 @@ app.put('/api/branches/:id', authenticateToken, async (req, res) => {
     if (!adminId) return res.status(400).json({ success: false, error: 'adminId missing' });
     const { branchName, location, phone, email, isActive, logo } = req.body;
     const db = firebaseIntegrationService.forClient(adminId);
-    const update = { branchName, location, phone: phone || '', email: email || '', isActive, logo: logo || '', updatedAt: new Date().toISOString() };
+    const update = { branchName, location, phone: phone || '', email: email || '', logo: logo || '', updatedAt: new Date().toISOString() };
+    if (isActive !== undefined) update.isActive = isActive;
     await db.setDocument('branches', req.params.id, update);
     console.log(`✅ Branch updated in subcollection: ${req.params.id} for ${adminId}`);
     invalidateCache(['branches_all', `public_branches_${adminId}`]);
@@ -2678,6 +2691,7 @@ app.get('/api/reports/last-orders', authenticateToken, async (req, res) => {
               progress: `${progress}%`,
               createdAt: order.createdAt && order.createdAt.toDate ? order.createdAt.toDate() : order.createdAt,
               deliveryDate: order.deliveryDate && order.deliveryDate.toDate ? order.deliveryDate.toDate() : order.deliveryDate,
+              trialDate: order.trialDate && order.trialDate.toDate ? order.trialDate.toDate() : order.trialDate,
               branch: order.branch || ''
             };
           });
@@ -2848,6 +2862,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
             status: o.status || '',
             createdAt: o.createdAt && o.createdAt.toDate ? o.createdAt.toDate() : o.createdAt,
             deliveryDate: o.deliveryDate && o.deliveryDate.toDate ? o.deliveryDate.toDate() : o.deliveryDate,
+           trialDate: o.trialDate && o.trialDate.toDate ? o.trialDate.toDate() : o.trialDate,
             branch: o.branch || '',
             workflowTasks: o.workflowTasks || []
           }));
@@ -2884,7 +2899,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
 
       const mongoOrders = await Order.find(matchQuery)
         .sort({ createdAt: -1 })
-        .select('orderId customerName customerPhone customerAddress garmentType totalAmount advanceAmount status createdAt deliveryDate workflowTasks branch');
+        .select('orderId customerName customerPhone customerAddress garmentType totalAmount advanceAmount status createdAt deliveryDate trialDate workflowTasks branch');
       
       orders = mongoOrders.map(order => ({
         _id: order._id,
@@ -2898,6 +2913,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
         status: order.status,
         createdAt: order.createdAt,
         deliveryDate: order.deliveryDate,
+        trialDate: order.trialDate || null,
         branch: order.branch,
         workflowTasks: order.workflowTasks || []
       }));
@@ -2905,11 +2921,13 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
       source = 'mongodb';
     }
 
-    // Redact revenue fields for sub-admins
-    if (req.user && req.user.role === 'sub-admin') {
-      const redacted = orders.map(o => { const c = { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
-      return res.json(redacted);
-    }
+   
+      // Sub-admins can see per-order payment details (total, advance, balance)
+    // but the dashboard aggregate revenue cards are hidden in the frontend
+    // if (req.user && req.user.role === 'sub-admin') {
+    //   const redacted = orders.map(o => { const c = { ...o }; delete c.totalAmount; delete c.advanceAmount; delete c.balanceAmount; return c; });
+    //   return res.json(redacted);
+    // }
 
     // attach overdue flag for convenience
     if (overdueFlag) {
@@ -2922,30 +2940,50 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
-            // GET notifications
-              app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
+           app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
               try {
-                  const _nKey = `notifs_${req.user.adminId}`;
-                  const _nCached = getCache(_nKey);
-                  if (_nCached) return res.json(_nCached);
+                  const isSubAdmin = req.user.role === 'sub-admin';
+                  const myBranch = (req.user.branch || '').toString().trim();
+                  // All notifications are stored under adminId — sub-admins share the same adminId
+                  const cacheKey = isSubAdmin
+                      ? `notifs_sub_${req.user.username}`
+                      : `notifs_${req.user.adminId}`;
+                  const cached = getCache(cacheKey);
+                  if (cached) return res.json(cached);
+
                   const db = firebaseIntegrationService.forClient(req.user.adminId);
                   const result = await db.getCollection('notifications', {
                       where: [['adminId', '==', req.user.adminId]],
-                      limit: 30
+                      limit: 50
                   });
-                  const notifications = (result.data || []).sort((a, b) => {
+
+                  let notifications = (result.data || [])
+                      .filter(n => n.data?.type === 'order_complete'); // only completed orders
+
+                  // Sub-admins: only see notifications for their branch
+                  if (isSubAdmin && myBranch) {
+                      notifications = notifications.filter(n => {
+                          const nb = (n.branch || n.data?.branch || '').toString().trim();
+                          return nb === myBranch;
+                      });
+                  }
+
+                  notifications.sort((a, b) => {
                       const ta = a.createdAt?._seconds || new Date(a.createdAt || 0).getTime() / 1000;
                       const tb = b.createdAt?._seconds || new Date(b.createdAt || 0).getTime() / 1000;
                       return tb - ta;
                   });
-                  const _nResp = { notifications };
-                  setCache(_nKey, _nResp, 60 * 1000); // 60s cache — matches 30s poll so max 1 real read/min
-                  res.json(_nResp);
+
+                  const resp = { notifications };
+                  setCache(cacheKey, resp, 60 * 1000); // 1 min cache — keep fresh
+                  res.json(resp);
               } catch(err) { res.status(500).json({ error: err.message }); }
           });
+          
           app.get('/api/admin/notifications/stream', authenticateToken, (req, res) => {
-            const adminId = req.user && req.user.adminId;
+            const adminId = req.user && (req.user.role === 'sub-admin' ? req.user.username : (req.user.adminId || req.user.username));
             if (!adminId) return res.status(400).end();
+            console.log(`📡 SSE register: ${adminId} role=${req.user.role} branch=${req.user.branch || 'none'}`);
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
             res.setHeader('Connection', 'keep-alive');
@@ -2964,39 +3002,64 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
             });
         });
 
-            // Mark one read
+           // Mark one read
             app.put('/api/admin/notifications/:id/read', authenticateToken, async (req, res) => {
                 try {
                     const db = firebaseIntegrationService.forClient(req.user.adminId);
                     await db.updateDocument('notifications', req.params.id, { read: true });
-                    invalidateCache([`notifs_${req.user.adminId}`]);
+                    invalidateCache([`notifs_${req.user.adminId}`, `notifs_sub_${req.user.username}`]);
                     res.json({ success: true });
                 } catch(err) { res.status(500).json({ error: err.message }); }
+            });
+
+            // WhatsApp sent — update doc + push real-time to admin AND all connected sub-admin SSE channels
+            app.put('/api/admin/notifications/:id/whatsapp-sent', authenticateToken, async (req, res) => {
+                try {
+                    const sentBy = req.user.role === 'sub-admin' ? req.user.username : req.user.adminId;
+                    const _db = firebaseIntegrationService.forClient(req.user.adminId);
+                    await _db.updateDocument('notifications', req.params.id, {
+                        whatsappSent: true,
+                        whatsappSentAt: new Date(),
+                        whatsappSentBy: sentBy
+                    });
+                    // Bust cache for admin + sub-admins
+                    invalidateCache([`notifs_${req.user.adminId}`, `notifs_sub_`]);
+                    // Push real-time update to admin AND all connected SSE clients for this boutique
+                    const ssePayload = { type: 'notification', event: 'whatsapp_sent', notifId: req.params.id, sentBy };
+                    _ssePush(req.user.adminId, ssePayload);
+                    for (const [key] of _sseClients) {
+                        if (key !== req.user.adminId && _sseClients.get(key)?.size > 0) {
+                            _ssePush(key, ssePayload);
+                        }
+                    }
+                    res.json({ success: true });
+                } catch(e) { res.status(500).json({ success: false }); }
             });
 
             // Mark all read
             app.put('/api/admin/notifications/read-all', authenticateToken, async (req, res) => {
                 try {
                     const db = firebaseIntegrationService.forClient(req.user.adminId);
-                   const result = await db.getCollection('notifications', {
-                    where: [['adminId', '==', req.user.adminId], ['read', '==', false]]
-                });
+                    const result = await db.getCollection('notifications', {
+                        where: [['adminId', '==', req.user.adminId], ['read', '==', false]]
+                    });
                     await Promise.all((result.data || []).map(n =>
                         db.updateDocument('notifications', n.id, { read: true })
                     ));
-                    res.json({ success: true });
-                } catch(err) { res.status(500).json({ error: err.message }); }
-            });
-             // Delete notification
-             app.delete('/api/admin/notifications/:id', authenticateToken, async (req, res) => {
-                try {
-                    const db = firebaseIntegrationService.forClient(req.user.adminId);
-                    await db.deleteDocument('notifications', req.params.id);
-                    invalidateCache([`notifs_${req.user.adminId}`]);
+                    invalidateCache([`notifs_${req.user.adminId}`, `notifs_sub_${req.user.username}`]);
                     res.json({ success: true });
                 } catch(err) { res.status(500).json({ error: err.message }); }
             });
 
+            // Delete notification
+            app.delete('/api/admin/notifications/:id', authenticateToken, async (req, res) => {
+                try {
+                    const db = firebaseIntegrationService.forClient(req.user.adminId);
+                    await db.deleteDocument('notifications', req.params.id);
+                    invalidateCache([`notifs_${req.user.adminId}`, `notifs_sub_${req.user.username}`]);
+                    res.json({ success: true });
+                } catch(err) { res.status(500).json({ error: err.message }); }
+            });
 // Get single order with full timeline
 app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
   try {
@@ -3048,8 +3111,11 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
     if (order && order.createdAt && order.createdAt.toDate) {
       order.createdAt = order.createdAt.toDate();
     }
-    if (order && order.deliveryDate && order.deliveryDate.toDate) {
+     if (order && order.deliveryDate && order.deliveryDate.toDate) {
       order.deliveryDate = order.deliveryDate.toDate();
+    }
+    if (order && order.trialDate && order.trialDate.toDate) {
+      order.trialDate = order.trialDate.toDate();
     }
 
     // RBAC: sub-admins can only view orders from their branch
@@ -3071,6 +3137,7 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
       status: order.status,
       createdAt: order.createdAt,
       deliveryDate: order.deliveryDate,
+      trialDate: order.trialDate || null,
       measurements: order.measurements || {},
       designNotes: order.designNotes || '',
       designImages: order.designImages || [],
@@ -3956,13 +4023,27 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
           }
         });
             // Staff Login — reads from clients/{adminId}/staff subcollection
+            // this endpoint is frequently used by mobile clients which may not
+            // always send the tenant ID. We gracefully fall back to the default
+            // production tenant and also accept the value from query/header. A
+            // dedicated health check is added above so mobile apps can verify
+            // connectivity without relying on a 404 on '/api/'.
             app.post('/api/staff/login', async (req, res) => {
               try {
-                const { staffId, pin, adminId } = req.body || {};
+                // prefer explicit body value, then query string, then header
+                let { staffId, pin, adminId } = req.body || {};
+                if (!adminId) {
+                  adminId = req.query.adminId || req.get('x-admin-id') || '';
+                }
+                // final default if nothing specified
+                if (!adminId) {
+                  adminId = 'sapthala-designer-workshop';
+                }
 
                 if (!staffId || !pin) {
                   return res.status(400).json({ error: 'Staff ID and PIN are required' });
                 }
+                // at this point adminId will never be blank
                 if (!adminId) {
                   return res.status(400).json({ error: 'adminId is required to identify your boutique' });
                 }
@@ -4256,15 +4337,23 @@ const tasks = (order.workflowTasks || []).map(t =>
       ]);
 
       console.log(`✅ Stage completed: ${stageId} → next: ${nextStageId || 'completed'} on order ${orderId} (${adminId})`);
-              try {
-              if (!nextStageId) {
-                  await sendAdminNotification(adminId,
-                      '🎉 Order Fully Completed!',
-                      `All stages done for Order #${orderId} — ${order.customerName || 'Customer'} — Ready for delivery`,
-                      { orderId, type: 'order_complete' }
-                  );
-              }
-          } catch(e) { console.warn('Notification trigger error:', e.message); }
+             try {
+    if (!nextStageId) {
+        const _branch = order.branch || '';
+        await sendAdminNotification(
+            adminId,
+            '🎉 Order Fully Completed!',
+            `Order #${orderId} — ${order.customerName || 'Customer'} is ready for delivery (Branch: ${_branch || '—'})`,
+            {
+                type: 'order_complete',
+                orderId,
+                customerName: order.customerName || '',
+                customerPhone: order.customerPhone || '',
+                branch: _branch
+            }
+        );
+    }
+} catch(e) { console.warn('Notification trigger error:', e.message); }
       return res.json({ success: true, nextStage: nextStageId, currentStage: nextStageId || 'completed' });
     }
 

@@ -33,7 +33,11 @@
             box-shadow: 0 4px 16px rgba(124,24,60,0.12);
         }
         .login-title {
-            font-size: 30px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
+            font-size: 30px; font-weight: bold; color: #7c183c; margin-bottom: 2px;
+            letter-spacing: 1px;
+        }
+        .login-title2 {
+            font-size: 24px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
             letter-spacing: 1px;
         }
         .login-subtitle {
@@ -506,12 +510,16 @@
                             ? (branches || []).filter(b => (b.branchId || '').toString() === subAdminBranch)
                             : (branches || []);
 
-                        const selIds = ['orderBranch', 'staffBranch', 'staffFilterBranch', 'reportBranch'];
+                         const selIds = ['orderBranch', 'staffBranch', 'staffFilterBranch', 'reportBranch'];
                         selIds.forEach(id => {
                             const el = document.getElementById(id);
-                            if (el && el.tagName === 'SELECT') el.innerHTML = '<option value="">All</option>';
+                            if (!el || el.tagName !== 'SELECT') return;
+                            if (id === 'orderBranch') {
+                                el.innerHTML = isSubAdmin ? '' : '<option value="">-- Select Branch --</option>';
+                            } else {
+                                el.innerHTML = '<option value="">All Branches</option>';
+                            }
                         });
-
                         filtered.forEach(b => {
                             const display = (b.branchName || b.branchId || b.branch || '').toString();
                             const value = (b.branchId || display).toString();
@@ -531,14 +539,22 @@
                             }
                         });
 
-                        // Lock all selects to sub-admin's branch
+                         // Admin: orderBranch must stay unselected (mandatory pick)
+                        // Sub-admin: auto-select and lock their branch on all selects
                         if (isSubAdmin && subAdminBranch) {
                             selIds.forEach(id => {
                                 const el = document.getElementById(id);
                                 if (!el || el.tagName !== 'SELECT') return;
-                                el.value = subAdminBranch;
+                                const matched = Array.from(el.options).find(o =>
+                                    o.value.toString() === subAdminBranch.toString()
+                                );
+                                if (matched) el.value = matched.value;
                                 el.disabled = true;
                             });
+                        } else {
+                            // Admin: ensure orderBranch has no value selected
+                            const ob = document.getElementById('orderBranch');
+                            if (ob) { ob.value = ''; ob.disabled = false; }
                         }
                     } catch (e) { console.warn('earlyPopulateBranches failed', e); }
                 });
@@ -913,8 +929,11 @@
     <!-- Login Page -->
     <div id="loginPage" class="login-container">
         <div class="login-box">
-            <div class="login-logo">🏠</div>
-            <h1 class="login-title">SAPTHALA</h1>
+            <div class="login-logo">
+            <img src="img/aplogo.jpg.JPG" alt="Logo" style="width:90px;height:80px;border-radius:50%;object-fit:cover;border:3px solid white;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+        </div>
+            <h2 class="login-title">Boutiquo</h2>
+             <h3 class="login-title2">Autopilot</h3>
             <p class="login-subtitle">Professional Boutique Admin Portal</p>
             
             <form class="login-form" onsubmit="handleLogin(event)">
@@ -927,7 +946,7 @@
             </form>
             
             <div class="login-footer">
-                <p>📞 Contact: 7794021608 | 📧 sapthalaredddydesigns@gmail.com</p>
+                <p> Powered by MS Technologies</p>
              </div>
         </div>
     </div>
@@ -947,11 +966,13 @@
     <div id="mainApp" class="hidden" style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">
     <div class="header">
         <div class="header-left">
-            <img src="img/sapthala logo.png" alt="Sapthala Logo" class="header-logo">
-            <div>
-                <h1>SAPTHALA</h1>
-                <p>Professional Boutique Admin Portal</p>
-            </div>
+             <a href="javascript:void(0)" onclick="location.reload()" style="display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;cursor:pointer;">
+                <img src="img/sapthala logo.png" alt="Sapthala Logo" class="header-logo">
+                <div>
+                    <h1>SAPTHALA</h1>
+                    <p>Professional Boutique Admin Portal</p>
+                </div>
+            </a>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
             <select id="themeSelector" onchange="applyTheme(this.value)" style="padding: 8px 12px; border-radius: 6px; border: 2px solid #ddd; background: white; font-weight: 500; cursor: pointer;">
@@ -971,7 +992,7 @@
 
             
             <div style="position:relative;display:inline-block;">
-                <button onclick="toggleNotifications()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:20px;position:relative;box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+                <button onclick="event.stopPropagation();toggleNotifications()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:20px;position:relative;box-shadow:0 2px 8px rgba(99,102,241,0.3);">
                     🔔
                     <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:white;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;align-items:center;justify-content:center;">0</span>
                 </button>
@@ -1515,16 +1536,17 @@
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" onclick="resetOrderForm()">Reset All</button>
                     <button type="button" onclick="addAnotherItem()" style="padding:15px 30px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:12px;font-weight:bold;font-size:16px;cursor:pointer;transition:all 0.3s;">➕ Add Another Item</button>
+                    <button type="button" class="btn-pdf" onclick="previewPDF()" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">📄 Preview PDF</button>
                     <button type="button" id="createOrderBtn" class="btn-primary" onclick="createOrder()">✅ Create Order & Send to Staff</button>
+                                        
 
                 </div>
                 
                 <!-- PDF Actions -->
                 <div class="pdf-actions">
-                    <button type="button" class="btn-pdf" onclick="generateOrderPDF()">Generate Order PDF</button>
-                    <button type="button" class="btn-pdf" onclick="generateMeasurementPDF()">Generate Measurement PDF</button>
-                    <button type="button" class="btn-pdf" onclick="previewPDF()" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">📄 Preview PDF</button>
-                    <button type="button" class="btn-pdf" onclick="shareViaWhatsApp()" style="background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);">📱 Share WhatsApp</button>
+                    <!-- <button type="button" class="btn-pdf" onclick="generateOrderPDF()">Generate Order PDF</button> -->
+                    <!-- <button type="button" class="btn-pdf" onclick="generateMeasurementPDF()">Generate Measurement PDF</button> -->
+                    <!-- <button type="button" class="btn-pdf" onclick="shareViaWhatsApp()" style="background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);">📱 Share WhatsApp</button> -->
                 </div>
 
             </div><!-- END new-order tab-panel -->
@@ -1572,8 +1594,7 @@
                         <select id="staffFilterBranch" onchange="onStaffFilterChange()" style="padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: 600;">
                             <option value="">All Branches</option>
                         </select>
-                        <button id="ensureBranchBtn" onclick="ensureBranchStaffPrompt()" style="padding: 12px 18px; background: linear-gradient(135deg,#10b981 0%,#059669 100%); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">🛠 Ensure Branch Staff</button>
-                    </div>
+                     </div>
                 </div>
                 
                 <div id="staffList" style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;"></div>
@@ -1829,7 +1850,39 @@
             </form>
         </div>
     </div>
-
+            <!-- Branch Modal -->
+            <div id="branchModal" class="modal">
+                <div class="modal-content" style="max-width:480px;">
+                    <div class="modal-header">
+                        <h2 id="branchModalTitle">➕ Add Branch</h2>
+                        <button onclick="closeBranchModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b;">✕</button>
+                    </div>
+                    <div class="modal-body" style="padding:24px;">
+                        <input type="hidden" id="branchEditId">
+                        <div style="margin-bottom:16px;">
+                            <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:6px;">Branch Name *</label>
+                            <input type="text" id="branchNameInput" placeholder="e.g. KPHB" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:6px;">Location *</label>
+                            <input type="text" id="branchLocationInput" placeholder="e.g. Kukatpally" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:6px;">Phone</label>
+                            <input type="text" id="branchPhoneInput" placeholder="Branch phone number" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:6px;">Email</label>
+                            <input type="text" id="branchEmailInput" placeholder="Branch email" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                        </div>
+                        <p id="branchModalError" style="color:#dc2626;font-size:13px;display:none;margin-bottom:12px;"></p>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;">
+                            <button onclick="closeBranchModal()" style="padding:10px 20px;background:#f1f5f9;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancel</button>
+                            <button onclick="saveBranchModal()" style="padding:10px 20px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;">💾 Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
     <!-- Sub-Admin Modal -->
     <div id="subAdminModal" class="modal">
         <div class="modal-content">
@@ -2072,6 +2125,7 @@
                         updateDashboardStats();
                         try { updateFirestoreStatus(); } catch(e) { console.warn('Firestore status check failed to run', e); }
                         showTab('dashboard');
+                        setTimeout(function() { try { if (typeof connectNotifSSE === 'function') connectNotifSSE(); } catch(e){} }, 600);
                     }, 800);
                 } else {
                     showLoginError(data?.error || 'Invalid username or password');
@@ -2173,6 +2227,7 @@
             document.getElementById('mainApp').classList.remove('hidden');
             updateDashboardStats();
             showTab('dashboard');
+            setTimeout(function() { try { if (typeof connectNotifSSE === 'function') connectNotifSSE(); } catch(e){} }, 500);
         }
 
         function bypassLogin() {
@@ -2214,6 +2269,12 @@
             // Apply UI restrictions based on logged-in user's role (sub-admin restrictions)
             try { applyPermissionRestrictions(); } catch (e) { console.warn('applyPermissionRestrictions error', e); }
             try { refreshBranchesAndPopulate(); } catch(e){ console.warn('refreshBranchesAndPopulate error', e); }
+            // Connect SSE after login — token is now available
+            setTimeout(function() {
+                try {
+                    if (typeof connectNotifSSE === 'function') connectNotifSSE();
+                } catch(e) { console.warn('connectNotifSSE error', e); }
+            }, 500);
         }
 
         async function populateGlobalBranchFilters() {
@@ -2235,8 +2296,8 @@
 
         sel.innerHTML = '<option value="">All Branches</option>';
         const orderBranchSel = document.getElementById('orderBranch');
-        const reportBranchSel = document.getElementById('reportBranch');
-        if (orderBranchSel) orderBranchSel.innerHTML = '<option value="">Choose branch...</option>';
+        const reportBranchSel =null; // document.getElementById('reportBranch');
+                if (orderBranchSel) orderBranchSel.innerHTML = isSubAdmin ? '' : '<option value="">-- Select Branch --</option>';
         const staffBranchDatalist = document.getElementById('branchesDatalist');
         if (staffBranchDatalist) staffBranchDatalist.innerHTML = '';
 
@@ -2271,7 +2332,8 @@
         // Lock sub-admin to their branch
         if (isSubAdmin && subAdminBranch) {
             if (orderBranchSel) {
-                orderBranchSel.value = subAdminBranch;
+                const _m = Array.from(orderBranchSel.options).find(o => o.value.toString() === subAdminBranch.toString());
+                if (_m) orderBranchSel.value = _m.value;
                 orderBranchSel.disabled = true;
             }
             if (reportBranchSel) {
@@ -2287,10 +2349,14 @@
 }
                         async function loadNotifications() {
                         try {
+                            
                             const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
                             const res = await fetch('/api/admin/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
                             const data = await res.json();
-                            const notifs = data.notifications || [];
+                             const _cu = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
+                            const _isSubAdmin = _cu.role === 'sub-admin';
+                            const _myBranch = (_cu.branch || '').toString();
+                            const notifs = (data.notifications || []);
                             const unread = notifs.filter(n => !n.read).length;
                             const badge = document.getElementById('notifBadge');
                             if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
@@ -2309,8 +2375,24 @@
                                 const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
                                 const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
                                 const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
+                                 const _orderId = n.data?.orderId || '';
+                                const _phone = n.data?.customerPhone || '';
+                               const _waSent = !!n.whatsappSent;         // sent by ME
+                                const _waSentByAny = !!n.whatsappSentByAnyone; // sent by anyone
+                                const _waSentAt = n.whatsappSentAt?._seconds ? n.whatsappSentAt._seconds * 1000 : (n.whatsappSentAt || null);
+                                const _waExpired = _waSentByAny && _waSentAt && (Date.now() - _waSentAt > 30 * 60 * 1000);
+                                const _waLastChance = _waSentByAny && !_waExpired && !_waSent;
+                                const _waLabel = (_waSent || (_waSentByAny && _waExpired)) ? '✅ Sent' : (_waLastChance ? '📱 Last Chance (Sent by other)' : '📱 Send WhatsApp');
+                                const _waStyle = _waExpired
+                                    ? 'margin-top:8px;width:100%;padding:7px;background:#94a3b8;color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:not-allowed;opacity:0.6;'
+                                    : _waLastChance
+                                        ? 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;'
+                                        : 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;';
+                                const _waBtn = (n.data?.type === 'order_complete')
+                                    ? `<button id="waBtn_${n.id}" onclick="notifSendWhatsApp('${n.id}','${_orderId}','${_phone}')" ${_waExpired ? 'disabled' : ''} style="${_waStyle}">${_waLabel}${_waLastChance && _waSentAt ? ` · deletes in ${Math.max(0,Math.ceil((30*60*1000-(Date.now()-_waSentAt))/60000))}min` : ''}</button>`
+                                    : '';
                                 return `
-                                <div style="padding:14px 16px;border-radius:12px;margin-bottom:8px;background:${cardBg};border-left:4px solid ${borderColor};border:1px solid ${borderSolid};position:relative;">
+                                <div id=\"notif-card-${n.id}\" style=\"padding:14px 16px;border-radius:12px;margin-bottom:8px;background:${cardBg};border-left:4px solid ${borderColor};border:1px solid ${borderSolid};position:relative;transition:opacity 0.4s;\">
                                     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                                         <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
                                             <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
@@ -2323,10 +2405,11 @@
                                         </div>
                                         <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;">🗑</button>
                                     </div>
+                                    ${_waBtn}
                                 </div>`;
                             }).join('');
                             // Popup for new order_complete notifications
-                            const newComplete = notifs.find(n => !n.read && n.data?.type === 'order_complete');
+                            const newComplete = notifs.find(n => !n.read && !n.whatsappSent && n.data?.type === 'order_complete');
                             if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
                                 sessionStorage.setItem('popup_' + newComplete.id, '1');
                                 showOrderCompletePopup(newComplete);
@@ -2334,27 +2417,59 @@
                         } catch(e) { console.warn('Notifications error:', e); }
                     }
 
-                    // SSE — connect ONCE, calls loadNotifications instantly on push
-                    (function connectNotifSSE() {
+                   // Named global so it can be called after login
+                    function connectNotifSSE() {
+                        if (window._notifSSE && window._notifSSE.readyState === 1) return; // already OPEN
                         const _t = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
-                        if (!_t) return;
-                        const _es = new EventSource(`/api/admin/notifications/stream?token=${encodeURIComponent(_t)}`);
+                        if (!_t) return; // not logged in yet — will be called again after login
+                        if (window._notifSSE) { try { window._notifSSE.close(); } catch(e){} window._notifSSE = null; }
+                        const _es = new EventSource('/api/admin/notifications/stream?token=' + encodeURIComponent(_t));
+                        _es.onopen = function() { console.log('📡 Notif SSE connected'); };
                         _es.onmessage = function(e) {
                             try {
                                 const p = JSON.parse(e.data);
-                                if (p.type === 'notification') loadNotifications();
-                            } catch(err) { console.warn('SSE parse error', err); }
+                               if (p.type === 'notification') {
+                                    if (p.event === 'order_complete') {
+                                        loadNotifications();
+                                        // Show popup for new order_complete — use real notifId
+                                        const _popId = p.data?.notifId || ('sse_' + Date.now());
+                                        if (!sessionStorage.getItem('popup_' + _popId)) {
+                                            sessionStorage.setItem('popup_' + _popId, '1');
+                                            showOrderCompletePopup({ id: _popId, title: p.title, body: p.body, data: p.data || {} });
+                                        }
+                                    } else if (p.event === 'whatsapp_sent') {
+                                        // Another user sent WhatsApp — silently refresh panel to show updated state
+                                        loadNotifications();
+                                        // Update any open popup button in real-time
+                                        const _wbtn = document.getElementById('popupWaBtn_' + p.notifId);
+                                        if (_wbtn && p.sentBy) {
+                                            _wbtn.disabled = true;
+                                            _wbtn.textContent = '✅ Sent by ' + p.sentBy;
+                                            _wbtn.style.background = 'rgba(255,255,255,0.2)';
+                                            _wbtn.style.opacity = '0.7';
+                                        }
+                                        const _lbtn = document.getElementById('waBtn_' + p.notifId);
+                                        if (_lbtn) {
+                                            _lbtn.disabled = true;
+                                            _lbtn.textContent = '✅ Sent by ' + p.sentBy;
+                                            _lbtn.style.background = '#94a3b8';
+                                        }
+                                    } else {
+                                        loadNotifications();
+                                    }
+                                }
+                            } catch(err) {}
                         };
                         _es.onerror = function() {
                             _es.close();
-                            setTimeout(connectNotifSSE, 5000);
+                            window._notifSSE = null;
+                            clearTimeout(window._notifSSETimer);
+                            window._notifSSETimer = setTimeout(connectNotifSSE, 8000);
                         };
                         window._notifSSE = _es;
-                    })();
-
-                    // Fallback poll every 30s only (SSE handles real-time)
-                    setInterval(loadNotifications, 60000);
-                    loadNotifications(); // initial load
+                    }
+                    connectNotifSSE(); // try on load (works if already logged in / page refresh)
+                    loadNotifications();
 
                 function toggleNotifications() {
                     const dd = document.getElementById('notifDropdown');
@@ -2362,7 +2477,14 @@
                     dd.style.display = isOpen ? 'none' : 'block';
                     if (!isOpen) loadNotifications();
                 }
-
+                    document.addEventListener('click', function(e) {
+                    const dd = document.getElementById('notifDropdown');
+                    if (dd && dd.style.display === 'block') {
+                        if (!dd.contains(e.target)) {
+                            dd.style.display = 'none';
+                        }
+                    }
+                });
                 async function markRead(id) {
                     const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
                     await fetch(`/api/admin/notifications/${id}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
@@ -2386,10 +2508,16 @@
                     const popup = document.createElement('div');
                     popup.id = 'orderCompletePopup';
                     popup.style.cssText = 'position:fixed;top:80px;right:30px;background:linear-gradient(135deg,#10b981,#059669);color:white;padding:20px 24px;border-radius:16px;box-shadow:0 8px 40px rgba(16,185,129,0.4);z-index:99999;max-width:340px;animation:slideIn 0.3s ease;';
+                    const _pk = `wa_sent_${notif.id}`;
+                    const _pc = parseInt(localStorage.getItem(_pk) || '0');
+                    const _pd = _pc >= 2;
                     popup.innerHTML = `
                         <div style="font-size:28px;margin-bottom:8px;">🎉</div>
                         <div style="font-weight:700;font-size:16px;margin-bottom:4px;">${notif.title}</div>
                         <div style="font-size:13px;opacity:0.9;margin-bottom:12px;">${notif.body}</div>
+                        <button id="popupWaBtn_${notif.id}" onclick="notifSendWhatsApp('${notif.id}','${notif.data?.orderId||''}','${notif.data?.customerPhone||''}')" ${_pd?'disabled':''} style="width:100%;margin-bottom:8px;padding:9px;background:${_pd?'rgba(255,255,255,0.2)':'#25d366'};color:white;border:none;border-radius:8px;font-weight:700;cursor:${_pd?'not-allowed':'pointer'};opacity:${_pd?'0.6':'1'};">
+                            ${_pd ? '✅ WhatsApp Sent' : `📱 Send WhatsApp${_pc===1?' (last chance)':''}`}
+                        </button>
                         <div style="display:flex;gap:8px;">
                             <button onclick="markRead('${notif.id}');document.getElementById('orderCompletePopup').remove();" 
                                 style="flex:1;background:white;color:#059669;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;">
@@ -2401,7 +2529,64 @@
                             </button>
                         </div>`;
                     document.body.appendChild(popup);
-                    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 10000);
+                     const _bar = document.createElement('div');
+                    _bar.style.cssText = 'height:4px;background:rgba(255,255,255,0.25);border-radius:4px;margin-top:12px;overflow:hidden;';
+                    _bar.innerHTML = '<div id="popupBar_'+notif.id+'" style="height:100%;width:100%;background:white;border-radius:4px;transition:width 15s linear;"></div>';
+                    popup.appendChild(_bar);
+                    requestAnimationFrame(() => { const b = document.getElementById('popupBar_'+notif.id); if(b) b.style.width='0%'; });
+                    setTimeout(() => { if (popup.parentNode) { popup.style.transition='opacity 0.5s'; popup.style.opacity='0'; setTimeout(()=>popup.remove(),500); } }, 15000);
+                }
+                // ADD after showOrderCompletePopup closing brace:
+                async function notifSendWhatsApp(notifId, orderId, phone) {
+                    const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+
+                    // Disable button immediately to prevent double-click
+                    [`waBtn_${notifId}`, `popupWaBtn_${notifId}`].forEach(bid => {
+                        const b = document.getElementById(bid);
+                        if (b) { b.disabled = true; b.textContent = '⏳ Opening...'; }
+                    });
+
+                    // Build and open WhatsApp
+                    try {
+                        const r = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}?nocache=1`, { headers: { 'Authorization': `Bearer ${token}` } });
+                        const od = r.ok ? await r.json() : null;
+                        const order = od?.order || od || {};
+                        const custPhone = phone || order.customerPhone || '';
+                        const custName = order.customerName || 'Customer';
+                        const garment = order.garmentType || 'Order';
+                        const delivery = order.deliveryDate
+                            ? (() => { const d = order.deliveryDate; const s = d?._seconds ? new Date(d._seconds*1000) : new Date(typeof d==='string'&&d.length===10?d+'T12:00:00':d); return isNaN(s)?'TBD':s.toLocaleDateString('en-IN'); })()
+                            : 'TBD';
+                        const msg = `Hello ${custName}! 🎉\n\nYour order at Sapthala Designer Workshop is *READY FOR DELIVERY*!\n\n📦 *Order Details:*\n• Order ID: ${orderId}\n• Garment: ${garment}\n• Delivery Date: ${delivery}\n\nPlease visit us to collect your order. 🙏\n\n_Sapthala Designer Workshop_`;
+                        const clean = custPhone.replace(/\D/g,'');
+                        window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank');
+                    } catch(e) {
+                        const clean = phone.replace(/\D/g,'');
+                        window.open(`https://wa.me/${clean}`, '_blank');
+                    }
+
+                    // ── Update server: set whatsappSent=true, whatsappSentAt=now ──
+                    try {
+                        await fetch(`/api/admin/notifications/${notifId}/whatsapp-sent`, {
+                            method: 'PUT',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                        });
+                    } catch(e) { console.warn('whatsapp-sent update failed', e); }
+
+                    // Close popup, refresh panel to show last-chance state
+                    const _pop = document.getElementById('orderCompletePopup');
+                    if (_pop) _pop.remove();
+                    loadNotifications();
+
+                    // Schedule hard delete from server after 30 min
+                    window._notifDelTimers = window._notifDelTimers || {};
+                    clearTimeout(window._notifDelTimers[notifId]);
+                    window._notifDelTimers[notifId] = setTimeout(async () => {
+                        try {
+                            await fetch('/api/admin/notifications/' + notifId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token')) } });
+                            loadNotifications();
+                        } catch(e) {}
+                    }, 30 * 60 * 1000);
                 }
 
                 
@@ -3311,7 +3496,7 @@
             } else if (tabName === 'reports') {
                                     populateGlobalBranchFilters().then(() => loadReports());
                                 } else if (tabName === 'settings') {
-                                    if (typeof BranchesManager !== 'undefined') BranchesManager.loadBranches();
+                                    if (typeof loadBranchesList === 'function') loadBranchesList();
                                 }
         }
 
@@ -3781,14 +3966,15 @@
             const completed = order.workflowTasks.filter(t => t.status === 'completed').length;
             return Math.round((completed / order.workflowTasks.length) * 100);
         }
-                function fmtDate(v) {
+                 function fmtDate(v) {
                     if (!v) return '—';
                     let d;
                     if (typeof v.toDate === 'function') d = v.toDate();
-                    else if (v._seconds) d = new Date(v._seconds * 1000);
-                    else if (v.seconds) d = new Date(v.seconds * 1000);
+                    else if (v._seconds != null) d = new Date(v._seconds * 1000 + Math.floor((v._nanoseconds || 0) / 1e6));
+                    else if (v.seconds != null) d = new Date(v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6));
+                    else if (typeof v === 'string' && v.length === 10) d = new Date(v + 'T12:00:00'); // plain YYYY-MM-DD — use noon to avoid UTC offset flipping date
                     else d = new Date(v);
-                    return (!d || isNaN(d.getTime())) ? '—' : d.toLocaleString('en-IN');
+                    return (!d || isNaN(d.getTime())) ? '—' : d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
                 }
         async function showOrderWorkflowDetail(orderId) {
             try {
@@ -4361,8 +4547,10 @@
                     button.className = 'garment-btn';
                     button.dataset.garment = garmentKey;
                     button.innerHTML = `
-                        <img src="${garment.image}" alt="${garment.name}" class="garment-image" 
+                       <img src="${garment.image}" alt="${garment.name}" class="garment-image" 
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
                              style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; background: #f8fafc; transition: all 0.3s;">
+                        <div style="display:none;width:100%;height:120px;align-items:center;justify-content:center;border-radius:8px;background:linear-gradient(135deg,#eef2ff,#f5f3ff);font-size:32px;margin-bottom:12px;">👗</div>
                         <div class="garment-title" style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 8px; line-height: 1.3;">${garment.name}</div>
                         <div class="garment-price" style="font-size: 16px; color: #059669; font-weight: 700; background: #d1fae5; padding: 6px 12px; border-radius: 6px; margin-top: auto;">${garment.price > 0 ? '₹' + garment.price : 'Custom Price'}</div>
                     `;
@@ -4829,7 +5017,16 @@
                             };
                             const paymentMode = document.querySelector('input[name="paymentMode"]:checked')?.value || 'cash';
                             const paymentRemarks = document.getElementById('paymentRemarks')?.value?.trim() || '';
-                            const branch = (document.getElementById('orderBranch')?.value) || (JSON.parse(localStorage.getItem('sapthala_user') || '{}').branch) || 'SAPTHALA.MAIN';
+                            const branch = (document.getElementById('orderBranch')?.value) || '';
+                            if (!branch) {
+                                alert('❌ Please select a branch before creating the order.');
+                                document.getElementById('orderBranch').style.border = '2px solid #ef4444';
+                                document.getElementById('orderBranch').focus();
+                                isCreatingOrder = false;
+                                if (createBtn) { createBtn.disabled = false; createBtn.textContent = '✅ Create Order & Send to Staff'; }
+                                return;
+                            }
+                            document.getElementById('orderBranch').style.border = '1px solid #cbd5e1';
                             const grandTotal = parseInt(document.getElementById('totalAmount').textContent.replace(/[₹,]/g, '')) || 0;
                             const advancePaid = advancePayment;
                             const balanceDue = parseInt(document.getElementById('balanceDue').textContent.replace(/[₹,]/g, '')) || 0;
@@ -5027,11 +5224,16 @@
         }
 
         function writeStatsToDom(data) {
-            document.getElementById('totalOrders').textContent = data.totalOrders || 0;
-            document.getElementById('totalRevenue').textContent = `₹${(Number(data.totalRevenue) || 0).toLocaleString()}`;
-            document.getElementById('advanceCollected').textContent = `₹${(Number(data.advanceCollected) || 0).toLocaleString()}`;
-            document.getElementById('pendingOrders').textContent = data.pendingOrders || 0;
-        }
+        document.getElementById('totalOrders').textContent = data.totalOrders || 0;
+        document.getElementById('totalRevenue').textContent = `₹${(Number(data.totalRevenue) || 0).toLocaleString()}`;
+        document.getElementById('advanceCollected').textContent = `₹${(Number(data.advanceCollected) || 0).toLocaleString()}`;
+        document.getElementById('pendingOrders').textContent = data.pendingOrders || 0;
+        // Re-apply sub-admin hiding after async data write
+        try {
+            const _wu = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
+            if (_wu.role === 'sub-admin') hideRevenueData();
+        } catch(e) {}
+    }
 
         // Dashboard Functions (improved: live -> cached fallback -> offline) + show data source
         async function updateDashboardStats() {
@@ -5228,41 +5430,260 @@
                 loadOrders(status ? { status } : {}).catch(e => console.warn('setOrderFilter loadOrders failed', e));
             }
 
+        // REPLACE lines 5388-5422 (entire displayOrders function) WITH:
+
         function displayOrders(orders) {
             const ordersList = document.getElementById('ordersList');
             if (!orders || orders.length === 0) {
-                ordersList.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">No orders found</div>';
+                ordersList.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;">No orders found</div>';
                 return;
             }
+            if (!window._orderSnapshots) window._orderSnapshots = {};
 
-            let html = '<div class="orders-list">';
+            const toDateStr = raw => {
+                if (!raw) return '';
+                if (raw._seconds) return new Date(raw._seconds*1000).toISOString().split('T')[0];
+                if (raw.seconds) return new Date(raw.seconds*1000).toISOString().split('T')[0];
+                if (typeof raw.toDate === 'function') return raw.toDate().toISOString().split('T')[0];
+                const d = new Date(raw); return isNaN(d) ? '' : d.toISOString().split('T')[0];
+            };
+           const fmtDate = raw => {
+                if (!raw) return '—';
+                let d;
+                try {
+                    if (typeof raw.toDate === 'function') d = raw.toDate();
+                    else if (raw._seconds != null) d = new Date(raw._seconds * 1000 + Math.floor((raw._nanoseconds || 0) / 1e6));
+                    else if (raw.seconds != null) d = new Date(raw.seconds * 1000 + Math.floor((raw.nanoseconds || 0) / 1e6));
+                    else if (typeof raw === 'string' && raw.length === 10) d = new Date(raw + 'T12:00:00');
+                    else d = new Date(raw);
+                } catch(e) { return '—'; }
+                return (!d || isNaN(d.getTime())) ? '—' : d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+            };
+            const parseOrderDate = order => {
+                const raw = order.createdAt || order.date || order.orderDate;
+                if (!raw) return null;
+                if (raw._seconds) return new Date(raw._seconds*1000);
+                if (raw.seconds) return new Date(raw.seconds*1000);
+                if (typeof raw.toDate==='function') return raw.toDate();
+                const d = new Date(raw); return isNaN(d) ? null : d;
+            };
+            const isWithin48h = order => {
+                const d = parseOrderDate(order);
+                return !d || (Date.now() - d.getTime()) <= 48*3600000;
+            };
+            const statusColors = {
+                completed:'#059669', delivered:'#0284c7', pending:'#d97706',
+                in_progress:'#7c3aed', assigned:'#6366f1', cancelled:'#dc2626'
+            };
+            const stageIcons = {
+                dyeing:'🎨', cutting:'✂️', stitching:'🧵', khakha:'📐',
+                maggam:'🪡', painting:'🖌️', finishing:'✨',
+                'quality-check':'🔍', 'ready-to-deliver':'🚚'
+            };
+            const stageStatusColor = s => s==='completed'?'#059669':s==='in_progress'||s==='started'?'#f59e0b':s==='pending'?'#6366f1':'#cbd5e1';
+            const stageStatusBg = s => s==='completed'?'#d1fae5':s==='in_progress'||s==='started'?'#fef3c7':s==='pending'?'#eef2ff':'#f1f5f9';
+
+            let html = '';
             orders.forEach(order => {
                 const oid = order.orderId || order.id || order._id || '';
-                const statusClass = (order.status === 'completed' || order.status === 'delivered') ? 'badge-available' : 'badge-busy';
-                html += `
-                    <div class="order-item" onclick="openOrderDetail('${oid}')" style="cursor:pointer">
-                        <div>
-                            <strong>${oid}</strong><br>
-                            <small>${order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</small>
-                        </div>
-                        <div>
-                            <strong>${order.customerName || (order.customer && order.customer.name) || 'Customer'}</strong><br>
-                            <small>${order.customerPhone || (order.customer && order.customer.phone) || ''}</small>
-                        </div>
-                        <div>
-                            ${order.garmentType || order.category || ''}<br>
-                            <small>₹${(order.totalAmount || order.pricing?.total || 0).toLocaleString()}</small>
-                        </div>
-                        <div>
-                            <span class="badge ${statusClass}">
-                                ${order.status || 'pending'}
-                            </span>
-                        </div>
+                window._orderSnapshots[oid] = order;
+                const status = (order.status || 'pending').toLowerCase().replace(/\s+/g,'_');
+                const scol = statusColors[status] || '#64748b';
+                const within = isWithin48h(order);
+                const total = order.totalAmount || order.pricing?.total || order.total || 0;
+                const advance = order.advanceAmount || order.pricing?.advance || order.advance || order.advancePaid || 0;
+                const balance = order.balanceAmount ?? order.balance ?? order.pricing?.balance ?? (total - advance);
+                const tasks = order.workflowTasks || [];
+                const doneTasks = tasks.filter(t=>t.status==='completed').length;
+                const totalTasks = tasks.length;
+                const pct = totalTasks > 0 ? Math.round((doneTasks/totalTasks)*100) : 0;
+                const pctColor = pct===100?'#059669':pct>=50?'#f59e0b':'#6366f1';
+                const phone = order.customerPhone || (order.customer && order.customer.phone) || '';
+                const custName = order.customerName || (order.customer && order.customer.name) || 'Customer';
+                const delivVal = toDateStr(order.deliveryDate);
+                const trialVal = toDateStr(order.trialDate);
+                const allStages = [
+                    {id:'dyeing',name:'Dyeing'},{id:'cutting',name:'Cutting'},{id:'stitching',name:'Stitching'},
+                    {id:'khakha',name:'Khakha'},{id:'maggam',name:'Maggam Work'},{id:'painting',name:'Painting'},
+                    {id:'finishing',name:'Finishing'},{id:'quality-check',name:'Quality Check'},{id:'ready-to-deliver',name:'Ready to Deliver'}
+                ];
+
+                // Workflow progress pills
+                const workflowHtml = tasks.length > 0 ? tasks.map(t => {
+                    const sc = stageStatusColor(t.status);
+                    const sb = stageStatusBg(t.status);
+                    const icon = stageIcons[t.stageId] || '⚙️';
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:${sb};border:1.5px solid ${sc};font-size:12px;font-weight:600;color:${sc};">
+                        ${icon} ${t.stageName||t.stageId}
+                        <span style="font-size:10px;background:${sc};color:white;padding:1px 6px;border-radius:10px;">${t.status||'waiting'}</span>
+                    </div>`;
+                }).join('') : '<span style="font-size:12px;color:#94a3b8;">No workflow stages assigned</span>';
+
+                // Edit form (same as customers modal but inline)
+                const editForm = within ? `
+                <div id="ord-edit-${oid}" style="display:none;margin-top:16px;padding:20px;background:#f8fafc;border-radius:14px;border:2px dashed #c7d2fe;animation:fadeIn 0.2s ease;">
+                    <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">🧾 Order Details</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Garment Type</label>
+                            <input id="ef-garment-${oid}" value="${order.garmentType||''}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Status</label>
+                            <select id="ef-status-${oid}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                                ${['pending','assigned','in_progress','completed','delivered','cancelled'].map(s=>`<option value="${s}" ${status===s?'selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
+                            </select></div>
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Delivery Date</label>
+                            <input type="date" id="ef-delivery-${oid}" value="${delivVal}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Trial Date</label>
+                            <input type="date" id="ef-trial-${oid}" value="${trialVal}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                        <div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Design Notes</label>
+                            <textarea id="ef-notes-${oid}" rows="2" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;">${order.designNotes||''}</textarea></div>
                     </div>
-                `;
+                    <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">💳 Payment</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Total (₹)</label>
+                            <input type="number" id="ef-total-${oid}" value="${total}" data-oid="${oid}" oninput="efUpdateBalance(this.dataset.oid)" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Advance (₹)</label>
+                            <input type="number" id="ef-advance-${oid}" value="${advance}" data-oid="${oid}" oninput="efUpdateBalance(this.dataset.oid)" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                        <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Mode</label>
+                            <select id="ef-paymode-${oid}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                                ${['','cash','upi','card','bank_transfer','cheque'].map(pm=>`<option value="${pm}" ${(order.paymentMode||'')==pm?'selected':''}>${pm?pm.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()):'— Mode —'}</option>`).join('')}
+                            </select></div>
+                        <div style="grid-column:1/-1;"><span id="ef-bal-${oid}" style="font-size:14px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</span></div>
+                        <div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Remarks</label>
+                            <input id="ef-premarks-${oid}" value="${order.paymentRemarks||''}" placeholder="e.g. Paid via PhonePe..." style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                    </div>
+                    <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">⚙️ Workflow Stages</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+                        ${allStages.map(s => {
+                            const checked = tasks.some(t=>t.stageId===s.id);
+                            const taskStatus = tasks.find(t=>t.stageId===s.id)?.status||'';
+                            const sc2 = stageStatusColor(taskStatus);
+                            return `<label onclick="(function(l){var cb=l.querySelector('input');cb.checked=!cb.checked;l.style.border='2px solid '+(cb.checked?'#6366f1':'#e2e8f0');l.style.background=cb.checked?'#eef2ff':'#f8fafc';})(this)" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:2px solid ${checked?'#6366f1':'#e2e8f0'};border-radius:20px;background:${checked?'#eef2ff':'#f8fafc'};cursor:pointer;font-size:13px;font-weight:600;color:${checked?'#4338ca':'#64748b'};">
+                                <input type="checkbox" id="ef-stage-${oid}-${s.id}" ${checked?'checked':''} style="display:none;">
+                                ${stageIcons[s.id]||'⚙️'} ${s.name}${taskStatus?` <span style="font-size:10px;color:${sc2};font-weight:700;">(${taskStatus})</span>`:''}
+                            </label>`;
+                        }).join('')}
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button onclick="event.stopPropagation();document.getElementById('ord-edit-${oid}').style.display='none';" style="padding:9px 20px;background:#f1f5f9;color:#475569;border:2px solid #e2e8f0;border-radius:8px;font-weight:600;cursor:pointer;">Cancel</button>
+                        <button onclick="event.stopPropagation();saveOrderEdit('${oid}','${phone}',(window._orderSnapshots&&window._orderSnapshots['${oid}'])||{})" style="padding:9px 20px;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;">💾 Save Changes</button>
+                    </div>
+                </div>` : '';
+
+                html += `
+                <div id="ocard-${oid}" style="background:white;border-radius:16px;margin-bottom:12px;border:1.5px solid #e2e8f0;border-left:5px solid ${scol};box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:box-shadow 0.2s;overflow:hidden;">
+                    <!-- Summary Row — click to toggle -->
+                    <div onclick="toggleOrderCard('${oid}')" style="display:grid;grid-template-columns:2fr 2fr 1.5fr 1.2fr 1fr auto;gap:12px;align-items:center;padding:16px 18px;cursor:pointer;user-select:none;">
+                        <div>
+                            <div style="font-weight:700;font-size:14px;color:#1e293b;">${oid}</div>
+                            <div style="font-size:12px;color:#94a3b8;margin-top:2px;">${parseOrderDate(order)?parseOrderDate(order).toLocaleDateString('en-IN'):''}</div>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;color:#1e293b;">${custName}</div>
+                            <div style="font-size:12px;color:#94a3b8;">${phone}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:#374151;">${order.garmentType||order.category||'—'}</div>
+                            <div style="font-size:12px;color:#94a3b8;">₹${total.toLocaleString()}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Progress ${pct}%</div>
+                            <div style="background:#f1f5f9;border-radius:6px;height:6px;width:100%;"><div style="width:${pct}%;height:100%;background:${pctColor};border-radius:6px;transition:width 0.3s;"></div></div>
+                        </div>
+                        <div style="text-align:center;">
+                            <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:${scol}20;color:${scol};">${status.replace(/_/g,' ')}</span>
+                        </div>
+                        <div style="font-size:18px;color:#94a3b8;transition:transform 0.2s;" id="ocard-arrow-${oid}">▼</div>
+                    </div>
+
+                    <!-- Expanded Detail Panel -->
+                    <div id="ocard-detail-${oid}" style="display:none;border-top:1.5px solid #f1f5f9;padding:18px 18px 20px;animation:fadeIn 0.2s ease;">
+                        <!-- Info grid -->
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;">
+                            <div style="background:#f8fafc;border-radius:10px;padding:12px;">
+                                <div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Customer</div>
+                                <div style="font-weight:700;color:#1e293b;">${custName}</div>
+                                <div style="font-size:12px;color:#64748b;">${phone}</div>
+                                <div style="font-size:12px;color:#64748b;">${order.customerAddress||order.customer?.address||'—'}</div>
+                            </div>
+                            <div style="background:#f8fafc;border-radius:10px;padding:12px;">
+                                <div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Dates</div>
+                                <div style="font-size:13px;color:#1e293b;">📦 Delivery: <strong>${fmtDate(order.deliveryDate)}</strong></div>
+                                <div style="font-size:13px;color:#1e293b;margin-top:4px;">👗 Trial: <strong>${order.trialDate ? fmtDate(order.trialDate) : '—'}</strong></div>
+                                <div style="font-size:13px;color:#1e293b;margin-top:4px;">📍 Branch: <strong>${order.branch||'—'}</strong></div>
+                            </div>
+                            <div style="background:#f8fafc;border-radius:10px;padding:12px;">
+                                <div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Payment</div>
+                                <div style="font-size:13px;color:#1e293b;">Total: <strong>₹${total.toLocaleString()}</strong></div>
+                                <div style="font-size:13px;color:#1e293b;margin-top:2px;">Advance: <strong>₹${advance.toLocaleString()}</strong></div>
+                                <div style="font-size:13px;margin-top:2px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</div>
+                                <div style="font-size:12px;color:#94a3b8;margin-top:2px;">${order.paymentMode||''} ${order.paymentRemarks?'• '+order.paymentRemarks:''}</div>
+                            </div>
+                        </div>
+
+                        <!-- Design Notes -->
+                        ${order.designNotes ? `<div style="background:#fefce8;border-radius:10px;padding:12px;margin-bottom:14px;border-left:4px solid #f59e0b;"><div style="font-size:10px;font-weight:800;color:#92400e;text-transform:uppercase;margin-bottom:4px;">📝 Design Notes</div><div style="font-size:13px;color:#78350f;">${order.designNotes}</div></div>` : ''}
+
+                        <!-- Workflow -->
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">⚙️ Workflow Progress (${doneTasks}/${totalTasks} completed)</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px;">${workflowHtml}</div>
+                        </div>
+
+                        <!-- Measurements -->
+                        ${Object.keys(order.measurements||{}).length>0 ? `
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📐 Measurements</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                                ${Object.entries(order.measurements).map(([k,v])=>`<span style="padding:4px 12px;background:#f1f5f9;border-radius:8px;font-size:12px;font-weight:600;color:#374151;">${k.replace(/_/g,' ')}: <strong>${v}</strong></span>`).join('')}
+                            </div>
+                        </div>` : ''}
+
+                        <!-- Addons -->
+                        ${(order.addons&&order.addons.length>0) ? `
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">➕ Add-ons</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                                ${order.addons.map(a=>`<span style="padding:4px 12px;background:#ede9fe;color:#5b21b6;border-radius:8px;font-size:12px;font-weight:600;">${typeof a==='object'?a.name:a}</span>`).join('')}
+                            </div>
+                        </div>` : ''}
+
+                        <!-- Action buttons -->
+                        <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+                            
+                        ${(() => {
+                        const hasCompletedStage = tasks.some(t => t.status === 'completed');
+                        if (!within) {
+                            return `<button disabled style="padding:8px 18px;background:#f1f5f9;color:#94a3b8;border:none;border-radius:8px;font-size:13px;">🔒 Edit Closed (48h)</button>`;
+                        } else if (hasCompletedStage) {
+                            return `<button disabled title="A workflow stage is already completed." style="padding:8px 18px;background:#f3f4f6;color:#9ca3af;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;cursor:not-allowed;opacity:0.55;">🔒 Edit Locked (Stage Done)</button>`;
+                        } else {
+                            return `<button onclick="event.stopPropagation();toggleOrderEditInline('${oid}')" style="padding:8px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit Order</button>`;
+                        }
+                    })()}
+                                            </div>
+                        ${editForm}
+                    </div>
+                </div>`;
             });
-            html += '</div>';
+
             ordersList.innerHTML = html;
+        }
+
+        function toggleOrderCard(oid) {
+            const detail = document.getElementById('ocard-detail-' + oid);
+            const arrow = document.getElementById('ocard-arrow-' + oid);
+            const card = document.getElementById('ocard-' + oid);
+            if (!detail) return;
+            const isOpen = detail.style.display !== 'none';
+            detail.style.display = isOpen ? 'none' : 'block';
+            if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+            if (card) card.style.boxShadow = isOpen ? '0 2px 8px rgba(0,0,0,0.06)' : '0 6px 24px rgba(99,102,241,0.15)';
+        }
+
+        function toggleOrderEditInline(oid) {
+            const form = document.getElementById('ord-edit-' + oid);
+            if (!form) return;
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
         }
 
         // Customers Management
@@ -6075,14 +6496,25 @@
                                     return;
                                 }
                                 list.innerHTML = branches.map(b => `
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f1f5f9;">
-                                        <div>
-                                            <strong style="font-size:16px;color:#1e293b;">🏢 ${b.branchName || b.branchId}</strong>
-                                            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">ID: ${b.branchId} ${b.location ? '• ' + b.location : ''}</p>
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f1f5f9;">
+                                    <div style="display:flex;align-items:center;gap:16px;">
+                                        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">
+                                            ${(b.branchName||b.branchId||'?').substring(0,2).toUpperCase()}
                                         </div>
-                                        <button class="btn-delete" onclick="deleteBranch('${b.branchId}')" title="Delete Branch">🗑️ Delete</button>
+                                        <div>
+                                            <strong style="font-size:16px;color:#1e293b;">${b.branchName||b.branchId}</strong>
+                                            <span style="margin-left:8px;background:#e0e7ff;color:#4338ca;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;">${b.branchId}</span>
+                                            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">${b.location||''}</p>
+                                            <p style="margin:2px 0 0;color:#94a3b8;font-size:12px;">${(() => { try { const raw = b.createdAt || b.updatedAt; if (!raw) return ''; const d = new Date(raw._seconds ? raw._seconds*1000 : raw.seconds ? raw.seconds*1000 : raw); if (isNaN(d)) return ''; return (b.createdAt ? 'Created: ' : 'Updated: ') + d.toLocaleDateString(); } catch(e){ return ''; } })()}</p>
+                                        </div>
                                     </div>
-                                `).join('');
+                                    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                                        <span style="background:${b.isActive===false?'#fee2e2':'#dcfce7'};color:${b.isActive===false?'#dc2626':'#16a34a'};font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600;">${b.isActive===false?'Inactive':'Active'}</span>
+                                        <button onclick="editBranch('${b.branchId}','${(b.branchName||'').replace(/'/g,"\\'")}','${(b.location||'').replace(/'/g,"\\'")}','${(b.phone||'').replace(/'/g,"\\'")}','${(b.email||'').replace(/'/g,"\\'")}' )" style="padding:6px 18px;background:#f59e0b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;width:100%;">✏️ Edit</button>
+                                        <button onclick="deleteBranch('${b.branchId}')" style="padding:6px 18px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;width:100%;">🗑️ Delete</button>
+                                    </div>
+                                </div>
+                            `).join('');
                             } catch (e) {
                                 list.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;">❌ ${e.message}</div>`;
                             }
@@ -6105,12 +6537,78 @@
                                 alert('❌ Failed to delete branch: ' + e.message);
                             }
                         }
+                       window.editBranch = async function(branchId, branchName, location, phone, email) {
+                    document.getElementById('branchModalTitle').textContent = '✏️ Edit Branch';
+                    document.getElementById('branchEditId').value = branchId;
+                    document.getElementById('branchNameInput').value = branchName || '';
+                    document.getElementById('branchLocationInput').value = location || '';
+                    document.getElementById('branchPhoneInput').value = phone || '';
+                    document.getElementById('branchEmailInput').value = email || '';
+                    document.getElementById('branchModalError').style.display = 'none';
+                    document.getElementById('branchModal').classList.add('show');
+                }
+
+                    window.openAddBranchModal = function() {
+                        document.getElementById('branchModalTitle').textContent = '➕ Add Branch';
+                        document.getElementById('branchEditId').value = '';
+                        document.getElementById('branchNameInput').value = '';
+                        document.getElementById('branchLocationInput').value = '';
+                        document.getElementById('branchPhoneInput').value = '';
+                        document.getElementById('branchEmailInput').value = '';
+                        document.getElementById('branchModalError').style.display = 'none';
+                        document.getElementById('branchModal').classList.add('show');
+                    }
+
+                    window.closeBranchModal = function() {
+                        document.getElementById('branchModal').classList.remove('show');
+                    }
+
+                    window.saveBranchModal = async function() {
+                        const editId = document.getElementById('branchEditId').value;
+                        const branchName = document.getElementById('branchNameInput').value.trim();
+                        const location = document.getElementById('branchLocationInput').value.trim();
+                        const phone = document.getElementById('branchPhoneInput').value.trim();
+                        const email = document.getElementById('branchEmailInput').value.trim();
+                        const errEl = document.getElementById('branchModalError');
+
+                        if (!branchName || !location) {
+                            errEl.textContent = 'Branch name and location are required.';
+                            errEl.style.display = 'block';
+                            return;
+                        }
+
+                        const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                        try {
+                            let res;
+                            if (editId) {
+                                res = await fetch(`/api/branches/${encodeURIComponent(editId)}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ branchName, location, phone, email })
+                                });
+                            } else {
+                                res = await fetch('/api/branches', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ branchName, location, phone, email })
+                                });
+                            }
+                            if (!res.ok) throw new Error((await res.json()).error || 'Failed to save');
+                            closeBranchModal();
+                            await loadBranchesList();
+                            await refreshBranchesAndPopulate();
+                        } catch(e) {
+                            errEl.textContent = '❌ ' + e.message;
+                            errEl.style.display = 'block';
+                        }
+                    }
 
                         // Stub so onclick="BranchesManager.openAddModal()" doesn't crash
-                          BranchesManager = {
-                            loadBranches: loadBranchesList,
-                            openAddModal: function() { alert('Use the Add Sub-Admin form to create a branch, or contact your administrator.'); }
-                        };
+                         window._loadBranchesList = loadBranchesList;
+                      BranchesManager = {
+                        loadBranches: loadBranchesList,
+                        openAddModal: openAddBranchModal
+                    };
 
         // Enhanced Reports with Last 10 Orders
         async function loadLastOrdersReport() {
@@ -6284,7 +6782,12 @@
 
         async function saveStaff(event) {
             event.preventDefault();
-            
+             const _uname = document.getElementById('staffUsername').value.trim();
+            if (_uname.length < 8) {
+                alert('Username must be at least 8 characters.');
+                document.getElementById('staffUsername').focus();
+                return;
+            }
             const formData = {
                 staffId: document.getElementById('staffUsername').value,
                 name: document.getElementById('staffName').value,
@@ -6573,13 +7076,22 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                 const reportBranch = document.getElementById('reportBranch');
                 const orderBranch = document.getElementById('orderBranch');
 
+                 const _ru = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
+                const _isSubAdmin = _ru.role === 'sub-admin';
+                const _subBranch = (_ru.branch || _ru.branchId || '').toString();
+
                 if (datalist) datalist.innerHTML = '';
                 if (staffBranchSelect) staffBranchSelect.innerHTML = '<option value="">Select branch</option>';
                 if (staffFilter) staffFilter.innerHTML = '<option value="">All Branches</option>';
                 if (reportBranch) reportBranch.innerHTML = '<option value="">All Branches</option>';
-                if (orderBranch) orderBranch.innerHTML = '<option value="">Choose branch...</option>';
+                // Admin: show "Choose branch..." prompt. Sub-admin: no empty option — branch auto-selected below
+                if (orderBranch) orderBranch.innerHTML = _isSubAdmin ? '' : '<option value="">-- Select Branch --</option>';
 
-                (branches || []).forEach(b => {
+                const _visibleBranches = _isSubAdmin && _subBranch
+                    ? (branches || []).filter(b => (b.branchId || b.branch || '').toString() === _subBranch)
+                    : (branches || []);
+
+                _visibleBranches.forEach(b => {
                     const display = (b.branchName || b.branchId || b.branch || '').toString();
                     const value = (b.branchId || display).toString();
                     if (datalist) {
@@ -6598,6 +7110,18 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                         const o4 = document.createElement('option'); o4.value = value; o4.textContent = `${display} (${value})`; orderBranch.appendChild(o4);
                     }
                 });
+
+                // Sub-admin: auto-select and lock their branch. Admin: must choose manually.
+                if (_isSubAdmin && _subBranch && orderBranch) {
+                    const matched = Array.from(orderBranch.options).find(o =>
+                        o.value.toString() === _subBranch
+                    );
+                    if (matched) orderBranch.value = matched.value;
+                    orderBranch.disabled = true;
+                } else if (orderBranch) {
+                    orderBranch.disabled = false;
+                    orderBranch.value = ''; // force admin to pick
+                }
             } catch (e) {
                 console.warn('refreshBranchesAndPopulate failed', e);
             }
@@ -6651,7 +7175,12 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                 const orderData = collectOrderData();
                 const response = await api.shareOrderPDF(orderData, false);
                 if (response.success) {
-                    window.open(response.pdf.pdfPath || response.pdf.htmlPath, '_blank');
+                   const pdfPath = response.pdf.pdfPath || response.pdf.htmlPath;
+const orderId = orderData.orderId || orderData.items?.[0]?.orderId || 'order';
+const a = document.createElement('a');
+a.href = pdfPath.startsWith('/') ? window.location.origin + pdfPath : pdfPath;
+a.download = `${orderId}.pdf`;
+document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 }
             } catch (error) {
                 alert('❌ Failed to generate PDF: ' + error.message);
@@ -6659,89 +7188,93 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
         }
  
         async function openPostOrderWindow(order, custName, custPhone, delivDate, trialDt) {
-            try {
-                const phone = (custPhone || '').replace(/\D/g, '');
-                const msg = `Hello ${custName}! 👗\n\nYour order has been placed at Sapthala Designer Workshop.\n\n` +
-                    `📦 Order Details:\n` +
-                    `• Garment: ${order.garmentType || ''}\n` +
-                    `• Total Amount: ₹${order.totalAmount || 0}\n` +
-                    `• Advance Paid: ₹${order.advanceAmount || 0}\n` +
-                    `• Balance Due: ₹${(order.totalAmount - order.advanceAmount) || 0}\n` +
-                    `• Delivery Date: ${delivDate ? new Date(delivDate).toLocaleDateString('en-IN') : 'TBD'}\n` +
-                    (trialDt ? `• Trial Date: ${new Date(trialDt).toLocaleDateString('en-IN')}\n` : '') +
-                    `\nThank you for choosing us! 🙏`;
-                const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    try {
+        const phone = (custPhone || '').replace(/\D/g, '');
+        const waMsg = 'Hello ' + custName + '!\n\nYour order has been placed at Sapthala Designer Workshop.\n\n' +
+            'Order Details:\n' +
+            'Garment: ' + (order.garmentType || '') + '\n' +
+            'Total Amount: ₹' + (order.totalAmount || 0) + '\n' +
+            'Advance Paid: ₹' + (order.advanceAmount || 0) + '\n' +
+            'Balance Due: ₹' + ((order.totalAmount - order.advanceAmount) || 0) + '\n' +
+            'Delivery Date: ' + (delivDate ? new Date(delivDate).toLocaleDateString('en-IN') : 'TBD') + '\n' +
+            (trialDt ? 'Trial Date: ' + new Date(trialDt).toLocaleDateString('en-IN') + '\n' : '') +
+            '\nThank you for choosing us!';
+        const waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg);
 
-                // Build PDF preview HTML same as previewPDF() but with Download + WhatsApp buttons
-                const themeName = localStorage.getItem('sapthala_current_theme') || 'default';
-                const templateMap = {
-                    default:'default-invoice-template.html', newYear:'newyear-invoice-template.html',
-                    sankranti:'sankranthi-invoice-template.html', holi:'holi-invoice-template.html',
-                    ramadan:'ramzan-invoice-template.html', diwali:'diwali-invoice-template.html',
-                    ganesh:'ganesh-chaturthi-invoice-template.html', independence:'independence-day-invoice-template.html',
-                    christmas:'christmas-invoice-template.html', navaratri:'navaratri-invoice-template.html',
-                    luxury:'luxury-invoice-template.html', modern:'modern-invoice-template.html', elegant:'elegant-invoice-template.html',
-                };
-                let templateHtml = '';
-                try {
-                    const r = await fetch('/invoice-theme/' + (templateMap[themeName] || 'default-invoice-template.html'));
-                    templateHtml = r.ok ? await r.text() : '';
-                } catch(e) {}
-                if (!templateHtml) {
-                    try { const r2 = await fetch('/invoice-theme/default-invoice-template.html'); templateHtml = await r2.text(); } catch(e) {}
-                }
-
-                const grandTotal = order.totalAmount || 0;
-                const advance = order.advanceAmount || 0;
-                const balance = Math.max(0, grandTotal - advance);
-                const invoiceNo = order.orderId || `INV-${Date.now()}`;
-                const invoiceDate = new Date().toLocaleDateString('en-IN');
-
-                const imgMap = {
-                    'sapthala logo.PNG':'sapthala%20logo.PNG','Chirstmas.PNG':'Chirstmas.PNG',
-                    'Diwali.png':'Diwali.png','ganesh maharaj-Photoroom.png':'ganesh%20maharaj-Photoroom.png',
-                    'holi image-Photoroom.png':'holi%20image-Photoroom.png','Independence day.png':'Independence%20day.png',
-                    'Navratri.png':'Navratri.png','new year.png':'new%20year.png','new year 2.png':'new%20year%202.png',
-                    'Ramzan.png':'Ramzan.png','sankranthi.png':'sankranthi.png',
-                };
-                let html = templateHtml
-                    .replace(/src="(?:\.\/|\/)?([^"]+\.(png|PNG|jpg|JPG|jpeg|JPEG))"/gi, (m, f) => `src="/invoice-theme/${imgMap[f]||encodeURIComponent(f)}"`)
-                    .replace(/\[Customer Name\]/g, custName)
-                    .replace(/\[Phone Number\]/g, custPhone)
-                    .replace(/\[Invoice Number\]/g, invoiceNo)
-                    .replace(/\[Invoice Date\]/g, invoiceDate);
-
-                const itemRow = `<tr><td>1</td><td style="text-align:left;padding:8px;"><strong>${order.garmentType||'Custom'}</strong>${delivDate?`<br><small>Delivery: ${delivDate}</small>`:''}</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">${grandTotal}</td><td class="amount">${grandTotal}</td></tr>`;
-                html = html.replace(/<tr>\s*<td>1<\/td>\s*<td>\[Item Name\]<\/td>[\s\S]*?<\/tr>/, itemRow);
-
-                const injectScript = `<script>
-                (function(){
-                    var gt=${grandTotal},adv=${advance},bal=${balance};
-                    var e;
-                    e=document.getElementById('subTotal');   if(e)e.innerText=gt.toLocaleString('en-IN');
-                    e=document.getElementById('grandTotal'); if(e)e.innerText=gt.toLocaleString('en-IN');
-                    e=document.getElementById('balance');    if(e)e.innerText=bal.toLocaleString('en-IN');
-                    document.querySelectorAll('p').forEach(function(p){
-                        if(p.innerHTML.includes('Received:')) p.innerHTML='<strong>Received:</strong> \u20B9 ${advance.toLocaleString('en-IN')}';
-                    });
-                    // Action buttons
-                    var bar=document.createElement('div');
-                    bar.style.cssText='position:fixed;top:0;left:0;right:0;background:#fff;padding:12px 20px;display:flex;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;';
-                    bar.innerHTML='<button onclick="window.print()" style="flex:1;padding:10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">📄 Download / Print PDF</button>'
-                        +'<a href="${waUrl}" target="_blank" style="flex:1;padding:10px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;">📱 Share on WhatsApp</a>';
-                    document.body.insertBefore(bar, document.body.firstChild);
-                    document.body.style.marginTop='60px';
-                })();
-                <\/script>`;
-                html = html.replace('</body>', injectScript + '\n</body>');
-
-                const tab = window.open('', '_blank');
-                if (tab) { tab.document.write(html); tab.document.close(); }
-                else alert('⚠️ Popup blocked. Please allow popups for this site.\n\nWhatsApp link:\n' + waUrl);
-            } catch(e) {
-                console.error('openPostOrderWindow error:', e);
-            }
+        const themeName = localStorage.getItem('sapthala_current_theme') || 'default';
+        const templateMap = {
+            default:'default-invoice-template.html', newYear:'newyear-invoice-template.html',
+            sankranti:'sankranthi-invoice-template.html', holi:'holi-invoice-template.html',
+            ramadan:'ramzan-invoice-template.html', diwali:'diwali-invoice-template.html',
+            ganesh:'ganesh-chaturthi-invoice-template.html', independence:'independence-day-invoice-template.html',
+            christmas:'christmas-invoice-template.html', navaratri:'navaratri-invoice-template.html',
+            luxury:'luxury-invoice-template.html', modern:'modern-invoice-template.html', elegant:'elegant-invoice-template.html',
+        };
+        let templateHtml = '';
+        try {
+            const r = await fetch('/invoice-theme/' + (templateMap[themeName] || 'default-invoice-template.html'));
+            templateHtml = r.ok ? await r.text() : '';
+        } catch(e) {}
+        if (!templateHtml) {
+            try { const r2 = await fetch('/invoice-theme/default-invoice-template.html'); templateHtml = await r2.text(); } catch(e) {}
         }
+
+        const grandTotal = order.totalAmount || 0;
+        const advance = order.advanceAmount || 0;
+        const balance = Math.max(0, grandTotal - advance);
+        const invoiceNo = order.orderId || ('INV-' + Date.now());
+        const invoiceDate = new Date().toLocaleDateString('en-IN');
+        const imgMap = {
+            'sapthala logo.PNG':'sapthala%20logo.PNG','Chirstmas.PNG':'Chirstmas.PNG',
+            'Diwali.png':'Diwali.png','ganesh maharaj-Photoroom.png':'ganesh%20maharaj-Photoroom.png',
+            'holi image-Photoroom.png':'holi%20image-Photoroom.png','Independence day.png':'Independence%20day.png',
+            'Navratri.png':'Navratri.png','new year.png':'new%20year.png','new year 2.png':'new%20year%202.png',
+            'Ramzan.png':'Ramzan.png','sankranthi.png':'sankranthi.png',
+        };
+
+        const origin = window.location.origin;
+        let html = templateHtml
+            .replace(/src="(?:\.\/)?([^"]+\.(png|PNG|jpg|JPG|jpeg|JPEG))"/gi,
+                (m, f) => 'src="' + origin + '/invoice-theme/' + (imgMap[f] || encodeURIComponent(f)) + '"')
+            .replace(/\[Customer Name\]/g, custName)
+            .replace(/\[Phone Number\]/g, custPhone)
+            .replace(/\[Invoice Number\]/g, invoiceNo)
+            .replace(/\[Invoice Date\]/g, invoiceDate);
+
+        // Set title → browser uses this as filename in Save dialog
+        if (/<title[^>]*>/i.test(html)) {
+            html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, '<title>' + invoiceNo + '</title>');
+        } else {
+            html = html.replace(/<head[^>]*>/i, '$&<title>' + invoiceNo + '</title>');
+        }
+
+        const itemRow = '<tr><td>1</td><td style="text-align:left;padding:8px;"><strong>' + (order.garmentType||'Custom') + '</strong>' +
+            (delivDate ? '<br><small>Delivery: ' + delivDate + '</small>' : '') +
+            '</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">' + grandTotal + '</td><td class="amount">' + grandTotal + '</td></tr>';
+        html = html.replace(/<tr>\s*<td>1<\/td>\s*<td>\[Item Name\]<\/td>[\s\S]*?<\/tr>/, itemRow);
+
+        html = html.replace(/id="subTotal"[^>]*>[^<]*/g,   'id="subTotal"> ' + grandTotal.toLocaleString('en-IN'));
+        html = html.replace(/id="grandTotal"[^>]*>[^<]*/g, 'id="grandTotal"> ' + grandTotal.toLocaleString('en-IN'));
+        html = html.replace(/id="received"[^>]*>[^<]*/g,   'id="received"> ' + advance.toLocaleString('en-IN'));
+        html = html.replace(/id="balance"[^>]*>[^<]*/g,    'id="balance"> ' + balance.toLocaleString('en-IN'));
+
+        const barHtml = '<div style="position:fixed;top:0;left:0;right:0;background:#fff;padding:12px 20px;display:flex;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;">' +
+            '<button onclick="window.print()" style="flex:1;padding:12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Print / Save as PDF</button>' +
+            '<a href="' + waUrl.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" style="flex:1;padding:12px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;">📲 Share on WhatsApp</a>' +
+            '</div><div style="height:60px;"></div>';
+        html = html.replace(/<body[^>]*>/i, '$&' + barHtml);
+
+        // Blob URL → Chrome uses <title> as filename automatically
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+        const tab = window.open(blobUrl, '_blank');
+        if (!tab) { URL.revokeObjectURL(blobUrl); alert('Popup blocked.\n\nWhatsApp: ' + waUrl); return; }
+        setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
+
+    } catch(e) {
+        console.error('openPostOrderWindow error:', e);
+    }
+}
         async function shareViaWhatsApp() {
             try {
                 const orderData = collectOrderData();
@@ -6847,7 +7380,7 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                                         <td class="amount">${item.itemTotal||0}</td>
                                     </tr>`;
                                 }).join('');
-
+z
                                 // Fix all image src paths to point to /invoice-theme/
                                 let html = templateHtml;
                               // Exact filename map matching your invoice theme folder
@@ -6878,29 +7411,38 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                                     itemRows
                                 );
 
-                                const injectScript = `<script>
-                        (function(){
-                            var gt=${grandTotal}, adv=${advance}, bal=${balance};
-                            var el=document.getElementById('subTotal');   if(el) el.innerText=gt.toLocaleString('en-IN');
-                            var el2=document.getElementById('grandTotal');if(el2)el2.innerText=gt.toLocaleString('en-IN');
-                            var el3=document.getElementById('balance');   if(el3)el3.innerText=bal.toLocaleString('en-IN');
-                            var el4=document.getElementById('amountWords');if(el4)el4.innerText='${n2w(grandTotal)} Rupees Only';
-                            document.querySelectorAll('p').forEach(function(p){
-                                if(p.innerHTML.includes('Received:'))
-                                    p.innerHTML='<strong>Received:</strong> \u20B9 ${advance.toLocaleString('en-IN')}';
-                            });
-                            var btn=document.createElement('div');
-                            btn.style.cssText='text-align:center;margin:16px 0;';
-                            btn.innerHTML='<button onclick="window.print()" style="padding:10px 28px;background:#6b1e2d;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Print / Save as PDF</button>';
-                            document.body.insertBefore(btn,document.body.firstChild);
-                        })();
-                        <\/script>`;
-
+                             
                                 html = html.replace('</body>', injectScript + '\n</body>');
 
                                 const tab = window.open('', '_blank');
-                                if (tab) { tab.document.write(html); tab.document.close(); }
-                                else alert('⚠️ Popup blocked. Please allow popups for this site.');
+                if (tab) {
+                    html = html.replace(/<title>[^<]*<\/title>/, '<title>' + invoiceNo + '</title>');
+                    tab.document.write(html);
+                    tab.document.close();
+                    // Directly manipulate tab DOM - no injected script needed
+                    tab.document.title = invoiceNo;
+                    const bar = tab.document.createElement('div');
+                    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#fff;padding:12px 20px;display:flex;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;';
+                    const btn = tab.document.createElement('button');
+                    btn.textContent = '\u2B07\uFE0F Download / Print PDF';
+                    btn.style.cssText = 'flex:1;padding:10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;';
+                    btn.onclick = function(){ tab.print(); };
+                    const wa = tab.document.createElement('a');
+                    wa.href = waUrl;
+                    wa.target = '_blank';
+                    wa.textContent = '\uD83D\uDCF2 Share on WhatsApp';
+                    wa.style.cssText = 'flex:1;padding:10px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;';
+                    bar.appendChild(btn);
+                    bar.appendChild(wa);
+                    tab.document.body.insertBefore(bar, tab.document.body.firstChild);
+                    tab.document.body.style.marginTop = '60px';
+                    // Also fix amounts directly
+                    var e;
+                    e = tab.document.getElementById('subTotal');   if(e) e.innerText = grandTotal.toLocaleString('en-IN');
+                    e = tab.document.getElementById('grandTotal'); if(e) e.innerText = grandTotal.toLocaleString('en-IN');
+                    e = tab.document.getElementById('received');   if(e) e.innerText = advance.toLocaleString('en-IN');
+                    e = tab.document.getElementById('balance');    if(e) e.innerText = balance.toLocaleString('en-IN');
+                } else alert('Popup blocked. Please allow popups for this site.\n\nWhatsApp link:\n' + waUrl);
 
                             } catch(e) {
                                 console.error('previewPDF error', e);
@@ -6984,7 +7526,7 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                                                 deliveryDate: document.getElementById('deliveryDate').value,
                                                 paymentMode: document.querySelector('input[name="paymentMode"]:checked')?.value || 'cash',
                                                 paymentRemarks: document.getElementById('paymentRemarks')?.value?.trim() || '',
-                                                branch: document.getElementById('orderBranch')?.value || (JSON.parse(localStorage.getItem('sapthala_user') || '{}').branch) || 'SAPTHALA.MAIN',
+                                                branch: document.getElementById('orderBranch')?.value || '',
                                                 workflow,
                                                 addons,
                                                 theme: currentTheme
@@ -7139,7 +7681,7 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
     </script>
     
     <!-- Branches Management Module -->
-    <script src="/js/branches-manager.js"></script>
+  <!-- <script src="/js/branches-manager.js"></script> -->
 </body>
 </html>
 

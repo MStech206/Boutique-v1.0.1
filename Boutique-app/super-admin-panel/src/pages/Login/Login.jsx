@@ -52,8 +52,7 @@ function Login() {
             />
           </div>
           
-          <h3 className="text-center mb-1 fw-bold" style={{ color: '#6366f1' }}>SAPTHALA</h3>
-          <p className="text-center mb-4 text-muted">Super Admin Portal</p>
+           <p className="text-center mb-4 text-muted">Super Admin Portal</p>
 
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
