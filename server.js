@@ -107,6 +107,7 @@ app.use((req, res, next) => {
   if (req.url.endsWith('.gif')) res.type('image/gif');
   if (req.url.endsWith('.svg')) res.type('image/svg+xml');
   if (req.url.endsWith('.html')) res.type('text/html');
+  if (req.url.endsWith('.JFIF')) res.type('image/jfif');
   next();
 });
                          
@@ -1339,27 +1340,7 @@ app.post('/api/admin/login', async (req, res) => {
       }
       return res.status(400).json({ error: 'Password is required' });
     }
-    // ✅ Save to Firestore loginAttempts 
-        if (firebaseIntegrationService.initialized) {
-          try {
-            await db().collection('loginAttempts').add({
-              username: user.username,
-              email: user.email || '',
-              adminId: user.adminId || '',
-              role: normalizedRole,
-              success: true,
-              timestamp: new Date(),
-              ipAddress,
-              userAgent,
-            });
-            // ✅ Also update lastLogin on the user doc
-            await db().collection('users').doc(user.username).update({
-              lastLogin: new Date(),
-            });
-          } catch (e) {
-            console.warn('Firestore loginAttempts write failed:', e.message);
-          }
-        }
+     
     // Search for user by username (admin or sub-admin)
     const searchUsername = username || 'admin';
     let user = null;

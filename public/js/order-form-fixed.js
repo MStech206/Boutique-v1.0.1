@@ -31,29 +31,29 @@
     // Complete Garment Categories with Images
     const GARMENT_CATEGORIES = {
         men: {
-            'business-shirt': { name: 'Business Shirt', price: 1200, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Business Shirt.PNG' },
-            'casual-shirt': { name: 'Casual Shirt', price: 900, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Casual Shirt.PNG' },
-            'men-kurta': { name: 'Men Kurta', price: 800, measurements: ['KL', 'C', 'W'], image: '/images/Mens/Men Kurta.PNG' },
-            'formal-trouser': { name: 'Formal Trouser', price: 1000, measurements: ['PL', 'PW'], image: '/images/Mens/Formal Trouser.PNG' },
-            'traditional-dhoti': { name: 'Traditional Dhoti', price: 600, measurements: ['W', 'L'], image: '/images/Mens/Traditional Dhoti.PNG' },
-            'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.PNG' }
+            'business-shirt': { name: 'Business Shirt', price: 1200, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Business Shirt.jfif' },
+            'casual-shirt': { name: 'Casual Shirt', price: 900, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Casual Shirt.jfif' },
+            'men-kurta': { name: 'Men Kurta', price: 800, measurements: ['KL', 'C', 'W'], image: '/images/Mens/Men Kurta.jfif' },
+            'formal-trouser': { name: 'Formal Trouser', price: 1000, measurements: ['PL', 'PW'], image: '/images/Mens/Formal Trouser.jfif' },
+            'traditional-dhoti': { name: 'Traditional Dhoti', price: 600, measurements: ['W', 'L'], image: '/images/Mens/Traditional Dhoti.jfif' },
+            'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.jfif' }
         },
         women: {
-            'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.PNG' },
-            'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.PNG' },
-            'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.PNG' },
-            'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.PNG' },
-            'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.PNG' },
-            'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.PNG' },
-            'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.PNG' },
-            'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.PNG' },
-            'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.PNG' },
-            'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.PNG' },
-            'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.PNG' },
-            'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.PNG' },
+            'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.png' },
+            'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.png' },
+            'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.png' },
+            'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.png' },
+            'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.png' },
+            'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.png' },
+            'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.png' },
+            'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.png' },
+            'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.png' },
+            'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.png' },
+            'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.png' },
+            'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.png' },
             'evening-gown': { name: 'Evening Gown', price: 4000, measurements: ['B', 'W', 'FL', 'SH'], image: '/images/womens/Evening Gown.jfif' },
             'anarkali-dress': { name: 'Anarkali Dress', price: 2800, measurements: ['B', 'W', 'FL'], image: '/images/womens/Anarkali Dress.png' },
-            'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.PNG' }
+            'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.png' }
         },
         boys: {
             'school-shirt': { name: 'School Shirt', price: 700, measurements: ['C', 'L'], image: '/images/kids/boys/School Shirt.png' },
@@ -77,9 +77,9 @@
         },
         'ready-made': {
             'readymade-shirt': { name: 'Readymade Shirt', price: 500, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Shirt.jfif' },
-            'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.PNG' },
-            'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.PNG' },
-            'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.PNG' }
+            'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.png' },
+            'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.png' },
+            'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.png' }
         },
         redo: {
             'size-adjustment': { name: 'Size Adjustment', price: 0, measurements: ['Current Size', 'New Size'], image: '/images/repair and fitting/Size Adjustment.jpg', isRedo: true },

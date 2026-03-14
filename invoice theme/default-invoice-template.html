@@ -204,7 +204,7 @@ th, td {
   </p>
 
   <!-- BALANCE -->
-  <p><strong>Received:</strong> ₹ 0.00</p>
+  <p><strong>Received:</strong> ₹ <span id="received">0</span></p>
   <p><strong>Balance:</strong> ₹ <span id="balance">0</span></p>
 
   <hr>
@@ -249,7 +249,7 @@ function calculateTotals() {
 
   document.getElementById("subTotal").innerText = total;
   document.getElementById("grandTotal").innerText = total;
-  document.getElementById("balance").innerText = total;
+  // balance is set by admin, do not overwrite here
   document.getElementById("amountWords").innerText =
     numberToWords(total) + " Rupees only";
 }

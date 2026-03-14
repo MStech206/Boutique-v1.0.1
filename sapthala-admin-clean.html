@@ -2778,8 +2778,27 @@
                 }
 
                 
-        function logout() {
+       function logout() {
             localStorage.removeItem('sapthala_logged_in');
+            localStorage.removeItem('sapthala_token');
+            localStorage.removeItem('sapthala_user');
+            sessionStorage.removeItem('sapthala_token');
+            sessionStorage.removeItem('sapthala_user');
+            sessionStorage.removeItem('sapthala_logged_in');
+            // Close SSE connection
+            if (window._notifSSE) { try { window._notifSSE.close(); } catch(e) {} window._notifSSE = null; }
+            // Stop animations
+            try { stopLaunchAnimations(); } catch(e) {}
+            try { dismissLaunchCelebration(); } catch(e) {}
+            // Reset login button state — it stays disabled/Logging in after success path
+            const _loginBtn = document.querySelector('.login-form button[type="submit"]');
+            if (_loginBtn) { _loginBtn.disabled = false; _loginBtn.innerHTML = '🔐 Login'; }
+            // Remove success/error messages left over from last login
+            const _sMsg = document.getElementById('loginSuccessMsg');
+            if (_sMsg) _sMsg.remove();
+            const _eMsg = document.getElementById('loginErrorMsg');
+            if (_eMsg) _eMsg.remove();
+            // Switch pages
             document.getElementById('mainApp').classList.add('hidden');
             document.getElementById('loginPage').classList.remove('hidden');
             document.getElementById('username').value = '';
@@ -3167,12 +3186,12 @@
         
         const GARMENT_CATEGORIES = {
             men: {
-                'business-shirt': { name: 'Business Shirt', price: 1200, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Business Shirt.png' },
-                'casual-shirt': { name: 'Casual Shirt', price: 900, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Casual Shirt.png' },
-                'men-kurta': { name: 'Men Kurta', price: 800, measurements: ['KL', 'C', 'W'], image: '/images/Mens/Men Kurta.png' },
-                'formal-trouser': { name: 'Formal Trouser', price: 1000, measurements: ['PL', 'PW'], image: '/images/Mens/Formal Trouser.png' },
-                'traditional-dhoti': { name: 'Traditional Dhoti', price: 600, measurements: ['W', 'L'], image: '/images/Mens/Traditional Dhoti.png' },
-                'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.png' }
+                'business-shirt': { name: 'Business Shirt', price: 1200, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Business Shirt.jfif' },
+                'casual-shirt': { name: 'Casual Shirt', price: 900, measurements: ['C', 'SH', 'L'], image: '/images/Mens/Casual Shirt.jfif' },
+                'men-kurta': { name: 'Men Kurta', price: 800, measurements: ['KL', 'C', 'W'], image: '/images/Mens/Men Kurta.jfif' },
+                'formal-trouser': { name: 'Formal Trouser', price: 1000, measurements: ['PL', 'PW'], image: '/images/Mens/Formal Trouser.jfif' },
+                'traditional-dhoti': { name: 'Traditional Dhoti', price: 600, measurements: ['W', 'L'], image: '/images/Mens/Traditional Dhoti.jfif' },
+                'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.jfif' }
             },
             women: {
                 'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.png' },
@@ -5317,7 +5336,7 @@
                             const result = await response.json();
                             if (result.success) {
                                 alert(`✅ ${ordersToCreate.length} order(s) created successfully and assigned to staff!`);
-                                openPostOrderWindow(ordersToCreate[0], customerName, customerPhone, deliveryDate, trialDate);
+                                openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
                                 clearCart();
                                 resetOrderForm();
                                 showTab('orders');
@@ -5341,7 +5360,8 @@
                     }
                     if (allOk) {
                         alert(`✅ ${ordersToCreate.length} order(s) created!`);
-                        openPostOrderWindow(ordersToCreate[0], customerName, customerPhone, deliveryDate, trialDate);
+                        openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
+
                         clearCart(); resetOrderForm(); showTab('orders'); return;
                     }
                     // Final offline fallback
@@ -5354,7 +5374,8 @@
                     existingOrders.push({ id: `ORD-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, ...od, createdAt: new Date().toISOString(), status: 'pending', assignedStaff: getRandomStaffAssignment() });
                 });
                 localStorage.setItem('sapthala_orders', JSON.stringify(existingOrders));
-                alert(`✅ ${ordersToCreate.length} order(s) saved offline!`);
+                  alert(`✅ ${ordersToCreate.length} order(s) saved offline!`);
+                openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
                 clearCart();
                 resetOrderForm();
                 showTab('orders');
@@ -7383,15 +7404,23 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             }
         }
  
-        async function openPostOrderWindow(order, custName, custPhone, delivDate, trialDt) {
+       async function openPostOrderWindow(ordersOrOrder, custName, custPhone, delivDate, trialDt) {
     try {
+        // Support both single order (legacy) and array of orders
+        const orders = Array.isArray(ordersOrOrder) ? ordersOrOrder : [ordersOrOrder];
         const phone = (custPhone || '').replace(/\D/g, '');
+
+        // Grand total across all orders
+        const grandTotal = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const advance    = orders.reduce((s, o) => s + (o.advanceAmount || 0), 0);
+        const balance    = Math.max(0, grandTotal - advance);
+
         const waMsg = 'Hello ' + custName + '!\n\nYour order has been placed at Sapthala Designer Workshop.\n\n' +
             'Order Details:\n' +
-            'Garment: ' + (order.garmentType || '') + '\n' +
-            'Total Amount: ₹' + (order.totalAmount || 0) + '\n' +
-            'Advance Paid: ₹' + (order.advanceAmount || 0) + '\n' +
-            'Balance Due: ₹' + ((order.totalAmount - order.advanceAmount) || 0) + '\n' +
+            orders.map((o,i) => `Item ${i+1}: ${o.garmentType||'Custom'} — ₹${o.totalAmount||0}`).join('\n') + '\n' +
+            'Total Amount: ₹' + grandTotal + '\n' +
+            'Advance Paid: ₹' + advance + '\n' +
+            'Balance Due: ₹' + balance + '\n' +
             'Delivery Date: ' + (delivDate ? new Date(delivDate).toLocaleDateString('en-IN') : 'TBD') + '\n' +
             (trialDt ? 'Trial Date: ' + new Date(trialDt).toLocaleDateString('en-IN') + '\n' : '') +
             '\nThank you for choosing us!';
@@ -7415,10 +7444,7 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             try { const r2 = await fetch('/invoice-theme/default-invoice-template.html'); templateHtml = await r2.text(); } catch(e) {}
         }
 
-        const grandTotal = order.totalAmount || 0;
-        const advance = order.advanceAmount || 0;
-        const balance = Math.max(0, grandTotal - advance);
-        const invoiceNo = order.orderId || ('INV-' + Date.now());
+        const invoiceNo   = orders[0].orderId || ('INV-' + Date.now());
         const invoiceDate = new Date().toLocaleDateString('en-IN');
         const imgMap = {
             'sapthala logo.PNG':'sapthala%20logo.PNG','Chirstmas.PNG':'Chirstmas.PNG',
@@ -7437,22 +7463,41 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             .replace(/\[Invoice Number\]/g, invoiceNo)
             .replace(/\[Invoice Date\]/g, invoiceDate);
 
-        // Set title → browser uses this as filename in Save dialog
         if (/<title[^>]*>/i.test(html)) {
             html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, '<title>' + invoiceNo + '</title>');
         } else {
             html = html.replace(/<head[^>]*>/i, '$&<title>' + invoiceNo + '</title>');
         }
 
-        const itemRow = '<tr><td>1</td><td style="text-align:left;padding:8px;"><strong>' + (order.garmentType||'Custom') + '</strong>' +
-            (delivDate ? '<br><small>Delivery: ' + delivDate + '</small>' : '') +
-            '</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">' + grandTotal + '</td><td class="amount">' + grandTotal + '</td></tr>';
-        html = html.replace(/<tr>\s*<td>1<\/td>\s*<td>\[Item Name\]<\/td>[\s\S]*?<\/tr>/, itemRow);
+        // Build one row per order item
+        const itemRows = orders.map((o, idx) => {
+            const amt = o.totalAmount || 0;
+            return '<tr><td>' + (idx+1) + '</td><td style="text-align:left;padding:8px;"><strong>' +
+                (o.garmentType || 'Custom') + '</strong>' +
+                ((o.deliveryDate || delivDate) ? '<br><small>Delivery: ' + (o.deliveryDate || delivDate) + '</small>' : '') +
+                '</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">' + amt + '</td><td class="amount">' + amt + '</td></tr>';
+        }).join('');
 
+        html = html.replace(/<tr>\s*<td>1<\/td>\s*<td>\[Item Name\]<\/td>[\s\S]*?<\/tr>/, itemRows);
         html = html.replace(/id="subTotal"[^>]*>[^<]*/g,   'id="subTotal"> ' + grandTotal.toLocaleString('en-IN'));
         html = html.replace(/id="grandTotal"[^>]*>[^<]*/g, 'id="grandTotal"> ' + grandTotal.toLocaleString('en-IN'));
         html = html.replace(/id="received"[^>]*>[^<]*/g,   'id="received"> ' + advance.toLocaleString('en-IN'));
-        html = html.replace(/id="balance"[^>]*>[^<]*/g,    'id="balance"> ' + balance.toLocaleString('en-IN'));
+        html = html.replace(/id="balance"[^>]*>[^<]*/g,    'id="balance"> '  + balance.toLocaleString('en-IN'));
+        // Inject override script that runs AFTER template's own scripts — forces correct values
+        const _adv = advance, _bal = balance, _gt = grandTotal;
+        const overrideScript = `<script>
+        (function(){
+            function _fix(){
+                var m = {subTotal:'${grandTotal.toLocaleString('en-IN')}',grandTotal:'${grandTotal.toLocaleString('en-IN')}',received:'${advance.toLocaleString('en-IN')}',balance:'${balance.toLocaleString('en-IN')}'};
+                Object.keys(m).forEach(function(id){ var e=document.getElementById(id); if(e) e.innerText=m[id]; });
+            }
+            if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',function(){ setTimeout(_fix,100); }); }
+            else { setTimeout(_fix,100); }
+            setTimeout(_fix,500);
+            setTimeout(_fix,1500);
+        })();
+        <\/script>`;
+        html = html.replace('</body>', overrideScript + '</body>');
 
         const barHtml = '<div style="position:fixed;top:0;left:0;right:0;background:#fff;padding:12px 20px;display:flex;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;">' +
             '<button onclick="window.print()" style="flex:1;padding:12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Print / Save as PDF</button>' +
@@ -7460,12 +7505,11 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             '</div><div style="height:60px;"></div>';
         html = html.replace(/<body[^>]*>/i, '$&' + barHtml);
 
-        // Blob URL → Chrome uses <title> as filename automatically
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
         const tab = window.open(blobUrl, '_blank');
         if (!tab) { URL.revokeObjectURL(blobUrl); alert('Popup blocked.\n\nWhatsApp: ' + waUrl); return; }
-        setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
+         setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 30000);
 
     } catch(e) {
         console.error('openPostOrderWindow error:', e);
@@ -7576,7 +7620,7 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                         <td class="amount">${item.itemTotal||0}</td>
                                     </tr>`;
                                 }).join('');
-z
+
                                 // Fix all image src paths to point to /invoice-theme/
                                 let html = templateHtml;
                               // Exact filename map matching your invoice theme folder
@@ -7608,7 +7652,7 @@ z
                                 );
 
                              
-                                html = html.replace('</body>', injectScript + '\n</body>');
+                                
 
                                 const tab = window.open('', '_blank');
                 if (tab) {
@@ -7966,6 +8010,7 @@ z
             }
             // 2 second pause then sustained
             setTimeout(() => {
+                if (!__sapthalaAnimationsRunning) return;
                 __sapthalaLaunchCelebrationInterval = setInterval(() => {
                    sidePopper('right');
                     sidePopper('left');
@@ -7978,6 +8023,7 @@ z
             }, 2000);
         }
         function stopLaunchAnimations() {
+             __sapthalaAnimationsRunning = false; 
             if (__sapthalaLaunchCelebrationInterval) {
                 clearInterval(__sapthalaLaunchCelebrationInterval);
                 __sapthalaLaunchCelebrationInterval = null;
