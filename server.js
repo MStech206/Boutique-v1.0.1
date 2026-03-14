@@ -133,8 +133,8 @@ app.use('/pdfs', express.static('pdfs'));
 app.use('/img', express.static('img'));
 app.use('/invoice-theme', express.static(path.join(__dirname, 'invoice theme')));
 // Fix for image paths - serve without spaces in URL
-app.use('/images', express.static('sapthala admin imgs'));
-app.use('/sapthala-admin-imgs', express.static('sapthala admin imgs'));
+app.use('/images', express.static(path.join(__dirname, 'sapthala admin imgs')));
+app.use('/sapthala-admin-imgs', express.static(path.join(__dirname, 'sapthala admin imgs')));
 
 // Serve super-admin-panel React app - CRITICAL FIX
 // Serve super-admin-panel React app - CRITICAL FIX
