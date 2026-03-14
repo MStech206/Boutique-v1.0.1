@@ -39,35 +39,35 @@
             'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.jfif' }
         },
         women: {
-            'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.png' },
-            'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.png' },
-            'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.png' },
-            'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.png' },
-            'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.png' },
-            'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.png' },
-            'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.png' },
-            'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.png' },
-            'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.png' },
-            'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.png' },
-            'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.png' },
-            'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.png' },
+            'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.jfif' },
+            'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.jfif' },
+            'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.jfif' },
+            'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.jfif' },
+            'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.jfif' },
+            'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.jfif' },
+            'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.jfif' },
+            'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.jfif' },
+            'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.jfif' },
+            'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.jfif' },
+            'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.jfif' },
+            'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.jfif' },
             'evening-gown': { name: 'Evening Gown', price: 4000, measurements: ['B', 'W', 'FL', 'SH'], image: '/images/womens/Evening Gown.jfif' },
-            'anarkali-dress': { name: 'Anarkali Dress', price: 2800, measurements: ['B', 'W', 'FL'], image: '/images/womens/Anarkali Dress.png' },
-            'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.png' }
+            'anarkali-dress': { name: 'Anarkali Dress', price: 2800, measurements: ['B', 'W', 'FL'], image: '/images/womens/Anarkali Dress.jfif' },
+            'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.jfif' }
         },
         boys: {
-            'school-shirt': { name: 'School Shirt', price: 700, measurements: ['C', 'L'], image: '/images/kids/boys/School Shirt.png' },
-            'boys-kurta': { name: 'Boys Kurta', price: 800, measurements: ['KL', 'C'], image: '/images/kids/boys/Boys Kurta.png' },
-            'school-pant': { name: 'School Pant', price: 600, measurements: ['PL', 'PW'], image: '/images/kids/boys/School Pant.jpg' },
-            'festival-dhoti': { name: 'Festival Dhoti Set', price: 1200, measurements: ['C', 'W', 'L'], image: '/images/kids/boys/Festival Dhoti Set.png' }
+            'school-shirt': { name: 'School Shirt', price: 700, measurements: ['C', 'L'], image: '/images/kids/boys/School Shirt.jfif' },
+            'boys-kurta': { name: 'Boys Kurta', price: 800, measurements: ['KL', 'C'], image: '/images/kids/boys/Boys Kurta.jfif' },
+            'school-pant': { name: 'School Pant', price: 600, measurements: ['PL', 'PW'], image: '/images/kids/boys/School Pant.jfif' },
+            'festival-dhoti': { name: 'Festival Dhoti Set', price: 1200, measurements: ['C', 'W', 'L'], image: '/images/kids/boys/Festival Dhoti Set.jfif' }
         },
         girls: {
-            'birthday-frock': { name: 'Birthday Frock (2-5 Years)', price: 1350, measurements: ['FL', 'C'], image: '/images/kids/girls/Birthday Frock (2-5 Years).jpg' },
-            'school-frock': { name: 'School Frock (6-8 Years)', price: 1750, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/School Frock (6-8 Years).jpg' },
-            'princess-lehenga': { name: 'Princess Lehenga (2-5 Years)', price: 1300, measurements: ['LL', 'LW'], image: '/images/kids/girls/Princess Lehenga (2-5 Years).png' },
-            'festival-lehenga': { name: 'Festival Lehenga (6-8 Years)', price: 2000, measurements: ['LL', 'LW', 'C'], image: '/images/kids/girls/Festival Lehenga (6-8 Years).png' },
-            'girls-kurta': { name: 'Girls Kurta', price: 750, measurements: ['KL', 'C'], image: '/images/kids/girls/Girls Kurta.jpg' },
-            'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance Costume.jpg' }
+            'birthday-frock': { name: 'Birthday Frock (2-5 Years)', price: 1350, measurements: ['FL', 'C'], image: '/images/kids/girls/Birthday Frock (2-5 Years).jfif' },
+            'school-frock': { name: 'School Frock (6-8 Years)', price: 1750, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/School Frock (6-8 Years).jfif' },
+            'princess-lehenga': { name: 'Princess Lehenga (2-5 Years)', price: 1300, measurements: ['LL', 'LW'], image: '/images/kids/girls/Princess Lehenga (2-5 Years).jfif' },
+            'festival-lehenga': { name: 'Festival Lehenga (6-8 Years)', price: 2000, measurements: ['LL', 'LW', 'C'], image: '/images/kids/girls/Festival Lehenga (6-8 Years).jfif' },
+            'girls-kurta': { name: 'Girls Kurta', price: 750, measurements: ['KL', 'C'], image: '/images/kids/girls/Girls Kurta.jfif' },
+            'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance Costume.jfif' }
         },
         fitting: {
             'blouse-alteration': { name: 'Blouse Alteration', price: 200, measurements: ['BL', 'B'], image: '/images/repair and fitting/Blouse Alteration.jpg' },

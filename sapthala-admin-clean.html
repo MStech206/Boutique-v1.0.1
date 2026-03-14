@@ -676,8 +676,8 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Enhanced Order Form Scripts -->
-    <script src="/js/order-form-fixed.js"></script>
-    <script src="/js/order-creation-enhanced.js"></script>
+    <!-- <script src="/js/order-form-fixed.js"></script>
+    <script src="/js/order-creation-enhanced.js"></script> -->
     <script>
         (function earlyPopulateBranches(){
             try {
@@ -1474,7 +1474,7 @@
                             <!-- Delivery Date -->
                             <div class="form-group">
                                 <label style="font-size: 16px; font-weight: bold; color: #374151; margin-bottom: 8px; display: block;">📅 Delivery Date *</label>
-                                <input type="date" id="deliveryDate" required style="width: 100%; padding: 14px; border: 2px solid #d1d5db; border-radius: 10px; font-size: 16px; font-weight: bold;">
+                                <input type="date" id="deliveryDate" required style="width: 100%; padding: 14px; border: 2px solid #d1d5db; border-radius: 10px; font-size: 16px; font-weight: bold;" oninput="validateTrialDate()">
                             </div>
 
                             <!-- Workflow Stages -->
@@ -3194,35 +3194,35 @@
                 'wedding-sherwani': { name: 'Wedding Sherwani', price: 3500, measurements: ['C', 'SH', 'L', 'W'], image: '/images/Mens/Wedding Sherwani.jfif' }
             },
             women: {
-                'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.png' },
-                'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.png' },
-                'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.png' },
-                'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.png' },
-                'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.png' },
-                'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.png' },
-                'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.png' },
-                'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.png' },
-                'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.png' },
-                'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.png' },
-                'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.png' },
-                'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.png' },
+                'cross-cut-blouse': { name: 'Cross Cut Blouse', price: 850, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Cross Cut Blouse.jfif' },
+                'katora-blouse': { name: 'Katora Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Katora Blouse.jfif' },
+                'princess-blouse': { name: 'Princess Blouse', price: 950, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/princess blouse.jfif' },
+                'padded-blouse': { name: 'Padded Blouse', price: 1200, measurements: ['BL', 'B', 'W', 'SH'], image: '/images/womens/Padded Blouse.jfif' },
+                'umbrella-lehenga': { name: 'Umbrella Lehenga', price: 2200, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Umbrella Lehanga.jfif' },
+                'pleated-lehenga': { name: 'Pleated Lehenga', price: 2800, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Pleated Lehenga.jfif' },
+                'designer-lehenga': { name: 'Designer Lehenga', price: 3500, measurements: ['LL', 'LW', 'B'], image: '/images/womens/Designer Lehenga.jfif' },
+                'party-frock': { name: 'Party Frock', price: 2400, measurements: ['FL', 'B', 'W'], image: '/images/womens/Party Frock.jfif' },
+                'wedding-frock': { name: 'Wedding Frock', price: 2600, measurements: ['FL', 'B', 'W'], image: '/images/womens/Wedding Frock.jfif' },
+                'cotton-kurthi': { name: 'Cotton Kurthi', price: 650, measurements: ['KL', 'B', 'W'], image: '/images/womens/Cotton Kurthi.jfif' },
+                'silk-kurthi': { name: 'Silk Kurthi', price: 850, measurements: ['KL', 'B', 'W'], image: '/images/womens/Silk Kurthi.jfif' },
+                'churidar-suit': { name: 'Churidar Suit', price: 1150, measurements: ['KL', 'B', 'W'], image: '/images/womens/Churidar Suit.jfif' },
                 'evening-gown': { name: 'Evening Gown', price: 4000, measurements: ['B', 'W', 'FL', 'SH'], image: '/images/womens/Evening Gown.jfif' },
-                'anarkali-dress': { name: 'Anarkali Dress', price: 2800, measurements: ['B', 'W', 'FL'], image: '/images/womens/Anarkali Dress.png' },
-                'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.png' }
+                'anarkali-dress': { name: 'Anarkali Dress', price: 2800, measurements: ['B', 'W', 'FL'], image: '/images/womens/Anarkali Dress.jfif' },
+                'instant-saree': { name: 'Instant Saree', price: 2250, measurements: ['BL', 'B', 'W'], image: '/images/womens/Instant Saree.jfif' }
             },
             boys: {
-                'school-shirt': { name: 'School Shirt', price: 700, measurements: ['C', 'L'], image: '/images/kids/boys/School Shirt.png' },
-                'boys-kurta': { name: 'Boys Kurta', price: 800, measurements: ['KL', 'C'], image: '/images/kids/boys/Boys Kurta.png' },
-                'school-pant': { name: 'School Pant', price: 600, measurements: ['PL', 'PW'], image: '/images/kids/boys/School Pant.jpg' },
-                'festival-dhoti': { name: 'Festival Dhoti Set', price: 1200, measurements: ['C', 'W', 'L'], image: '/images/kids/boys/Festival Dhoti Set.png' }
+                'school-shirt': { name: 'School Shirt', price: 700, measurements: ['C', 'L'], image: '/images/kids/boys/School Shirt.jfif' },
+                'boys-kurta': { name: 'Boys Kurta', price: 800, measurements: ['KL', 'C'], image: '/images/kids/boys/Boys Kurta.jfif' },
+                'school-pant': { name: 'School Pant', price: 600, measurements: ['PL', 'PW'], image: '/images/kids/boys/School Pant.jfif' },
+                'festival-dhoti': { name: 'Festival Dhoti Set', price: 1200, measurements: ['C', 'W', 'L'], image: '/images/kids/boys/Festival Dhoti Set.jfif' }
             },
             girls: {
-                'birthday-frock': { name: 'Birthday Frock (2-5 Years)', price: 1350, measurements: ['FL', 'C'], image: '/images/kids/girls/Birthday Frock (2-5 Years).jpg' },
-                'school-frock': { name: 'School Frock (6-8 Years)', price: 1750, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/School Frock (6-8 Years).jpg' },
-                'princess-lehenga': { name: 'Princess Lehenga (2-5 Years)', price: 1300, measurements: ['LL', 'LW'], image: '/images/kids/girls/Princess Lehenga (2-5 Years).png' },
-                'festival-lehenga': { name: 'Festival Lehenga (6-8 Years)', price: 2000, measurements: ['LL', 'LW', 'C'], image: '/images/kids/girls/Festival Lehenga (6-8 Years).png' },
-                'girls-kurta': { name: 'Girls Kurta', price: 750, measurements: ['KL', 'C'], image: '/images/kids/girls/Girls Kurta.jpg' },
-                'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance Costume.jpg' }
+                'birthday-frock': { name: 'Birthday Frock (2-5 Years)', price: 1350, measurements: ['FL', 'C'], image: '/images/kids/girls/Birthday Frock (2-5 Years).jfif' },
+                'school-frock': { name: 'School Frock (6-8 Years)', price: 1750, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/School Frock (6-8 Years).jfif' },
+                'princess-lehenga': { name: 'Princess Lehenga (2-5 Years)', price: 1300, measurements: ['LL', 'LW'], image: '/images/kids/girls/Princess Lehenga (2-5 Years).jfif' },
+                'festival-lehenga': { name: 'Festival Lehenga (6-8 Years)', price: 2000, measurements: ['LL', 'LW', 'C'], image: '/images/kids/girls/Festival Lehenga (6-8 Years).jfif' },
+                'girls-kurta': { name: 'Girls Kurta', price: 750, measurements: ['KL', 'C'], image: '/images/kids/girls/Girls Kurta.jfif' },
+                'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance Costume.jfif' }
             },
             fitting: {
                 'blouse-alteration': { name: 'Blouse Alteration', price: 200, measurements: ['BL', 'B'], image: '/images/repair and fitting/Blouse Alteration.jpg' },
@@ -3232,9 +3232,9 @@
             },
             'ready-made': {
                 'readymade-shirt': { name: 'Readymade Shirt', price: 500, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Shirt.jfif' },
-                'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.PNG' },
-                'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.PNG' },
-                'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.PNG' }
+                'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.jpg' },
+                'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.jpg' },
+                'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.jpg' }
             },
             redo: {
                 'size-adjustment': { name: 'Size Adjustment', price: 0, measurements: ['Current Size', 'New Size'], image: '/images/repair and fitting/Size Adjustment.jpg', isRedo: true },
@@ -3537,10 +3537,13 @@
                 });
             });
 
-            // Set minimum delivery date to tomorrow
+           // Set minimum delivery date to tomorrow
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             document.getElementById('deliveryDate').min = tomorrow.toISOString().split('T')[0];
+            // Set minimum trial date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('trialDate').min = today;
         }
         
         // Customer Functions
@@ -4761,6 +4764,7 @@
                     button.type = 'button';
                     button.className = 'garment-btn';
                     button.dataset.garment = garmentKey;
+                    button.dataset.price = garment.price || 0;
                     button.innerHTML = `
                          <img src="${garment.image}" alt="${garment.name}" class="garment-image"
                              onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
@@ -4792,13 +4796,11 @@
             setTimeout(() => {
                 document.getElementById('measurementSection').style.display = 'block';
                 document.getElementById('measurementSection').scrollIntoView({ behavior: 'smooth' });
-                
                 generateMeasurementFields();
-                
+
                 setTimeout(() => {
                     document.getElementById('pricingSection').style.display = 'block';
-                    document.getElementById('pricingSection').scrollIntoView({ behavior: 'smooth' });
-                    
+                    // Do NOT scroll to pricingSection — user should fill measurements first
                     calculateTotal();
                     renderCartItems();
                     const psc = document.getElementById('paymentSummaryCard');
@@ -4891,7 +4893,9 @@
                                             // Base price from selected garment
                                            const activeBtn = document.querySelector('.garment-btn.active');
                                             const domPrice = activeBtn ? (parseFloat(activeBtn.dataset.price || activeBtn.dataset.cost || '0') || 0) : 0;
-                                            const basePrice = currentOrder.garment ? (currentOrder.garment.price || domPrice || 0) : domPrice;
+                                            const basePrice = (currentOrder.garment && currentOrder.garment.price > 0)
+                                                ? currentOrder.garment.price
+                                                : (domPrice > 0 ? domPrice : (currentOrder.garment ? (currentOrder.garment.price || 0) : 0));
 
                                             // Standard add-ons
                                             let addonTotal = 0;
@@ -4951,7 +4955,7 @@
                                             if (advance < 0) { advance = 0; if (advanceInput) advanceInput.value = 0; }
 
                                             // Advance cannot exceed grand total
-                                            if (grandTotal > 0 && advance > grandTotal) {
+                                            if (advance > grandTotal) {
                                                 if (advanceInput) {
                                                     advanceInput.style.border = '2px solid #ef4444';
                                                     advanceInput.style.background = '#fef2f2';
@@ -4999,20 +5003,39 @@
                                                 document.getElementById('discountDisplay')?.classList.add('hidden');
                                             }
                                         };
-                             function validateTrialDate() {
-                            const trial = document.getElementById('trialDate').value;
-                            const delivery = document.getElementById('deliveryDate').value;
-                            const hint = document.getElementById('trialDateHint');
-                            if (trial && delivery && trial >= delivery) {
-                                document.getElementById('trialDate').style.border = '2px solid #ef4444';
-                                hint.textContent = '⚠️ Trial date must be before delivery date';
-                                hint.style.color = '#dc2626';
-                            } else {
-                                document.getElementById('trialDate').style.border = '2px solid #d1d5db';
-                                hint.textContent = 'Optional — must be before delivery date';
-                                hint.style.color = '#6b7280';
+                            function validateTrialDate() {
+                                const trialEl    = document.getElementById('trialDate');
+                                const deliveryEl = document.getElementById('deliveryDate');
+                                const hint       = document.getElementById('trialDateHint');
+                                const trial      = trialEl.value;
+                                const delivery   = deliveryEl.value;
+
+                                // If trial is set, delivery must be strictly after it
+                                if (trial) {
+                                    // Set delivery min to day after trial
+                                    const dayAfterTrial = new Date(trial);
+                                    dayAfterTrial.setDate(dayAfterTrial.getDate() + 1);
+                                    deliveryEl.min = dayAfterTrial.toISOString().split('T')[0];
+                                } else {
+                                    // Reset delivery min to tomorrow
+                                    const tomorrow = new Date();
+                                    tomorrow.setDate(tomorrow.getDate() + 1);
+                                    deliveryEl.min = tomorrow.toISOString().split('T')[0];
+                                }
+
+                                // Validate: trial must be before delivery
+                                if (trial && delivery && trial >= delivery) {
+                                    trialEl.style.border    = '2px solid #ef4444';
+                                    deliveryEl.style.border = '2px solid #ef4444';
+                                    hint.textContent = '⚠️ Trial date must be before delivery date';
+                                    hint.style.color = '#dc2626';
+                                } else {
+                                    trialEl.style.border    = '2px solid #d1d5db';
+                                    deliveryEl.style.border = '2px solid #d1d5db';
+                                    hint.textContent = 'Optional — must be before delivery date';
+                                    hint.style.color = '#6b7280';
+                                }
                             }
-                        }
 
                             function updateMinAdvanceHint() {
                                 const total = parseInt(document.getElementById('totalAmount').textContent.replace('₹', '').replace(',', '')) || 0;
@@ -5155,6 +5178,20 @@
                     return;
                 }
 
+                if (!designDescription) {
+                    alert('❌ Design Description is required. Please describe the design before creating the order.');
+                    document.getElementById('designDescription').focus();
+                    document.getElementById('designDescription').style.border = '2px solid #ef4444';
+                    return;
+                }
+                document.getElementById('designDescription').style.border = '2px solid #d1d5db';
+                const _trial = document.getElementById('trialDate').value;
+                const _delivery = document.getElementById('deliveryDate').value;
+                if (_trial && _delivery && _trial >= _delivery) {
+                    alert('❌ Trial date must be before delivery date.');
+                    document.getElementById('trialDate').focus();
+                    return;
+                }
                 if (isNaN(advancePayment) || advancePayment < 0) {
                     alert('❌ Advance payment cannot be negative');
                     return;
@@ -5336,7 +5373,7 @@
                             const result = await response.json();
                             if (result.success) {
                                 alert(`✅ ${ordersToCreate.length} order(s) created successfully and assigned to staff!`);
-                                openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
+                                openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
                                 clearCart();
                                 resetOrderForm();
                                 showTab('orders');
@@ -5360,7 +5397,7 @@
                     }
                     if (allOk) {
                         alert(`✅ ${ordersToCreate.length} order(s) created!`);
-                        openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
+                        openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
 
                         clearCart(); resetOrderForm(); showTab('orders'); return;
                     }
@@ -5375,7 +5412,7 @@
                 });
                 localStorage.setItem('sapthala_orders', JSON.stringify(existingOrders));
                   alert(`✅ ${ordersToCreate.length} order(s) saved offline!`);
-                openPostOrderWindow(ordersToCreate, customerName, customerPhone, deliveryDate, trialDate);
+                openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
                 clearCart();
                 resetOrderForm();
                 showTab('orders');
@@ -7421,8 +7458,8 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             'Total Amount: ₹' + grandTotal + '\n' +
             'Advance Paid: ₹' + advance + '\n' +
             'Balance Due: ₹' + balance + '\n' +
-            'Delivery Date: ' + (delivDate ? new Date(delivDate).toLocaleDateString('en-IN') : 'TBD') + '\n' +
-            (trialDt ? 'Trial Date: ' + new Date(trialDt).toLocaleDateString('en-IN') + '\n' : '') +
+            'Delivery Date: ' + (orders[0].deliveryDate || delivDate ? new Date(orders[0].deliveryDate || delivDate).toLocaleDateString('en-IN') : 'TBD') + '\n' +
+            (orders[0].trialDate || trialDt ? 'Trial Date: ' + new Date(orders[0].trialDate || trialDt).toLocaleDateString('en-IN') + '\n' : '') +
             '\nThank you for choosing us!';
         const waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg);
 
@@ -7474,7 +7511,7 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             const amt = o.totalAmount || 0;
             return '<tr><td>' + (idx+1) + '</td><td style="text-align:left;padding:8px;"><strong>' +
                 (o.garmentType || 'Custom') + '</strong>' +
-                ((o.deliveryDate || delivDate) ? '<br><small>Delivery: ' + (o.deliveryDate || delivDate) + '</small>' : '') +
+                (o.deliveryDate ? '<br><small>Delivery: ' + new Date(o.deliveryDate).toLocaleDateString('en-IN') + '</small>' : (delivDate ? '<br><small>Delivery: ' + new Date(delivDate).toLocaleDateString('en-IN') + '</small>' : '')) +
                 '</td><td>9988</td><td class="qty">1</td><td>Pcs</td><td class="price">' + amt + '</td><td class="amount">' + amt + '</td></tr>';
         }).join('');
 
