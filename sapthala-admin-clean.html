@@ -5,6 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SAPTHALA Boutique Admin Panel</title>
     <style>
+        @keyframes cornerGravityArc {
+            0%   { transform: translateY(0) rotate(0deg); }
+            25%  { transform: translateY(var(--peak)) rotate(calc(var(--ir) * 0.25)); }
+            100% { transform: translateY(var(--fall)) rotate(var(--ir)); }
+        }
+        @keyframes sideMoveX_left {
+            0%   { transform: translateX(0); opacity: 1; }
+            85%  { opacity: 1; }
+            100% { transform: translateX(var(--tx)); opacity: 0; }
+        }
+        @keyframes sideMoveX_right {
+            0%   { transform: translateX(0); opacity: 1; }
+            85%  { opacity: 1; }
+            100% { transform: translateX(var(--tx)); opacity: 0; }
+        }
+        @keyframes sideGravityFall {
+            0%   { transform: translateY(0) rotate(0deg); }
+            20%  { transform: translateY(var(--iy)) rotate(calc(var(--ir) * 0.2)); }
+            100% { transform: translateY(var(--fy)) rotate(var(--ir)); }
+        }
+        @keyframes sideShot {
+            0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+            60%  { opacity: 1; }
+            100% { transform: translate(var(--sx), var(--sy)) rotate(var(--sr)) scale(0.3); opacity: 0; }
+        }
+    
+        @keyframes btmPopperRise {
+            0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(1); opacity: 1; }
+            70%  { opacity: 1; }
+            100% { transform: translateY(var(--py)) translateX(var(--px)) rotate(var(--pr)) scale(0.5); opacity: 0; }
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; overflow: hidden; }
@@ -7920,14 +7951,32 @@ z
             }
         }
 
+      // NEW:
         function startLaunchAnimations() {
             stopLaunchAnimations();
-            __sapthalaLaunchCelebrationInterval = setInterval(() => {
-                createLaunchPetal();
-                createLaunchConfetti();
-            }, 220);
+            // Initial burst: less from left, both bottom corners
+            for (let _s = 0; _s < 18; _s++) {
+                setTimeout(() => sidePopper('left'), _s * 80);
+            }
+            for (let _s = 0; _s < 22; _s++) {
+                setTimeout(() => sidePopper('right'), _s * 80);
+            }
+            for (let _b = 0; _b < 15; _b++) {
+                setTimeout(() => cornerPopper(_b % 2 === 0 ? 'bottom-left' : 'bottom-right'), _b * 70);
+            }
+            // 2 second pause then sustained
+            setTimeout(() => {
+                __sapthalaLaunchCelebrationInterval = setInterval(() => {
+                   sidePopper('right');
+                    sidePopper('left');
+                    if (Math.random() > 0.4) sidePopper('left');
+                    cornerPopper('bottom-left');
+                    cornerPopper('bottom-right');
+                    createBottomPopper();
+                    createBottomPopper();
+                }, 320);
+            }, 2000);
         }
-
         function stopLaunchAnimations() {
             if (__sapthalaLaunchCelebrationInterval) {
                 clearInterval(__sapthalaLaunchCelebrationInterval);
@@ -7935,50 +7984,182 @@ z
             }
         }
 
-        function createLaunchConfetti() {
+        // function createLaunchConfetti() {
+        //     try {
+        //         const overlay = document.getElementById('launchCelebrationOverlay');
+        //         if (!overlay) return;
+        //         const colors = ['#f97316', '#f59e0b', '#ec4899', '#22c55e', '#3b82f6', '#a855f7'];
+
+        //         const dot = document.createElement('div');
+        //         dot.className = 'launchConfetti';
+        //         dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+
+        //         const fromLeft = Math.random() > 0.5;
+        //         dot.style.left = fromLeft ? '18px' : 'calc(100% - 18px)';
+        //         dot.style.top = `${18 + Math.random() * 26}px`;
+        //         dot.style.setProperty('--tx', `${(120 + Math.random() * 140) * (fromLeft ? 1 : -1)}px`);
+        //         dot.style.setProperty('--ty', `${140 + Math.random() * 120}px`);
+        //         dot.style.animation = `launchToCenterFast ${1.1 + Math.random() * 0.35}s ease-out forwards`;
+
+        //         overlay.appendChild(dot);
+        //         setTimeout(() => dot.remove(), 1800);
+        //     } catch (e) {
+        //         console.warn('createLaunchConfetti failed', e);
+        //     }
+        // }
+
+        // function createLaunchPetal() {
+        //     try {
+        //         const overlay = document.getElementById('launchCelebrationOverlay');
+        //         if (!overlay) return;
+        //         const colors = ['#fbbf24', '#f97316', '#fb7185', '#f43f5e', '#fb7185'];
+
+        //         const petal = document.createElement('div');
+        //         petal.className = 'launchPetal';
+        //         petal.style.background = colors[Math.floor(Math.random() * colors.length)];
+        //         petal.style.left = `${10 + Math.random() * 48}px`;
+        //         petal.style.top = `${18 + Math.random() * 18}px`;
+        //         petal.style.animation = `launchToCenterSlow ${2.1 + Math.random() * 0.6}s ease-in forwards`;
+
+        //         overlay.appendChild(petal);
+        //         setTimeout(() => petal.remove(), 2400);
+        //     } catch (e) {
+        //         console.warn('createLaunchPetal failed', e);
+        //     }
+        // }
+        // Side popper — shoots from left/right edges across screen like party poppers
+        function sidePopper(side) {
             try {
-                const overlay = document.getElementById('launchCelebrationOverlay');
-                if (!overlay) return;
-                const colors = ['#f97316', '#f59e0b', '#ec4899', '#22c55e', '#3b82f6', '#a855f7'];
+                const colors = ['#e53e3e','#00b5d8','#d69e2e','#38b2ac','#ed8936',
+                                 '#a855f7','#ec4899','#22c55e','#f97316','#3b82f6',
+                                 '#ffd93d','#ff6b6b','#ffffff'];
+                const count = 5 + Math.floor(Math.random() * 4);
+                for (let i = 0; i < count; i++) {
+                    const isRibbon = Math.random() < 0.3;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const size = isRibbon ? (3 + Math.random() * 3) : (5 + Math.random() * 8);
+                    const startTop = 15 + Math.random() * 60; // vh — where on the side it fires from
+                    const travelX = (40 + Math.random() * 50) * (side === 'left' ? 1 : -1); // vw inward
+                    const initialUpVH = -(5 + Math.random() * 15); // slight upward launch
+                    const fallVH = 80 + Math.random() * 30;        // then falls to bottom
+                    const rot = (Math.random() - 0.5) * 960;
+                    const dur = 2.0 + Math.random() * 1.5;
+                    const delay = i * 60;
 
-                const dot = document.createElement('div');
-                dot.className = 'launchConfetti';
-                dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    // WRAPPER — moves horizontally (linear, like launch velocity)
+                    const wrapper = document.createElement('div');
+                    wrapper.style.cssText = `
+                        position:fixed;
+                        top:${startTop}vh;
+                        ${side === 'left' ? 'left:0' : 'right:0'};
+                        pointer-events:none;
+                        z-index:999999;
+                        animation: sideMoveX_${side} ${dur}s linear ${delay}ms forwards;
+                        --tx:${travelX}vw;
+                    `;
 
-                const fromLeft = Math.random() > 0.5;
-                dot.style.left = fromLeft ? '18px' : 'calc(100% - 18px)';
-                dot.style.top = `${18 + Math.random() * 26}px`;
-                dot.style.setProperty('--tx', `${(120 + Math.random() * 140) * (fromLeft ? 1 : -1)}px`);
-                dot.style.setProperty('--ty', `${140 + Math.random() * 120}px`);
-                dot.style.animation = `launchToCenterFast ${1.1 + Math.random() * 0.35}s ease-out forwards`;
-
-                overlay.appendChild(dot);
-                setTimeout(() => dot.remove(), 1800);
-            } catch (e) {
-                console.warn('createLaunchConfetti failed', e);
-            }
+                    // INNER PIECE — falls with gravity (ease-in = accelerating fall)
+                    const el = document.createElement('div');
+                    el.style.cssText = `
+                        width:${isRibbon ? (12 + Math.random() * 16) + 'px' : size + 'px'};
+                        height:${size}px;
+                        background:${color};
+                        border-radius:${isRibbon
+                            ? (Math.random() > 0.5 ? '50% 0 50% 0' : '0 50% 0 50%')
+                            : (Math.random() > 0.4 ? '50%' : '3px')};
+                        opacity:1;
+                        animation: sideGravityFall ${dur}s ease-in ${delay}ms forwards;
+                        --iy:${initialUpVH}vh;
+                        --fy:${fallVH}vh;
+                        --ir:${rot}deg;
+                    `;
+                    wrapper.appendChild(el);
+                    document.body.appendChild(wrapper);
+                    setTimeout(() => { try { wrapper.remove(); } catch(e){} }, (dur * 1000) + delay + 400);
+                }
+            } catch(e) {}
         }
-
-        function createLaunchPetal() {
+        // Bottom-corner poppers — shoot up+inward then fall with gravity
+        function cornerPopper(corner) {
             try {
-                const overlay = document.getElementById('launchCelebrationOverlay');
-                if (!overlay) return;
-                const colors = ['#fbbf24', '#f97316', '#fb7185', '#f43f5e', '#fb7185'];
+                const colors = ['#e53e3e','#00b5d8','#d69e2e','#38b2ac','#ed8936',
+                                 '#a855f7','#ec4899','#22c55e','#f97316','#3b82f6',
+                                 '#ffd93d','#ff6b6b','#ffffff'];
+                const count = 3 + Math.floor(Math.random() * 3);
+                const isLeft = corner === 'bottom-left';
+                for (let i = 0; i < count; i++) {
+                    const isRibbon = Math.random() < 0.3;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const size = isRibbon ? (3 + Math.random() * 3) : (5 + Math.random() * 8);
+                    // Travel inward horizontally
+                    const travelX = (25 + Math.random() * 55) * (isLeft ? 1 : -1);
+                    // Shoot upward first, then gravity pulls down
+                    const peakVH = -(20 + Math.random() * 35); // up
+                    const fallVH = 90 + Math.random() * 20;    // final fall past bottom
+                    const rot = (Math.random() - 0.5) * 960;
+                    const dur = 2.2 + Math.random() * 1.4;
+                    const delay = i * 55;
 
-                const petal = document.createElement('div');
-                petal.className = 'launchPetal';
-                petal.style.background = colors[Math.floor(Math.random() * colors.length)];
-                petal.style.left = `${10 + Math.random() * 48}px`;
-                petal.style.top = `${18 + Math.random() * 18}px`;
-                petal.style.animation = `launchToCenterSlow ${2.1 + Math.random() * 0.6}s ease-in forwards`;
+                    // WRAPPER — horizontal travel (linear)
+                    const wrapper = document.createElement('div');
+                    wrapper.style.cssText = `
+                        position:fixed;
+                        bottom:0;
+                        ${isLeft ? 'left:0' : 'right:0'};
+                        pointer-events:none;
+                        z-index:999999;
+                        animation:${isLeft ? 'sideMoveX_left' : 'sideMoveX_right'} ${dur}s linear ${delay}ms forwards;
+                        --tx:${travelX}vw;
+                    `;
 
-                overlay.appendChild(petal);
-                setTimeout(() => petal.remove(), 2400);
-            } catch (e) {
-                console.warn('createLaunchPetal failed', e);
-            }
+                    // INNER — gravity arc (up then fall)
+                    const el = document.createElement('div');
+                    el.style.cssText = `
+                        width:${isRibbon ? (12 + Math.random() * 16) + 'px' : size + 'px'};
+                        height:${size}px;
+                        background:${color};
+                        border-radius:${isRibbon
+                            ? (Math.random() > 0.5 ? '50% 0 50% 0' : '0 50% 0 50%')
+                            : (Math.random() > 0.4 ? '50%' : '3px')};
+                        opacity:1;
+                        animation:cornerGravityArc ${dur}s ease-in ${delay}ms forwards;
+                        --peak:${peakVH}vh;
+                        --fall:${fallVH}vh;
+                        --ir:${rot}deg;
+                    `;
+                    wrapper.appendChild(el);
+                    document.body.appendChild(wrapper);
+                    setTimeout(() => { try { wrapper.remove(); } catch(e){} }, (dur * 1000) + delay + 400);
+                }
+            } catch(e) {}
         }
-
+        function createBottomPopper() {
+            try {
+                const colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff9f43','#a29bfe',
+                                 '#fd79a8','#00cec9','#e17055','#fdcb6e','#74b9ff','#ffffff'];
+                const emojis = ['🎉','🎊','✨','🎈','🌟','💫','🎆','🥳','🎀','💥','🌸','🎇'];
+                const isEmoji = Math.random() < 0.22;
+                const el = document.createElement('div');
+                const size = isEmoji ? (18 + Math.random() * 12) : (6 + Math.random() * 10);
+                const riseVH = -(55 + Math.random() * 55);
+                const swayPx = (Math.random() - 0.5) * 260;
+                const rot = (Math.random() - 0.5) * 800;
+                const dur = 1.8 + Math.random() * 1.5;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                el.style.cssText = `
+                    position:fixed;bottom:-10px;left:${2 + Math.random()*96}%;
+                    width:${isEmoji?'auto':size+'px'};height:${isEmoji?'auto':size*(0.5+Math.random())+'px'};
+                    font-size:${isEmoji?size+'px':'0'};background:${isEmoji?'transparent':color};
+                    border-radius:${Math.random()>0.5?'50%':'3px'};
+                    pointer-events:none;z-index:999999;opacity:1;
+                    animation:btmPopperRise ${dur}s cubic-bezier(0.2,0.9,0.4,1) forwards;
+                    --py:${riseVH}vh;--px:${swayPx}px;--pr:${rot}deg;
+                `;
+                if (isEmoji) el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                document.body.appendChild(el);
+                setTimeout(() => { try { el.remove(); } catch(e){} }, (dur + 0.3) * 1000);
+            } catch(e) {}
+        }
                     window.addEventListener('beforeunload', function() {
                 sessionStorage.removeItem('sapthala_order_cart');
             });
