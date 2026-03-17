@@ -653,13 +653,15 @@ app.get('/api/health/firestore', authenticateToken, async (req, res) => {
 
 // Public Firestore health check (no auth) used by admin UI header
 app.get('/api/public/health/firestore', async (req, res) => {
+  const cached = getCache('health_firestore');
+  if (cached) return res.json(cached);
   try {
     const health = await firebaseIntegrationService.healthCheck();
-    if (health.healthy) {
-      return res.json({ success: true, message: 'Firestore accessible', ...health });
-    } else {
-      return res.status(503).json({ success: false, error: health.error });
-    }
+    const result = health.healthy
+      ? { success: true, message: 'Firestore accessible', ...health }
+      : { success: false, error: health.error };
+    setCache('health_firestore', result, 60 * 1000); // cache 1 min
+    return res.json(result);
   } catch (error) {
     console.error('Public Firestore health check error:', error);
     return res.status(500).json({ success: false, error: 'Health check failed' });
@@ -3006,6 +3008,8 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
                       ? `notifs_sub_${req.user.username}`
                       : `notifs_${req.user.adminId}`;
                   const cached = getCache(cacheKey);
+                  // ... fetch from Firestore ...
+              setCache(cacheKey, resp, 2 * 60 * 1000); // 2 min TTL
                   if (cached) return res.json(cached);
 
                   const db = firebaseIntegrationService.forClient(req.user.adminId);
@@ -3060,11 +3064,13 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
             const heartbeat = setInterval(() => {
                 try { res.write(': heartbeat\n\n'); } catch(e) { clearInterval(heartbeat); }
             }, 25000);
-            req.on('close', () => {
-                clearInterval(heartbeat);
-                _sseClients.get(adminId)?.delete(res);
-                console.log(`📡 SSE disconnected: ${adminId}`);
-            });
+           req.on('close', () => {
+          _sseClients.get(adminId)?.delete(res);
+          if (_sseClients.get(adminId)?.size === 0) {
+            _sseClients.delete(adminId); // ← remove adminId entirely when no clients left
+          }
+          clearInterval(heartbeat);
+        });
         });
         // ── REAL-TIME NOTIFICATIONS via SSE ──────────────────────────
             let _notifSSE = null;
@@ -3098,7 +3104,7 @@ const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('
 
             function startNotificationPolling() {
                 if (_notifPollTimer) return; // already polling
-                _notifPollTimer = setInterval(() => loadNotifications(true), 30000);
+               _notifPollTimer = setInterval(() => loadNotifications(true), 300000);
             }
 
             function stopNotificationPolling() {
@@ -4043,7 +4049,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
       }
     }
 
-    setCache(cacheKey, responseData, 45 * 1000);
+    setCache(cacheKey, responseData, 5 * 60 * 1000);
     res.json(responseData);
   } catch (error) {
     console.error('Get orders error:', error);
