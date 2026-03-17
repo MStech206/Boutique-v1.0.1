@@ -640,10 +640,11 @@
                
                 const aid = encodeURIComponent(ADMIN_ID);
                  const authHeaders = { 'Authorization': `Bearer ${currentToken}` };
-                const [myTasksRes, availableTasksRes, performanceRes] = await Promise.all([
+               const [myTasksRes, availableTasksRes, performanceRes, staffStatusRes] = await Promise.all([
                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/tasks?adminId=${aid}${forceRefresh ? '&nocache=1' : ''}`, { headers: authHeaders }),
-                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/available-tasks?adminId=${aid}${forceRefresh ? '&nocache=1' : ''}`, { headers: authHeaders }),
-                    fetch(`${API_BASE}/reports/staff/${currentStaff.staffId}?adminId=${aid}`, { headers: authHeaders })
+                    fetch(`${API_BASE}/staff/${currentStaff.staffId}/available-tasks?adminId=${aid}&nocache=1`, { headers: authHeaders }),
+                    fetch(`${API_BASE}/reports/staff/${currentStaff.staffId}?adminId=${aid}`, { headers: authHeaders }),
+                    fetch(`${API_BASE}/staff/${currentStaff.staffId}?adminId=${aid}&nocache=1`, { headers: authHeaders })
                 ]);
                 // Parse responses with fallback to empty arrays
                 let myTasks = [];
@@ -687,14 +688,45 @@
                     }
                 }
 
+                // Sync latest isAvailable from server into currentStaff
+                try {
+                    if (staffStatusRes && staffStatusRes.ok) {
+                        const sd = await staffStatusRes.json();
+                        const staffData = sd.staff || sd;
+                        if (staffData && staffData.staffId) {
+                            currentStaff.isAvailable = staffData.isAvailable !== false;
+                            // Update session storage too
+                            try { sessionStorage.setItem('sapthala_staff_session', JSON.stringify({ staff: currentStaff, token: currentToken })); } catch(e) {}
+                        }
+                    }
+                } catch(e) { console.warn('Staff status sync failed:', e); }
+
                 // keep a copy for fast lookup from the details modal
                 window._staff_myTasks = myTasks || [];
                 window._staff_availableTasks = availableTasks || [];
+
+                const isBusy = currentStaff.isAvailable === false;
 
                 displayMyTasks(myTasks);
                 displayAvailableTasks(availableTasks);
                 updateStats(myTasks, availableTasks, performance);
                 updateConnectionStatus(true);
+
+                // Busy banner
+                let busyBanner = document.getElementById('staffBusyBanner');
+                if (isBusy) {
+                    if (!busyBanner) {
+                        busyBanner = document.createElement('div');
+                        busyBanner.id = 'staffBusyBanner';
+                        busyBanner.style.cssText = 'background:#fee2e2;border:2px solid #dc2626;border-radius:12px;padding:14px 18px;margin:0 16px 16px;font-weight:700;color:#dc2626;font-size:15px;text-align:center;';
+                        busyBanner.innerHTML = '🚫 You are currently marked as <strong>Busy</strong>. Ask admin to set you Available before accepting new tasks.';
+                        const section = document.querySelector('.section-title');
+                        if (section) section.parentNode.insertBefore(busyBanner, section);
+                        else document.querySelector('.dashboard')?.prepend(busyBanner);
+                    }
+                } else {
+                    if (busyBanner) busyBanner.remove();
+                }
             } catch (error) {
                 console.error(' Error loading tasks:', error);
                 updateConnectionStatus(false);
@@ -715,7 +747,15 @@
             container.innerHTML = tasks.map(task => {
                 const timeInfo = getTimeInfo(task);
                 return `
-                    <div class="task-card">
+                   ${(() => {
+                        const _d = toJsDate(task.deliveryDate);
+                        const _today = new Date(new Date().toDateString());
+                        const _done = task.status === 'completed';
+                        const _over = _d && !_done && (_d - _today) < 0;
+                        const _near = _d && !_done && !_over && (_d - _today) <= 2*86400000;
+                        const _cardStyle = _over ? 'border:2px solid #dc2626;background:#fff5f5;' : _near ? 'border:2px solid #f59e0b;background:#fffbeb;' : '';
+                        return `<div class="task-card" style="${_cardStyle}">`;
+                    })()}
                         <div class="task-header">
                             <span class="task-title">${task.stageIcon} ${task.stageName} - #${task.orderId}</span>
                             <span class="task-status status-${task.status}">${task.status}</span>
@@ -723,8 +763,22 @@
                      
                         <div class="task-info"> ${task.customerName || task.orderDetails?.customerName || 'Customer'}</div>
                         <div class="task-info"> ${task.garmentType || task.orderDetails?.garmentType || 'Garment'}</div>
-                        ${toJsDate(task.deliveryDate) ? '🗓 Delivery: ' + toJsDate(task.deliveryDate).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : 'No delivery date'}
-                        ${timeInfo ? `<div class="task-info" style="color:#059669;font-weight:bold;"> ${timeInfo}</div>` : ''}
+                       ${(() => {
+                            const _d = toJsDate(task.deliveryDate);
+                            if (!_d) return '<div class="task-info" style="color:#94a3b8;">No delivery date</div>';
+                            const _today = new Date(new Date().toDateString());
+                            const _diff = _d - _today;
+                            const _done = task.status === 'completed';
+                            const _over = !_done && _diff < 0;
+                            const _near = !_done && !_over && _diff <= 2 * 86400000;
+                            const _label = _d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+                            const _suffix = _over ? ' ⚠️ OVERDUE' : _near ? ' 🔔 DUE SOON' : '';
+                            const _bg = _over ? '#fee2e2' : _near ? '#fef3c7' : 'transparent';
+                            const _col = _over ? '#dc2626' : _near ? '#d97706' : '#374151';
+                            const _fw = (_over || _near) ? '800' : '500';
+                            return `<div class="task-info" style="background:${_bg};color:${_col};font-weight:${_fw};padding:${_over||_near?'5px 10px':'2px 0'};border-radius:8px;margin-top:4px;">🗓 Delivery: ${_label}${_suffix}</div>`;
+                        })()}
+                        ${timeInfo ? `<div class="task-info" style="color:${timeInfo.color};font-weight:bold;${timeInfo.urgent?'padding:6px 10px;background:'+(timeInfo.color==='#dc2626'?'#fee2e2':'#fef3c7')+';border-radius:8px;':''}"> ${timeInfo.text}</div>` : ''}
                         <div class="task-actions">
                             ${getTaskActions(task)}
                         </div>
@@ -733,7 +787,35 @@
             }).join('');
         }
         
-       function toJsDate(v) {
+       function _staffDeliveryAlerts(tasks) {
+            try {
+                const today = new Date(new Date().toDateString());
+                const seenKey = 'staff_deliv_alerted_' + today.toISOString().split('T')[0];
+                const alerted = JSON.parse(localStorage.getItem(seenKey) || '[]');
+                const toAlert = [];
+                tasks.forEach(t => {
+                    const tid = t.orderId + '_' + t.stageId;
+                    if (alerted.includes(tid) || t.status === 'completed') return;
+                    const d = toJsDate(t.deliveryDate);
+                    if (!d) return;
+                    const diff = d - today;
+                    const days = Math.round(diff / 86400000);
+                    if (days < 0)       toAlert.push({ tid, label: `🚨 OVERDUE — ${t.customerName||''} · ${t.garmentType||t.stageName}` });
+                    else if (days === 0) toAlert.push({ tid, label: `⚠️ DUE TODAY — ${t.customerName||''} · ${t.garmentType||t.stageName}` });
+                    else if (days <= 2)  toAlert.push({ tid, label: `🔔 Due in ${days}d — ${t.customerName||''} · ${t.garmentType||t.stageName}` });
+                });
+                if (!toAlert.length) return;
+                localStorage.setItem(seenKey, JSON.stringify([...alerted, ...toAlert.map(a=>a.tid)]));
+                // Toast
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#dc2626;color:white;padding:12px 20px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 6px 20px rgba(220,38,38,0.4);max-width:90vw;text-align:center;';
+                toast.innerHTML = toAlert.map(a => `<div>${a.label}</div>`).join('');
+                document.body.appendChild(toast);
+                setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.5s'; setTimeout(()=>toast.remove(),500); }, 5000);
+            } catch(e) {}
+        }
+
+        function toJsDate(v) {
     if (!v) return null;
     if (typeof v.toDate === 'function') return v.toDate();
     if (v._seconds !== undefined) return new Date(v._seconds * 1000);  // ← ADD THIS
@@ -745,25 +827,34 @@
     const d = new Date(v);
     return isNaN(d) ? null : d;
 }
+        // Lines 748–766 — REPLACE the entire getTimeInfo function:
         function getTimeInfo(task) {
-            if (task.status === 'started' && task.startedAt) {
+           if (task.status === 'completed' && task.timeSpent) {
+              return { text: `✅ Done in: ${task.timeSpent}min`, color: '#059669', urgent: false };
+            }
+           if (task.status === 'paused' && task.startedAt && task.pausedAt) {
+                const elapsed = Math.round((toJsDate(task.pausedAt) - toJsDate(task.startedAt)) / 60000);
+                return { text: `⏸ Paused at: ${elapsed}min`, color: '#f59e0b', urgent: false };
+           }
+           if ((task.status === 'started' || task.status === 'resumed') && task.startedAt) {
                 const start = toJsDate(task.startedAt);
-                if (!start) return null;
-                const elapsed = Math.round((Date.now() - start.getTime()) / 60000);
-                return `⏱ Running: ${elapsed}min`;
-            }
-            if (task.status === 'completed' && task.timeSpent) {
-                return `✅ Completed in: ${task.timeSpent}min`;
-            }
-            if (task.status === 'paused' && task.startedAt && task.pausedAt) {
-                const start = toJsDate(task.startedAt);
-                const paused = toJsDate(task.pausedAt);
-                if (!start || !paused) return null;
-                const elapsed = Math.round((paused.getTime() - start.getTime()) / 60000);
-                return `⏸ Paused at: ${elapsed}min`;
-            }
-            return null;
-        }
+               if (!start) return null;
+              const elapsed = Math.round((Date.now() - start.getTime()) / 60000);
+               if (task.timeLimitMinutes) {
+                   const remaining = task.timeLimitMinutes - elapsed;
+                   const pct = elapsed / task.timeLimitMinutes;
+                   if (remaining <= 0) {
+                       return { text: `🔴 OVERDUE by ${Math.abs(remaining)}min`, color: '#dc2626', urgent: true };
+                    } else if (pct >= 0.8) {
+                      return { text: `⚠️ ${remaining}min left of ${task.timeLimitDisplay || task.timeLimitMinutes+'min'}`, color: '#f59e0b', urgent: true };
+                    } else {
+                        return { text: `⏱ ${remaining}min left (${elapsed}min elapsed)`, color: '#059669', urgent: false };
+                   }
+             }
+                return { text: `⏱ Running: ${elapsed}min`, color: '#059669', urgent: false };
+           }
+          return null;
+       }
 
         function displayAvailableTasks(tasks) {
             const container = document.getElementById('availableTasks');
@@ -772,8 +863,9 @@
                 return;
             }
 
+           const isBusy = currentStaff && currentStaff.isAvailable === false;
             container.innerHTML = tasks.map(task => `
-                <div class="task-card">
+                <div class="task-card" style="${isBusy ? 'opacity:0.6;' : ''}">
                     <div class="task-header">
                         <span class="task-title">${task.stageIcon} ${task.stageName} - #${task.orderId}</span>
                         <span class="task-status status-pending">Available</span>
@@ -782,10 +874,24 @@
                         <div class="task-info"> ${task.customerName || task.orderDetails?.customerName || 'Customer'}</div>
                         <div class="task-info"> ${task.garmentType || task.orderDetails?.garmentType || 'Garment'}</div>
  
-                        <div class="task-info"> ${toJsDate(task.deliveryDate) ? toJsDate(task.deliveryDate).toLocaleDateString() : 'No delivery date'}</div>
-                        <button class="task-btn btn-view" onclick="viewTaskDetails('${task.orderId}','${task.stageId}')">View details</button>
-                        <button class="task-btn btn-accept" onclick="acceptTask('${task.orderId}', '${task.stageId}')">Accept Task</button>
-                    </div>
+                            ${(() => {
+                            const _d = toJsDate(task.deliveryDate);
+                            if (!_d) return '<div class="task-info" style="color:#94a3b8;">No delivery date</div>';
+                            const _today = new Date(new Date().toDateString());
+                            const _diff = _d - _today;
+                            const _over = _diff < 0;
+                            const _near = !_over && _diff <= 2 * 86400000;
+                            const _label = _d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+                            const _suffix = _over ? ' ⚠️ OVERDUE' : _near ? ' 🔔 DUE SOON' : '';
+                            const _bg = _over ? '#fee2e2' : _near ? '#fef3c7' : 'transparent';
+                            const _col = _over ? '#dc2626' : _near ? '#d97706' : '#374151';
+                            const _fw = (_over || _near) ? '800' : '500';
+                            return `<div class="task-info" style="background:${_bg};color:${_col};font-weight:${_fw};padding:${_over||_near?'5px 10px':'2px 0'};border-radius:8px;margin-top:4px;">🗓 Delivery: ${_label}${_suffix}</div>`;
+                        })()}                        <button class="task-btn btn-view" onclick="viewTaskDetails('${task.orderId}','${task.stageId}')">View details</button>
+                       ${isBusy
+                            ? `<button class="task-btn" disabled style="background:#e2e8f0;color:#94a3b8;border:none;border-radius:8px;padding:10px;width:100%;font-weight:700;cursor:not-allowed;margin-top:8px;">🚫 Busy — Cannot Accept</button>`
+                            : `<button class="task-btn btn-accept" onclick="acceptTask('${task.orderId}', '${task.stageId}')">Accept Task</button>`
+                        }                  </div>
                 </div>
             `).join('');
         }
@@ -902,7 +1008,11 @@
             document.getElementById('performanceScore').textContent = avgTime > 0 ? `${avgTime}min` : '-';
         }
 
-        async function acceptTask(orderId, stageId) {
+async function acceptTask(orderId, stageId) {
+            if (currentStaff && currentStaff.isAvailable === false) {
+                alert('🚫 You are currently marked as Busy. Ask your admin to set your status to Available.');
+                return;
+            }
             try {
                 const response = await fetch(`${API_BASE}/staff/${currentStaff.staffId}/accept-task`, {
                     method: 'POST',
@@ -976,7 +1086,14 @@
                 alert(' Error: ' + error.message);
             }
         }
-
+// Live countdown ticker — refreshes time display every 60s without full API call
+      setInterval(() => {
+           const myTasks = window._staff_myTasks || [];
+            if (myTasks.some(t => t.status === 'started' || t.status === 'resumed')) {
+                 displayMyTasks(myTasks);
+                 _staffDeliveryAlerts(myTasks);
+             }
+        }, 60000);
         // // Auto-refresh every 30 seconds
         // setInterval(() => {
         //     if (currentStaff) {

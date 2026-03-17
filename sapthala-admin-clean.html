@@ -68,7 +68,7 @@
             letter-spacing: 1px;
         }
         .login-title2 {
-            font-size: 24px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
+            font-size:28px; font-weight: bold; color: #7c183c; margin-bottom: 8px;
             letter-spacing: 1px;
         }
         .login-subtitle {
@@ -650,8 +650,65 @@
             text-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
         }
 
-        /* END TEMPORARY LAUNCH CELEBRATION */
+ /* ── STICKY TOTAL BAR ── */
+        #stickyTotalBar {
+           display: none; position: fixed; bottom: 18px; left: 266px; right: 18px; border-radius: 14px;
+            z-index: 8888; background: linear-gradient(135deg,#1e293b,#0f172a);
+            border-top: 3px solid #6366f1; box-shadow: 0 -6px 32px rgba(99,102,241,0.22);
+            padding: 0 32px; height: 68px; align-items: center;
+            justify-content: space-between; gap: 20px;
+            animation: stickyBarSlideUp 0.35s cubic-bezier(0.23,1.01,0.32,1);
+        }
+        @keyframes stickyBarSlideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+        }
+            /* END TEMPORARY LAUNCH CELEBRATION */
+
+        #stickyTotalBar.visible { display: flex; }
+        .stk-label { font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; }
+        .stk-val   { font-size:19px; font-weight:800; color:#f1f5f9; }
+        .stk-val.green { color:#34d399; } .stk-val.red { color:#f87171; } .stk-val.amber { color:#fbbf24; }
+        .stk-div   { width:1px; height:36px; background:rgba(148,163,184,0.2); flex-shrink:0; }
+        #stickyTotalBar { background: linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%);
+            border-top: 3px solid rgba(255,255,255,0.3); }
+        .stk-label { color:rgba(255,255,255,0.75) !important; }
+        .stk-val   { color:white !important; }
+        .stk-val.green { color:#bbf7d0 !important; }
+        .stk-val.red   { color:#fecaca !important; }
+        .stk-val.amber { color:#fef08a !important; }
+        #stickyTotalMain { font-size:26px; font-weight:900; color:white !important;
+            background:none; -webkit-background-clip:unset; -webkit-text-fill-color:white; }
+        .stk-div { background:rgba(255,255,255,0.25) !important; }
+
+        /* ── SCROLL FABs ── */
+    #scrollFabGroup {
+             position:fixed;
+          right:20px;
+             top:0; bottom:0;
+             display:none;
+            flex-direction:column;
+             justify-content:space-between;
+            align-items:center;
+            padding:148px 0 104px 0;
+            z-index:8777;
+          pointer-events:none;
+           width:50px;
+         }
+        .scroll-fab {
+            pointer-events:all;
+            width:38px; height:38px; border-radius:50%;
+            border:2px solid #d1d5db;
+            cursor:pointer; font-size:16px; font-weight:900;
+            display:flex; align-items:center; justify-content:center;
+            box-shadow:0 3px 12px rgba(0,0,0,0.15);
+            transition:all 0.2s; opacity:0.9; line-height:1;
+        }
+        .scroll-fab:hover { transform:scale(1.15); opacity:1; }
+        .scroll-fab.up   { background:#ffffff; color:#111111; border-color:#d1d5db; }
+        .scroll-fab.down { background:#111111; color:#ffffff; border-color:#374151; }
     </style>
+    
     <script>
         // Global early error catcher — shows a visible fallback banner and logs errors to console
         (function(){
@@ -903,6 +960,8 @@
                         try { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden'); } catch(e){}
                         // attempt to call dashboard updater if available
                         try { if (typeof updateDashboardStats === 'function') updateDashboardStats(); } catch(e){}
+                        try { if (typeof startNotificationStream === 'function') startNotificationStream(); } catch(e){}
+
                     } else {
                         alert((data && data.error) || 'Login failed');
                     }
@@ -917,7 +976,7 @@
                 } catch(e){ console.warn('bypassLogin fallback failed', e); }
             };
 
-            window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_in') === 'true') { try { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden'); } catch(e){} } };
+window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_in') === 'true') { try { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('mainApp').classList.remove('hidden'); } catch(e){} try { if (typeof startNotificationStream === 'function') startNotificationStream(); } catch(e){} } };
 
             // Demo helper for offline/demo usage — kept lightweight and safe
             window.loadDemoDataOffline = async function() {
@@ -1118,8 +1177,8 @@
             <div class="login-logo">
             <img src="img/aplogo.jpg.JPG" alt="Logo" style="width:90px;height:80px;border-radius:50%;object-fit:cover;border:3px solid white;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
         </div>
-            <h2 class="login-title">Boutiquo</h2>
-             <h3 class="login-title2">Autopilot</h3>
+            <h2 class="login-title">Sapthala Designers</h2>
+             <h3 class="login-title2">Studio</h3>
             <p class="login-subtitle">Professional Boutique Admin Portal</p>
             
             <form class="login-form" onsubmit="handleLogin(event)">
@@ -1226,7 +1285,10 @@
         <div class="tab-content">
                                    <!-- Reports Tab -->
                                     <div id="reports" class="tab-panel" style="display:none;">
-                                            <h2 style="font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1e293b;">📊 Reports</h2>
+                                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                                                <h2 style="font-size: 28px; font-weight: bold; margin: 0; color: #1e293b;">📊 Reports</h2>
+                                                <button onclick="(function(){const btn=this;btn.innerHTML='🔄';btn.disabled=true;loadReports().finally(()=>{btn.innerHTML='🔄 Refresh';btn.disabled=false;})}).call(this)" style="display:flex;align-items:center;gap:6px;padding:9px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 3px 10px rgba(99,102,241,0.25);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">🔄 Refresh</button>
+                                            </div>
                                             <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap:wrap;">
                                                 <label style="font-weight: 500; color: #374151;">Branch: 
                                                     <select id="reportBranch" onchange="onReportBranchChange()" style="margin-left:6px;padding:7px 10px;border-radius:7px;border:1.5px solid #d1d5db;">
@@ -1740,6 +1802,7 @@
             <div id="orders" class="tab-panel">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
                     <h2 style="font-size: 28px; font-weight: bold; color: #1e293b; margin: 0;">📦 Orders Management</h2>
+                    <button onclick="(function(){const btn=this;btn.innerHTML='🔄';btn.disabled=true;loadOrders({}).finally(()=>{btn.innerHTML='🔄 Refresh';btn.disabled=false;})}).call(this)" style="display:flex;align-items:center;gap:6px;padding:9px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 3px 10px rgba(99,102,241,0.25);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">🔄 Refresh</button>
                     <span id="ordersDataSource" style="padding: 8px 14px; border-radius: 8px; background: #dcfce7; color: #065f46; font-weight: 700; font-size: 13px; display: none;">🔥 Firebase</span>
                 </div>
                 <!-- ✅ Status filter bar -->
@@ -2852,8 +2915,16 @@
             const activeCard = document.querySelector(`[data-theme="${themeName}"]`);
             if (activeCard) activeCard.classList.add('active');
             
+           const stickyBar = document.getElementById('stickyTotalBar');
+            if (stickyBar) {
+                // Use primary→secondary only (avoids white middle in Independence theme)
+                stickyBar.style.background = `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`;
+                stickyBar.style.borderTopColor = 'rgba(255,255,255,0.3)';
+            }
+
             console.log(`✨ Theme applied: ${theme.name}`);
         }
+       
         function resetTheme() {
            applyTheme('default');
           localStorage.setItem('sapthala_current_theme', 'default');
@@ -3222,7 +3293,7 @@
                 'princess-lehenga': { name: 'Princess Lehenga (2-5 Years)', price: 1300, measurements: ['LL', 'LW'], image: '/images/kids/girls/Princess Lehenga (2-5 Years).jfif' },
                 'festival-lehenga': { name: 'Festival Lehenga (6-8 Years)', price: 2000, measurements: ['LL', 'LW', 'C'], image: '/images/kids/girls/Festival Lehenga (6-8 Years).jfif' },
                 'girls-kurta': { name: 'Girls Kurta', price: 750, measurements: ['KL', 'C'], image: '/images/kids/girls/Girls Kurta.jfif' },
-                'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance Costume.jfif' }
+                'dance-costume': { name: 'Dance Costume', price: 2200, measurements: ['FL', 'C', 'W'], image: '/images/kids/girls/Dance costume.jfif' }
             },
             fitting: {
                 'blouse-alteration': { name: 'Blouse Alteration', price: 200, measurements: ['BL', 'B'], image: '/images/repair and fitting/Blouse Alteration.jpg' },
@@ -3232,9 +3303,9 @@
             },
             'ready-made': {
                 'readymade-shirt': { name: 'Readymade Shirt', price: 500, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Shirt.jfif' },
-                'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.jpg' },
-                'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.jpg' },
-                'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.jpg' }
+                'readymade-dress': { name: 'Readymade Dress', price: 800, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Dress.jfif' },
+                'readymade-kurta': { name: 'Readymade Kurta Set', price: 1200, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Kurta Set.jfif' },
+                'readymade-blouse': { name: 'Readymade Blouse', price: 600, measurements: ['SIZE'], isReadyMade: true, image: '/sapthala-admin-imgs/Readymade imgs/Readymade Blouse.jfif' }
             },
             redo: {
                 'size-adjustment': { name: 'Size Adjustment', price: 0, measurements: ['Current Size', 'New Size'], image: '/images/repair and fitting/Size Adjustment.jpg', isRedo: true },
@@ -3264,12 +3335,14 @@
                                      // ── MULTI-ITEM CART ──────────────────────────────────────────────────────────
                                     let orderCart = [];        // staging area: items pending final submission
                                     let editingCartIndex = -1; // -1 = new item, >=0 = editing existing
+                                    const _cartImageFiles = {}; // in-memory File store — can't go in sessionStorage
 
                                     function getCartFromStorage() {
                                         try { return JSON.parse(sessionStorage.getItem('sapthala_order_cart') || '[]'); } catch(e) { return []; }
                                     }
                                     function saveCartToStorage(cart) {
-                                        sessionStorage.setItem('sapthala_order_cart', JSON.stringify(cart));
+                                        const safe = cart.map(item => { const c = Object.assign({}, item); delete c._imageFiles; return c; });
+                                        sessionStorage.setItem('sapthala_order_cart', JSON.stringify(safe));
                                     }
                                     function clearCart() {
                                         orderCart = [];
@@ -3381,28 +3454,25 @@
                                         };
                                     }
 
-                                    function addAnotherItem() {
-                                        // Validate current item before saving
+                                 function addAnotherItem() {
                                         if (!currentOrder.garment) { alert('❌ Please select a garment first.'); return; }
                                         if (!document.getElementById('deliveryDate').value) { alert('❌ Please select a delivery date.'); return; }
 
                                         const snapshot = snapshotCurrentItem();
+                                        const snapFiles = (currentOrder.images || []).filter(img => img.file);
 
                                         orderCart = getCartFromStorage();
                                         if (editingCartIndex >= 0) {
-                                            // Replace the item being edited
                                             orderCart[editingCartIndex] = snapshot;
+                                            _cartImageFiles[editingCartIndex] = snapFiles;
                                             editingCartIndex = -1;
                                         } else {
                                             orderCart.push(snapshot);
+                                            _cartImageFiles[orderCart.length - 1] = snapFiles;
                                         }
                                         saveCartToStorage(orderCart);
-
-                                        // Clear order-specific fields but keep customer info
                                         clearItemFields();
                                         renderCartItems();
-
-                                        // Scroll to top of form
                                         document.getElementById('categorySection').scrollIntoView({ behavior: 'smooth' });
                                         alert(`✅ Item added to cart! (${orderCart.length} item(s)). Fill details for the next item, or click "Create Order" to finalize.`);
                                     }
@@ -3495,6 +3565,14 @@
                                         if (!confirm('Remove this item from cart?')) return;
                                         orderCart = getCartFromStorage();
                                         orderCart.splice(index, 1);
+                                        const newMap = {};
+                                        Object.keys(_cartImageFiles).forEach(k => {
+                                            const ki = parseInt(k);
+                                            if (ki < index) newMap[ki] = _cartImageFiles[ki];
+                                            else if (ki > index) newMap[ki - 1] = _cartImageFiles[ki];
+                                        });
+                                        Object.keys(_cartImageFiles).forEach(k => delete _cartImageFiles[k]);
+                                        Object.assign(_cartImageFiles, newMap);
                                         saveCartToStorage(orderCart);
                                         renderCartItems();
                                     }
@@ -5311,10 +5389,13 @@
                             const currentItemUrls = await uploadItemImages(currentOrder.images || []);
 
                             // Upload cart items images (stored as _imageFiles)
+                           // Upload cart items images from in-memory _cartImageFiles map
                             const cartItems = getCartFromStorage();
-                            for (const cartItem of cartItems) {
-                                if (cartItem._imageFiles && cartItem._imageFiles.length > 0) {
-                                    cartItem.designImages = await uploadItemImages(cartItem._imageFiles);
+                            for (let ci = 0; ci < cartItems.length; ci++) {
+                                const files = _cartImageFiles[ci] || [];
+                                if (files.length > 0) {
+                                    cartItems[ci].designImages = await uploadItemImages(files);
+                                    console.log(`📸 Uploaded ${cartItems[ci].designImages.length} image(s) for cart item ${ci}: ${cartItems[ci].garmentType}`);
                                 }
                             }
                             if (uploadBtn) uploadBtn.textContent = '📋 Saving order...';
@@ -5322,8 +5403,8 @@
                             const currentItemSnapshot = snapshotCurrentItem();
                             // Patch current item snapshot with uploaded URLs
                             currentItemSnapshot.designImages = currentItemUrls;
-                            // Merge cart + current item
-                            const allItems = [...getCartFromStorage(), currentItemSnapshot];
+                            // Merge uploaded cart items + current item
+                            const allItems = [...cartItems, currentItemSnapshot];
 
                             // Build one order per item, all sharing the same customer + payment split
                             const ordersToCreate = allItems.map((item, idx) => {
@@ -5369,11 +5450,16 @@
                             body: JSON.stringify({ orders: ordersToCreate })
                         });
 
-                        if (response.ok) {
+                       if (response.ok) {
                             const result = await response.json();
                             if (result.success) {
+                                // Merge server-assigned orderId back into each item
+                                const enriched = ordersToCreate.map((o, i) => ({
+                                    ...o,
+                                    orderId: (result.orders && result.orders[i] && result.orders[i].orderId) || o.orderId || ''
+                                }));
                                 alert(`✅ ${ordersToCreate.length} order(s) created successfully and assigned to staff!`);
-                                openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
+                                openPostOrderWindow(enriched, customerName, customerPhone);
                                 clearCart();
                                 resetOrderForm();
                                 showTab('orders');
@@ -5397,7 +5483,8 @@
                     }
                     if (allOk) {
                         alert(`✅ ${ordersToCreate.length} order(s) created!`);
-                        openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
+                                               openPostOrderWindow(ordersToCreate, customerName, customerPhone);
+
 
                         clearCart(); resetOrderForm(); showTab('orders'); return;
                     }
@@ -5412,7 +5499,7 @@
                 });
                 localStorage.setItem('sapthala_orders', JSON.stringify(existingOrders));
                   alert(`✅ ${ordersToCreate.length} order(s) saved offline!`);
-                openPostOrderWindow(ordersToCreate, customerName, customerPhone, ordersToCreate[0].deliveryDate || deliveryDate, ordersToCreate[0].trialDate || trialDate);
+                openPostOrderWindow(ordersToCreate, customerName, customerPhone);
                 clearCart();
                 resetOrderForm();
                 showTab('orders');
@@ -5624,7 +5711,7 @@
                 }
 
                 displayOrders(list, filters.highlightId);
-                
+                _checkDeliveryAlerts(list);
                 // Show data source badge
                 const dataSourceEl = document.getElementById('ordersDataSource');
                 if (dataSourceEl && orders.dataSource) {
@@ -5654,7 +5741,74 @@
                 }
             }
         }
-                   function filterPendingOrders() {
+                  function _checkDeliveryAlerts(orders) {
+            try {
+                const today = new Date(new Date().toDateString());
+                const seenKey = 'sapthala_deliv_alerted_' + today.toISOString().split('T')[0];
+                const alerted = JSON.parse(localStorage.getItem(seenKey) || '[]');
+                const toAlert = [];
+
+                orders.forEach(o => {
+                    const oid = o.orderId || o.id || o._id || '';
+                    if (alerted.includes(oid)) return;
+                    if (o.status === 'completed' || o.status === 'delivered') return;
+                    const raw = o.deliveryDate;
+                    if (!raw) return;
+                    let d;
+                    if (raw._seconds) d = new Date(raw._seconds * 1000);
+                    else if (raw.seconds) d = new Date(raw.seconds * 1000);
+                    else d = new Date(typeof raw === 'string' && raw.length === 10 ? raw + 'T12:00:00' : raw);
+                    if (isNaN(d)) return;
+                    const diff = d - today; // ms
+                    const days = Math.round(diff / 86400000);
+                    if (days < 0) toAlert.push({ oid, name: o.customerName || 'Customer', garment: o.garmentType || '', days, label: '🚨 OVERDUE' });
+                    else if (days === 0) toAlert.push({ oid, name: o.customerName || 'Customer', garment: o.garmentType || '', days, label: '⚠️ DUE TODAY' });
+                    else if (days <= 2) toAlert.push({ oid, name: o.customerName || 'Customer', garment: o.garmentType || '', days, label: `🔔 Due in ${days}d` });
+                });
+
+                if (!toAlert.length) return;
+
+                // Push into notification dropdown
+                const notifList = document.getElementById('notifList');
+                const badge = document.getElementById('notifBadge');
+                const existingAlerts = document.getElementById('delivery-alerts-group');
+                if (existingAlerts) existingAlerts.remove();
+
+                const alertHtml = `<div id="delivery-alerts-group">
+                    <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:0.06em;padding:6px 4px 4px;">📅 Delivery Alerts</div>
+                    ${toAlert.map(a => `
+                    <div onclick="window.__skipOrdersLoad=true;showTab('orders');" style="padding:10px 12px;border-radius:10px;margin-bottom:6px;background:${a.days<0?'#fee2e2':a.days===0?'#fff7ed':'#fefce8'};border-left:4px solid ${a.days<0?'#dc2626':a.days===0?'#f97316':'#f59e0b'};cursor:pointer;">
+                        <div style="font-size:13px;font-weight:700;color:${a.days<0?'#dc2626':a.days===0?'#c2410c':'#b45309'};">${a.label} — ${a.name}</div>
+                        <div style="font-size:12px;color:#6b7280;">${a.garment} · ${a.oid}</div>
+                    </div>`).join('')}
+                </div>`;
+
+                if (notifList) {
+                    if (notifList.innerHTML.includes('No notifications')) notifList.innerHTML = '';
+                    notifList.insertAdjacentHTML('afterbegin', alertHtml);
+                }
+
+                // Update badge count
+                if (badge) {
+                    const cur = parseInt(badge.textContent) || 0;
+                    badge.textContent = cur + toAlert.length;
+                    badge.style.display = 'flex';
+                }
+
+                // Mark as alerted for today so it doesn't spam
+                const newAlerted = [...alerted, ...toAlert.map(a => a.oid)];
+                localStorage.setItem(seenKey, JSON.stringify(newAlerted));
+
+                // Toast popup
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position:fixed;top:80px;right:20px;z-index:99999;background:#dc2626;color:white;padding:14px 20px;border-radius:14px;font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(220,38,38,0.35);animation:slideDown 0.3s ease;max-width:320px;';
+                toast.innerHTML = `⚠️ ${toAlert.length} delivery alert${toAlert.length>1?'s':''}! Click 🔔 to view.`;
+                document.body.appendChild(toast);
+                setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.5s'; setTimeout(()=>toast.remove(),500); }, 4000);
+            } catch(e) { console.warn('_checkDeliveryAlerts error', e); }
+        }
+
+        function filterPendingOrders() {
                     window.__skipOrdersLoad = true;  // ✅ block fallback loadOrders() in showTab
                     showTab('orders');
                     setOrderFilter('pending');       // ✅ this calls loadOrders({status:'pending'})
@@ -5756,6 +5910,10 @@
                 const custName = order.customerName || (order.customer && order.customer.name) || 'Customer';
                 const delivVal = toDateStr(order.deliveryDate);
                 const trialVal = toDateStr(order.trialDate);
+                const _today = new Date(new Date().toDateString());
+                const _delivDate = delivVal ? new Date(delivVal) : null;
+                const _isOverdue = _delivDate && _delivDate < _today && status !== 'completed' && status !== 'delivered';
+                const _isNear    = _delivDate && !_isOverdue && (_delivDate - _today) <= 2*86400000 && status !== 'completed' && status !== 'delivered';
                 const allStages = [
                     {id:'dyeing',name:'Dyeing'},{id:'cutting',name:'Cutting'},{id:'stitching',name:'Stitching'},
                     {id:'khakha',name:'Khakha'},{id:'maggam',name:'Maggam Work'},{id:'painting',name:'Painting'},
@@ -5799,14 +5957,30 @@
                             <input type="number" id="ef-advance-${oid}" value="${advance}" data-oid="${oid}" oninput="efUpdateBalance(this.dataset.oid)" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                         <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Mode</label>
                             <select id="ef-paymode-${oid}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
-                                ${['','cash','upi','card','bank_transfer','cheque'].map(pm=>`<option value="${pm}" ${(order.paymentMode||'')==pm?'selected':''}>${pm?pm.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()):'— Mode —'}</option>`).join('')}
-                            </select></div>
+${['','cash','upi','card','bank_transfer','cheque'].map(pm=>`<option value="${pm}" ${(order.paymentMode||'').toString().toLowerCase().trim()===pm?'selected':''}>${pm?pm.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()):'— Mode —'}</option>`).join('')}                            </select></div>
                         <div style="grid-column:1/-1;"><span id="ef-bal-${oid}" style="font-size:14px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</span></div>
                         <div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Remarks</label>
                             <input id="ef-premarks-${oid}" value="${order.paymentRemarks||''}" placeholder="e.g. Paid via PhonePe..." style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                     </div>
-                    <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">⚙️ Workflow Stages</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+<div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">📐 Measurements</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+                        ${[
+                            ['length','Length'],['chest','Chest'],['waist','Waist'],
+                            ['hip','Hip'],['shoulder','Shoulder'],['sleeve','Sleeve'],
+                            ['neck','Neck'],['blouse_length','Blouse Length'],['blouse_chest','Blouse Chest'],
+                            ['lehenga_length','Lehenga Length'],['lehenga_waist','Lehenga Waist'],
+                            ['pant_length','Pant Length'],['pant_waist','Pant Waist'],
+                            ['frock_length','Frock Length'],['kurta_length','Kurta Length']
+                        ].map(([k,lbl]) => {
+                            const val = (order.measurements||{})[k] || '';
+                            return `<div>
+                                <label style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:3px;">${lbl} <span style="color:#94a3b8;font-weight:400;">(in)</span></label>
+                                <input id="ef-m-${oid}-${k}" type="number" step="0.1" value="${val}" placeholder="—"
+                                    style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;box-sizing:border-box;text-align:center;">
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div style="font-size:11px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e7ff;">⚙️ Workflow Stages</div>                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
                         ${allStages.map(s => {
                             const checked = tasks.some(t=>t.stageId===s.id);
                             const taskStatus = tasks.find(t=>t.stageId===s.id)?.status||'';
@@ -5823,8 +5997,8 @@
                     </div>
                 </div>` : '';
 
-                html += `
-                <div id="ocard-${oid}" style="background:white;border-radius:16px;margin-bottom:12px;border:1.5px solid #e2e8f0;border-left:5px solid ${scol};box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:box-shadow 0.2s;overflow:hidden;">
+               html += `
+                <div id="ocard-${oid}" style="background:${_isOverdue?'#fff5f5':_isNear?'#fffbeb':'white'};border-radius:16px;margin-bottom:12px;border:1.5px solid ${_isOverdue?'#fca5a5':_isNear?'#fde68a':'#e2e8f0'};border-left:5px solid ${_isOverdue?'#dc2626':_isNear?'#f59e0b':scol};box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:box-shadow 0.2s;overflow:hidden;">
                     <!-- Summary Row — click to toggle -->
                     <div onclick="toggleOrderCard('${oid}')" style="display:grid;grid-template-columns:2fr 2fr 1.5fr 1.2fr 1fr auto;gap:12px;align-items:center;padding:16px 18px;cursor:pointer;user-select:none;">
                         <div>
@@ -5861,16 +6035,24 @@
                             </div>
                             <div style="background:#f8fafc;border-radius:10px;padding:12px;">
                                 <div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Dates</div>
-                                <div style="font-size:13px;color:#1e293b;">📦 Delivery: <strong>${fmtDate(order.deliveryDate)}</strong></div>
-                                <div style="font-size:13px;color:#1e293b;margin-top:4px;">👗 Trial: <strong>${order.trialDate ? fmtDate(order.trialDate) : '—'}</strong></div>
+<div style="font-size:13px;font-weight:${_isOverdue||_isNear?'800':'400'};padding:${_isOverdue||_isNear?'4px 8px':'0'};border-radius:6px;background:${_isOverdue?'#fee2e2':_isNear?'#fef3c7':'transparent'};color:${_isOverdue?'#dc2626':_isNear?'#d97706':'#1e293b'};">
+                                    📦 Delivery: <strong>${fmtDate(order.deliveryDate)}</strong>${_isOverdue?' ⚠️ OVERDUE':_isNear?' 🔔 DUE SOON':''}
+                                </div>                                <div style="font-size:13px;color:#1e293b;margin-top:4px;">👗 Trial: <strong>${order.trialDate ? fmtDate(order.trialDate) : '—'}</strong></div>
                                 <div style="font-size:13px;color:#1e293b;margin-top:4px;">📍 Branch: <strong>${order.branch||'—'}</strong></div>
                             </div>
                             <div style="background:#f8fafc;border-radius:10px;padding:12px;">
                                 <div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Payment</div>
                                 <div style="font-size:13px;color:#1e293b;">Total: <strong>₹${total.toLocaleString()}</strong></div>
                                 <div style="font-size:13px;color:#1e293b;margin-top:2px;">Advance: <strong>₹${advance.toLocaleString()}</strong></div>
-                                <div style="font-size:13px;margin-top:2px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</div>
-                                <div style="font-size:12px;color:#94a3b8;margin-top:2px;">${order.paymentMode||''} ${order.paymentRemarks?'• '+order.paymentRemarks:''}</div>
+                               <div style="font-size:13px;margin-top:2px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</div>
+                                <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                    ${order.paymentMode
+                                        ? `<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:#dbeafe;color:#1e40af;">${order.paymentMode==='cash'?'💵':order.paymentMode==='upi'?'📱':order.paymentMode==='card'?'💳':'🏦'} ${order.paymentMode.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>`
+                                        : `<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#f1f5f9;color:#94a3b8;">💳 Mode: —</span>`}
+                                </div>
+                                ${order.paymentRemarks
+                                    ? `<div style="margin-top:4px;font-size:12px;color:#64748b;font-style:italic;">📝 ${order.paymentRemarks}</div>`
+                                    : `<div style="margin-top:4px;font-size:12px;color:#cbd5e1;font-style:italic;">📝 No remarks</div>`}
                             </div>
                         </div>
 
@@ -6126,15 +6308,7 @@
                                         if (!d) return 0;
                                         return Math.min(100, ((Date.now() - d.getTime()) / (48 * 3600000)) * 100);
                                     }
-                                   window.efUpdateBalance = function(oid) {
-                                    var t = parseFloat(document.getElementById('ef-total-' + oid)?.value) || 0;
-                                    var a = parseFloat(document.getElementById('ef-advance-' + oid)?.value) || 0;
-                                    var el = document.getElementById('ef-bal-' + oid);
-                                    if (el) {
-                                        el.textContent = 'Balance: ₹' + (Math.max(0, t - a)).toLocaleString();
-                                        el.style.color = t - a > 0 ? '#dc2626' : '#059669';
-                                    }
-                                }
+                                   
 
                                     const statusColor = s => s === 'completed' || s === 'delivered' ? { bg:'#d1fae5', txt:'#065f46' } : s === 'cancelled' ? { bg:'#fee2e2', txt:'#991b1b' } : { bg:'#fef3c7', txt:'#92400e' };
 
@@ -6172,10 +6346,18 @@
                                                     </div>
                                                     <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:${sc.bg};color:${sc.txt};">${status.replace(/_/g,' ')}</span>
                                                 </div>
-                                                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;font-size:13px;color:#64748b;">
+                                               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px;font-size:13px;color:#64748b;">
                                                     <div>Garment<div style="font-weight:700;color:#1e293b;font-size:14px;">${order.garmentType || order.category || '—'}</div></div>
                                                     <div>Total<div style="font-weight:700;color:#1e293b;font-size:14px;">₹${total.toLocaleString()}</div></div>
                                                     <div>Balance<div style="font-weight:700;font-size:14px;color:${balance > 0 ? '#dc2626' : '#059669'};">₹${balance.toLocaleString()}</div></div>
+                                                </div>
+                                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                                                    ${order.paymentMode
+                                                        ? `<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:#dbeafe;color:#1e40af;">${order.paymentMode==='cash'?'💵':order.paymentMode==='upi'?'📱':order.paymentMode==='card'?'💳':'🏦'} ${order.paymentMode.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>`
+                                                        : `<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#f1f5f9;color:#94a3b8;">💳 Mode: —</span>`}
+                                                    ${order.paymentRemarks
+                                                        ? `<span style="font-size:12px;color:#64748b;font-style:italic;">📝 ${order.paymentRemarks}</span>`
+                                                        : `<span style="font-size:12px;color:#cbd5e1;font-style:italic;">📝 No remarks</span>`}
                                                 </div>
                                                 ${within
                                                     ? `<button onclick="toggleOrderEditForm('${oid}')" style="padding:8px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit Order</button>`
@@ -6238,17 +6420,17 @@
                                                                 data-oid="${oid}" oninput="efUpdateBalance(this.dataset.oid)"
                                                                 style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                                                         <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Advance Paid (₹)</label>
-                                                            <input type="number" id="ef-advance-${oid}" value="${advance}"
+                                                            <input type="number" id="ef-advance2-${oid}" value="${advance}"
                                                                 data-oid="${oid}" oninput="efUpdateBalance(this.dataset.oid)"
                                                                 style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>                    <div><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Mode</label>
-                                                            <select id="ef-paymode-${oid}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                                                            <select id="ef-paymode2-${oid}" style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
                                                                 ${['','cash','upi','card','bank_transfer','cheque'].map(pm=>`<option value="${pm}" ${(order.paymentMode||'')==pm?'selected':''}>${pm?pm.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()):'— Select Mode —'}</option>`).join('')}
                                                             </select></div>
                                                         <div style="grid-column:1/-1;">
-                                                            <span id="ef-bal-${oid}" style="font-size:14px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</span>
+                                                            <span id="ef-bal2-${oid}" style="font-size:14px;font-weight:700;color:${balance>0?'#dc2626':'#059669'};">Balance: ₹${balance.toLocaleString()}</span>
                                                         </div>
                                                         <div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:4px;">Payment Remarks</label>
-                                                            <input id="ef-premarks-${oid}" value="${order.paymentRemarks || ''}" placeholder="e.g. Paid via PhonePe, pending ₹200..." style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
+                                                            <input id="ef-premarks2-${oid}" value="${order.paymentRemarks || ''}" placeholder="e.g. Paid via PhonePe, pending ₹200..." style="width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>
                                                     </div>
                                                 </div>
 
@@ -6355,13 +6537,25 @@
                                     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
                                     const newTotal   = parseFloat(document.getElementById('ef-total-' + oid)?.value) ?? orderSnapshot.totalAmount ?? 0;
-                                    const newAdvance = parseFloat(document.getElementById('ef-advance-' + oid)?.value) ?? orderSnapshot.advanceAmount ?? 0;
-
+                                    const newAdvance = parseFloat(document.getElementById('ef-advance-' + oid)?.value ?? document.getElementById('ef-advance-' + oid)?.value) ?? orderSnapshot.advanceAmount ?? 0;
                                     // Collect measurements — only include keys that have a value entered;
                                     // for empty fields, fall back to whatever was already on the order
-                                    const measurementKeys = ['length','chest','waist','hip','shoulder','sleeve','neck',
-                                        'blouse_length','blouse_chest','lehenga_length','lehenga_waist',
-                                        'pant_length','pant_waist','frock_length','kurta_length'];
+                                   const measurementsHtml = measurementKeys.map(([k, lbl]) => {
+                                    // Correctly fetch value from the order snapshot
+                                    const val = (order.measurements && order.measurements[k]) ? order.measurements[k] : ''; 
+                                    return `
+                                    <div>
+                                        <label style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;display:block;margin-bottom:3px;">
+                                            ${lbl} <span style="color:#94a3b8;font-weight:400;">(in)</span>
+                                        </label>
+                                        <input id="ef-m-${oid}-${k}" 
+                                            type="number" 
+                                            step="0.1" 
+                                            value="${val}" 
+                                            placeholder="—" 
+                                            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;color:#1e293b;box-sizing:border-box;">
+                                    </div>`;
+                                }).join('');
                                     const existingMeasurements = orderSnapshot.measurements || {};
                                     const measurements = { ...existingMeasurements }; // start from old data
                                     measurementKeys.forEach(k => {
@@ -6395,7 +6589,7 @@
                                         branch:         document.getElementById('ef-branch-' + oid)?.value?.trim()     || orderSnapshot.branch         || '',
                                         designNotes:    document.getElementById('ef-notes-' + oid)?.value?.trim()      || orderSnapshot.designNotes    || '',
                                         paymentMode:    document.getElementById('ef-paymode-' + oid)?.value            || orderSnapshot.paymentMode    || '',
-                                        paymentRemarks: document.getElementById('ef-premarks-' + oid)?.value?.trim()   || orderSnapshot.paymentRemarks || '',
+                                        paymentRemarks: document.getElementById('ef-premarks-' + oid)?.value?.trim() || orderSnapshot.paymentRemarks || '',                                       
                                         measurements,
                                         addons,
                                         selectedWorkflowStages: selectedStages,
@@ -6416,7 +6610,9 @@
                                         const orders = JSON.parse(localStorage.getItem('sapthala_orders') || '[]');
                                         const idx = orders.findIndex(o => o.orderId === oid || o.id === oid || o._id === oid);
                                         if (idx !== -1) { orders[idx] = { ...orders[idx], ...updatePayload }; localStorage.setItem('sapthala_orders', JSON.stringify(orders)); }
-
+                                        if (window._orderSnapshots && window._orderSnapshots[oid]) {
+                                            window._orderSnapshots[oid] = { ...window._orderSnapshots[oid], ...updatePayload };
+                                        }
                                         if (typeof loadOrders === 'function') setTimeout(() => loadOrders({}, true).catch(()=>{}), 400);
                                         if (typeof loadReports === 'function') setTimeout(() => loadReports().catch(()=>{}), 600);
                                         document.getElementById('customerEditModal')?.remove(); // just close, don't reopen
@@ -7441,26 +7637,51 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
             }
         }
  
-       async function openPostOrderWindow(ordersOrOrder, custName, custPhone, delivDate, trialDt) {
+      async function openPostOrderWindow(ordersOrOrder, custName, custPhone) {
     try {
         // Support both single order (legacy) and array of orders
         const orders = Array.isArray(ordersOrOrder) ? ordersOrOrder : [ordersOrOrder];
         const phone = (custPhone || '').replace(/\D/g, '');
 
         // Grand total across all orders
-        const grandTotal = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-        const advance    = orders.reduce((s, o) => s + (o.advanceAmount || 0), 0);
+        const grandTotal = orders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
+        const advance    = orders.reduce((s, o) => s + (Number(o.advanceAmount) || 0), 0);
         const balance    = Math.max(0, grandTotal - advance);
 
-        const waMsg = 'Hello ' + custName + '!\n\nYour order has been placed at Sapthala Designer Workshop.\n\n' +
-            'Order Details:\n' +
-            orders.map((o,i) => `Item ${i+1}: ${o.garmentType||'Custom'} — ₹${o.totalAmount||0}`).join('\n') + '\n' +
-            'Total Amount: ₹' + grandTotal + '\n' +
-            'Advance Paid: ₹' + advance + '\n' +
-            'Balance Due: ₹' + balance + '\n' +
-            'Delivery Date: ' + (orders[0].deliveryDate || delivDate ? new Date(orders[0].deliveryDate || delivDate).toLocaleDateString('en-IN') : 'TBD') + '\n' +
-            (orders[0].trialDate || trialDt ? 'Trial Date: ' + new Date(orders[0].trialDate || trialDt).toLocaleDateString('en-IN') + '\n' : '') +
-            '\nThank you for choosing us!';
+        // Format date helper
+        const fmtD = v => {
+            if (!v) return null;
+            try { const d = new Date(v); return isNaN(d) ? null : d.toLocaleDateString('en-IN', {day:'2-digit', month:'long', year:'numeric'}); } catch(e) { return null; }
+        };
+
+        // Build per-item lines with individual orderId, trial & delivery dates
+        const itemLines = orders.map((o, i) => {
+            const oid   = o.orderId ? `Order ID: ${o.orderId}` : '';
+            const trial = fmtD(o.trialDate);
+            const deliv = fmtD(o.deliveryDate);
+            return `• ${o.garmentType || 'Custom'} — ₹${(Number(o.totalAmount)||0).toLocaleString('en-IN')}` +
+                   (oid   ? `\n  🔖 ${oid}`                  : '') +
+                   (trial ? `\n  👗 Trial Date: ${trial}`     : '') +
+                   (deliv ? `\n  📦 Delivery Date: ${deliv}`  : '');
+        }).join('\n');
+
+        const waMsg =
+            `Hello ${custName},
+            Thank you for choosing Sapthala Designer Workshop. We are delighted to design something special for you! ✨
+
+            *Order Details:*
+            ${itemLines}
+
+            *Total Amount:* ₹${grandTotal.toLocaleString('en-IN')}
+            *Advance Paid:* ₹${advance.toLocaleString('en-IN')}
+            *Balance Amount:* ₹${balance.toLocaleString('en-IN')}
+
+            We truly appreciate your trust in Sapthala Designer Workshop. We look forward to making your outfit perfect for your special occasions.
+
+            Feel free to explore more of our exclusive designs — we would love to create more beautiful outfits for you! 💫
+
+            Thank you for shopping with us.
+            _Sapthala Designer Workshop_`;
         const waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg);
 
         const themeName = localStorage.getItem('sapthala_current_theme') || 'default';
@@ -7952,7 +8173,118 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 advanceCard.parentElement.style.display = 'none';
             }
         }
+        window.efUpdateBalance = function(oid) {
+            var t = parseFloat(document.getElementById('ef-total-' + oid)?.value) || 0;
+            var a = parseFloat(document.getElementById('ef-advance2-' + oid)?.value ?? document.getElementById('ef-advance-' + oid)?.value) || 0;
+            var el = document.getElementById('ef-bal2-' + oid) || document.getElementById('ef-bal-' + oid);
+            if (el) {
+                var bal = Math.max(0, t - a);
+                el.textContent = 'Balance: ₹' + bal.toLocaleString();
+                el.style.color = bal > 0 ? '#dc2626' : '#059669';
+            }
+        };
 
+        // ── STICKY BAR + SCROLL FABs ──────────────────────────
+        const SCROLL_TABS = ['new-order','orders','reports','customers'];
+        function _stickyFmt(v){ return '₹'+(Number(v)||0).toLocaleString('en-IN'); }
+
+        function _updateStickyBar(){
+            try {
+                const t = document.getElementById('totalAmount');
+                const b = document.getElementById('basePrice');
+                const a = document.getElementById('addonPrice');
+                const adv = document.getElementById('advancePayment');
+                const bal = document.getElementById('balanceDue');
+                if(t)   document.getElementById('stickyTotalMain').textContent = t.textContent;
+                if(b)   document.getElementById('stickyBase').textContent      = b.textContent;
+                if(a)   document.getElementById('stickyAddons').textContent    = a.textContent;
+                if(adv) document.getElementById('stickyAdvance').textContent   = _stickyFmt(adv.value);
+                if(bal) document.getElementById('stickyBalance').textContent   = bal.textContent;
+                try {
+                    const cart = JSON.parse(sessionStorage.getItem('sapthala_order_cart')||'[]');
+                    document.getElementById('stickyItems').textContent = cart.length||0;
+                } catch(e){}
+            } catch(e){}
+        }
+
+        function _showTabUI(tabName){
+            const bar  = document.getElementById('stickyTotalBar');
+            const fabs = document.getElementById('scrollFabGroup');
+            const isNewOrder = tabName === 'new-order';
+            const showFabs   = SCROLL_TABS.includes(tabName);
+            if(bar)  { bar.classList.toggle('visible', isNewOrder); }
+           if(fabs) {
+                fabs.style.paddingBottom = isNewOrder ? '104px' : '24px';
+                // hide by default — only show while scrolling
+                fabs.style.display = 'none';
+                fabs._scrollTabActive = showFabs;
+            }
+           const scroller = document.querySelector('.container[style*="overflow-y"]') || document.querySelector('.container');
+            if(scroller) scroller.style.paddingBottom = isNewOrder ? '80px' : '';
+            // Align bar to sidebar right edge dynamically
+            const sbar = document.getElementById('stickyTotalBar');
+            if(sbar) {
+                const nav = document.getElementById('sidebar');
+                const left = nav ? (nav.getBoundingClientRect().right) : 248;
+                sbar.style.left = left + 'px';
+            }
+            if(isNewOrder) _updateStickyBar();
+        }
+
+        // Patch showTab
+        document.addEventListener('DOMContentLoaded', function(){
+            setTimeout(function(){
+                if(typeof showTab === 'function'){
+                    const _orig = showTab;
+                    window.showTab = function(t){ _orig(t); _showTabUI(t); };
+                }
+                if(typeof calculateTotal === 'function'){
+                    const _origC = calculateTotal;
+                    window.calculateTotal = function(){ const r=_origC.apply(this,arguments); setTimeout(_updateStickyBar,30); return r; };
+                }
+            }, 500);
+        });
+
+       // Attach scroll listener once
+        (function initScrollFabVisibility(){
+            document.addEventListener('DOMContentLoaded', function(){
+                const scroller = document.querySelector('.container[style*="overflow-y"]') ||
+                                 document.querySelector('.container') ||
+                                 document.documentElement;
+                let _hideTimer = null;
+                scroller.addEventListener('scroll', function(){
+                    const fabs = document.getElementById('scrollFabGroup');
+                    if(!fabs || !fabs._scrollTabActive) return;
+                    fabs.style.display = 'flex';
+                    fabs.style.opacity = '1';
+                    fabs.style.transition = 'opacity 0.3s';
+                    clearTimeout(_hideTimer);
+                    _hideTimer = setTimeout(function(){
+                        fabs.style.opacity = '0';
+                        setTimeout(function(){ fabs.style.display = 'none'; }, 300);
+                    }, 1200);
+                }, { passive: true });
+            });
+        })();
+            window.addEventListener('resize', function(){
+            const nav = document.getElementById('sidebar');
+            const sbar = document.getElementById('stickyTotalBar');
+            if(nav && sbar && sbar.classList.contains('visible'))
+                sbar.style.left = nav.getBoundingClientRect().right + 'px';
+        });
+        function scrollPanel(dir){
+            const s = document.querySelector('.container[style*="overflow-y"]') ||
+                      document.querySelector('.container') || document.documentElement;
+            const now = Date.now();
+            const isDouble = (scrollPanel._last && (now - scrollPanel._last) < 400 && scrollPanel._lastDir === dir);
+            scrollPanel._last = now;
+            scrollPanel._lastDir = dir;
+            if(isDouble){
+                s.scrollTo({ top: dir === 'up' ? 0 : s.scrollHeight, behavior:'smooth' });
+            } else {
+                s.scrollBy({ top: dir === 'up' ? -s.clientHeight : s.clientHeight, behavior:'smooth' });
+            }
+        }
         /* ------------------------------------------------------------------ */
         /* TEMPORARY LAUNCH CELEBRATION HELPERS (Remove after launch)          */
         /* ------------------------------------------------------------------ */
@@ -8247,6 +8579,49 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 sessionStorage.removeItem('sapthala_order_cart');
             });
     </script>
+ 
+
+    <!-- STICKY TOTAL BAR -->
+    <div id="stickyTotalBar">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:22px;">🧾</span>
+            <div style="display:flex;flex-direction:column;">
+                <span class="stk-label">Grand Total</span>
+                <span id="stickyTotalMain">₹0</span>
+            </div>
+        </div>
+        <div class="stk-div"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <span class="stk-label">💵 Base</span>
+            <span class="stk-val" id="stickyBase">₹0</span>
+        </div>
+        <div class="stk-div"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <span class="stk-label">🛠️ Add-ons</span>
+            <span class="stk-val" id="stickyAddons">₹0</span>
+        </div>
+        <div class="stk-div"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <span class="stk-label">💳 Advance</span>
+            <span class="stk-val green" id="stickyAdvance">₹0</span>
+        </div>
+        <div class="stk-div"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <span class="stk-label">🔴 Balance Due</span>
+            <span class="stk-val red" id="stickyBalance">₹0</span>
+        </div>
+        <div class="stk-div"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <span class="stk-label">🛒 Items</span>
+            <span class="stk-val amber" id="stickyItems">0</span>
+        </div>
+    </div>
+
+    <!-- SCROLL FABs -->
+    <div id="scrollFabGroup">
+       <button class="scroll-fab up"   onclick="scrollPanel('up')"   title="Scroll Up">▲</button>
+        <button class="scroll-fab down" onclick="scrollPanel('down')" title="Scroll Down" id="scrollFabDown">▼</button>
+    </div>
 
     <!-- TEMPORARY LAUNCH CELEBRATION OVERLAY (remove after event) -->
     <div id="launchCelebrationOverlay" aria-hidden="true">

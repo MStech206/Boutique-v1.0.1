@@ -306,6 +306,8 @@ app.get(['/staff', '/staff/*'], (req, res) => {
             adminId, title, body, data, read: false, createdAt: new Date()
         });
        invalidateCache([`notifs_${adminId}`]);
+        // Also bust any sub-admin caches under this adminId
+        try { if (typeof invalidateCache === 'function') invalidateCache([`notifs_sub_`]); } catch(e){}
         const _pushPayload = { type: 'notification', title, body, data };
         if (data && data.type === 'order_complete') _pushPayload.event = 'order_complete';
         _ssePush(adminId, _pushPayload);
@@ -316,7 +318,69 @@ app.get(['/staff', '/staff/*'], (req, res) => {
 }
 
 // ── SSE client registry for real-time push ───────────────────────────────
-const _sseClients = new Map(); // adminId → Set<res>
+// ── Helper: notify admin + sub-admin of the related branch ───────────────
+async function sendBranchNotification(adminId, branch, title, body, data = {}) {
+    // 1. Always notify the main admin
+    await sendAdminNotification(adminId, title, body, data);
+
+    // 2. Find sub-admin(s) for this branch and notify them too
+    if (!branch) return;
+    try {
+       let subAdmins = [];
+        // Firestore — users are stored GLOBALLY, not per-client
+        if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
+            try {
+                // Fetch all sub-admins (no compound index needed — filter branch in JS)
+                const res = await firebaseIntegrationService.getCollection('users', {
+                    where: [['role', '==', 'sub-admin']],
+                    limit: 200
+                });
+                if (res.success && Array.isArray(res.data)) {
+                    // Normalize branch for loose match: "BHEL" matches "SAPTHALA.BHEL" etc.
+                    const branchNorm = branch.toString().trim().toLowerCase();
+                    subAdmins = res.data.filter(u => {
+                        const ub = (u.branch || u.branchId || '').toString().trim().toLowerCase();
+                        return ub === branchNorm
+                            || ub.includes(branchNorm)
+                            || branchNorm.includes(ub);
+                    });
+                    console.log(`🔍 Found ${subAdmins.length} sub-admin(s) for branch "${branch}"`);
+                }
+            } catch(e) { console.warn('Global users Firestore lookup failed:', e.message); }
+        }
+        // // MongoDB fallback
+        // if (subAdmins.length === 0 && typeof User !== 'undefined') {
+        //     try {
+        //         const allSA = await User.find({ role: 'sub-admin' }).select('username branch branchId').lean();
+        //         const branchNorm = branch.toString().trim().toLowerCase();
+        //         subAdmins = allSA.filter(u => {
+        //             const ub = (u.branch || u.branchId || '').toString().trim().toLowerCase();
+        //             return ub === branchNorm || ub.includes(branchNorm) || branchNorm.includes(ub);
+        //         });
+        //     } catch(e) { console.warn('MongoDB sub-admin fallback failed:', e.message); }
+        // }
+        for (const sa of subAdmins) {
+            const saId = sa.username || sa.id || sa._id;
+            if (!saId) continue;
+            // Sub-admin shares same Firestore tree as admin — write notif tagged with their username
+            try {
+                const db = firebaseIntegrationService.forClient(adminId);
+                const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,6)}`;
+                await db.setDocument('notifications', notifId, {
+                    adminId, subAdminUsername: saId, branch,
+                    title, body, data, read: false, createdAt: new Date()
+                });
+                // Push SSE to sub-admin if they are connected
+                _ssePush(saId, { type: 'notification', title, body, data });
+               invalidateCache([`notifs_sub_${saId}`, `notifs_${adminId}`]);
+                console.log(`🔔 Branch notification sent to sub-admin: ${saId} (branch: ${branch})`);
+            } catch(e) { console.warn(`Sub-admin notif failed for ${saId}:`, e.message); }
+        }
+    } catch(e) { console.warn('sendBranchNotification sub-admin lookup failed:', e.message); }
+}
+
+// ── SSE client registry for real-time push ───────────────────────────────
+const _sseClients = new Map();
 function _ssePush(adminId, payload) {
     const clients = _sseClients.get(adminId);
     if (!clients || clients.size === 0) return;
@@ -443,7 +507,9 @@ process.on('uncaughtException', (error) => {
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
     console.error(error.stack);
-    process.exit(1);
+   app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server started in DEGRADED mode on port ${PORT}`);
+    });
   }
 })();
 
@@ -637,7 +703,7 @@ app.get('/api/public/reports/last-orders', async (req, res) => {
     const orders = await Order.find({})
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('orderId createdAt totalAmount garmentType status branch')
+      .select('orderId createdAt totalAmount garmentType status branch paymentMode paymentRemarks')
       .lean();
 
     const formatted = (orders || []).map(o => ({
@@ -2243,7 +2309,7 @@ app.get('/api/reports/last-orders-custom', authenticateToken, async (req, res) =
     const orders = await Order.find(matchQuery)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .select('orderId customerName customerPhone garmentType totalAmount advanceAmount balanceAmount status createdAt branch workflowTasks');
+      .select('orderId customerName customerPhone garmentType totalAmount advanceAmount balanceAmount status createdAt branch workflowTasks paymentMode paymentRemarks')
     
     const totalAmount = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const totalAdvance = orders.reduce((sum, o) => sum + (o.advanceAmount || 0), 0);
@@ -2270,7 +2336,9 @@ app.get('/api/reports/last-orders-custom', authenticateToken, async (req, res) =
           progress: progress,
           progressPercentage: progress,
           totalTasks: totalTasks,
-          completedTasks: completedTasks
+          completedTasks: completedTasks,
+          paymentMode: o.paymentMode || '',
+          paymentRemarks: o.paymentRemarks || ''
         };
       }),
       summary: {
@@ -2694,7 +2762,7 @@ app.get('/api/reports/last-orders', authenticateToken, async (req, res) => {
     const orders = await Order.find(matchQuery)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .select('orderId customerName customerPhone garmentType totalAmount advanceAmount createdAt deliveryDate branch status workflowTasks');
+     .select('orderId customerName customerPhone garmentType totalAmount advanceAmount createdAt deliveryDate branch status workflowTasks paymentMode paymentRemarks')
     
     console.log(`   Found ${orders.length} orders`);
     
@@ -2845,7 +2913,13 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
             deliveryDate: o.deliveryDate && o.deliveryDate.toDate ? o.deliveryDate.toDate() : o.deliveryDate,
            trialDate: o.trialDate && o.trialDate.toDate ? o.trialDate.toDate() : o.trialDate,
             branch: o.branch || '',
-            workflowTasks: o.workflowTasks || []
+            workflowTasks: o.workflowTasks || [],
+           paymentMode: o.paymentMode || o.payment?.mode || o.pricing?.paymentMode || '',
+            paymentRemarks: o.paymentRemarks || o.payment?.remarks || o.pricing?.remarks || '',
+            measurements: o.measurements || {},
+            designNotes: o.designNotes || '',
+            designImages: o.designImages || [],
+            addons: o.addons || []
           }));
           source = 'firebase';
         } else {
@@ -2860,7 +2934,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
     }
     
     // If Firebase fetch failed or no orders, use MongoDB as fallback
-    if (orders.length === 0 || source === 'mongodb') {
+  if (source !== 'firebase') {
       let matchQuery = {};
       if (branch) {
         matchQuery.branch = branch;
@@ -2880,7 +2954,7 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
 
       const mongoOrders = await Order.find(matchQuery)
         .sort({ createdAt: -1 })
-        .select('orderId customerName customerPhone customerAddress garmentType totalAmount advanceAmount status createdAt deliveryDate trialDate workflowTasks branch');
+        .select('orderId customerName customerPhone customerAddress garmentType totalAmount advanceAmount status createdAt deliveryDate trialDate workflowTasks branch paymentMode paymentRemarks')
       
       orders = mongoOrders.map(order => ({
         _id: order._id,
@@ -2896,7 +2970,9 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
         deliveryDate: order.deliveryDate,
         trialDate: order.trialDate || null,
         branch: order.branch,
-        workflowTasks: order.workflowTasks || []
+        workflowTasks: order.workflowTasks || [],
+        paymentMode: order.paymentMode || order.payment?.mode || '',
+        paymentRemarks: order.paymentRemarks || order.payment?.remarks || ''
       }));
       
       source = 'mongodb';
@@ -2938,14 +3014,17 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
                       limit: 50
                   });
 
+                 const NOTIF_TYPES = ['order_complete','delivery_alert','stage_time_warning','stage_time_overdue'];
                   let notifications = (result.data || [])
-                      .filter(n => n.data?.type === 'order_complete'); // only completed orders
+                      .filter(n => NOTIF_TYPES.includes(n.data?.type));
 
-                  // Sub-admins: only see notifications for their branch
+                  // Sub-admins: only see notifications tagged for their branch OR their username
                   if (isSubAdmin && myBranch) {
                       notifications = notifications.filter(n => {
                           const nb = (n.branch || n.data?.branch || '').toString().trim();
-                          return nb === myBranch;
+                          const targetSa = (n.subAdminUsername || '').toString().trim();
+                          // show if branch matches OR explicitly targeted at this sub-admin
+                          return nb === myBranch || targetSa === req.user.username;
                       });
                   }
 
@@ -2961,7 +3040,12 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
               } catch(err) { res.status(500).json({ error: err.message }); }
           });
           
-          app.get('/api/admin/notifications/stream', authenticateToken, (req, res) => {
+         app.get('/api/admin/notifications/stream', (req, res, next) => {
+            if (req.query.token && !req.headers.authorization) {
+                req.headers.authorization = `Bearer ${req.query.token}`;
+            }
+            next();
+        }, authenticateToken, (req, res) => {
             const adminId = req.user && (req.user.role === 'sub-admin' ? req.user.username : (req.user.adminId || req.user.username));
             if (!adminId) return res.status(400).end();
             console.log(`📡 SSE register: ${adminId} role=${req.user.role} branch=${req.user.branch || 'none'}`);
@@ -2982,6 +3066,58 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
                 console.log(`📡 SSE disconnected: ${adminId}`);
             });
         });
+        // ── REAL-TIME NOTIFICATIONS via SSE ──────────────────────────
+            let _notifSSE = null;
+            let _notifPollTimer = null;
+
+            function startNotificationStream() {
+const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');                if (!token) return;
+
+                // Close any existing connection
+                if (_notifSSE) { _notifSSE.close(); _notifSSE = null; }
+
+                _notifSSE = new EventSource(`/api/admin/notifications/stream?token=${token}`);
+
+                _notifSSE.onmessage = function(e) {
+                    try {
+                        const payload = JSON.parse(e.data);
+                        if (payload.type === 'notification') {
+                            // Re-fetch and re-render notifications silently
+                            loadNotifications(true);
+                        }
+                    } catch(err) {}
+                };
+
+                _notifSSE.onerror = function() {
+                    // SSE dropped — fall back to 30s AJAX polling
+                    _notifSSE.close();
+                    _notifSSE = null;
+                    startNotificationPolling();
+                };
+            }
+
+            function startNotificationPolling() {
+                if (_notifPollTimer) return; // already polling
+                _notifPollTimer = setInterval(() => loadNotifications(true), 30000);
+            }
+
+            function stopNotificationPolling() {
+                if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
+            }
+
+            // Call loadNotifications(silent=true) — add silent param to your existing function
+            // If your fetch function is named differently, replace 'loadNotifications' below
+            async function loadNotifications(silent = false) {
+                try {
+                    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                    const res = await fetch('/api/admin/notifications', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    renderNotifications(data.notifications || []);  // replace with your actual render function
+                    if (!silent) updateNotifBadge(data.notifications || []);
+                } catch(e) { console.warn('Notifications fetch failed:', e); }
+            }
 
            // Mark one read
             app.put('/api/admin/notifications/:id/read', authenticateToken, async (req, res) => {
@@ -3202,6 +3338,10 @@ app.get('/api/admin/orders/:orderId', authenticateToken, async (req, res) => {
                       await clientDB(req).setDocument('orders', docId, merged);
                       console.log(`✅ Order updated in Firestore: ${orderId}`);
                       invalidateCache(['orders_list_', 'public_orders_']);
+                      // After existing invalidateCache line, add:
+                      const userBranch = req.user.branch || 'all';
+                      setCache(`orders_list_${userBranch}`, null, 0);
+                      setCache(`orders_list_all`, null, 0);
                       res.json({ success: true, order: merged });
 
                     } catch (error) {
@@ -3714,7 +3854,38 @@ await clientDB(req).syncCustomer({ ...customerDoc, adminId: req.user?.adminId })
 
         // Send WhatsApp message (will return wa.me link if Twilio not configured)
         try {
-         const message = NotificationService.generateCustomerMessage(lastOrderData, theme);
+         // Build rich multi-item WhatsApp message
+        const _fmtD = v => { try { const d = new Date(v); return isNaN(d)?null:d.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'}); } catch(e){return null;} };
+        const _allOrders = results.map(r => ({ ...r, ...orderList.find(o => o.garmentType === r.garmentType) }));
+        const _grandTotal = _allOrders.reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
+        const _advance    = _allOrders.reduce((s,o)=>s+(Number(o.advanceAmount||o.pricing?.advance)||0),0);
+        const _balance    = Math.max(0, _grandTotal - _advance);
+        const _itemLines  = results.map(r => {
+            const src = orderList.find(o => o.garmentType === r.garmentType) || {};
+            const trial = _fmtD(src.trialDate);
+            const deliv = _fmtD(src.deliveryDate);
+            return `• ${r.garmentType||'Custom'} — ₹${(Number(src.totalAmount||src.pricing?.total)||0).toLocaleString('en-IN')}` +
+                   `\n  🔖 Order ID: ${r.orderId}` +
+                   (trial ? `\n  👗 Trial Date: ${trial}` : '') +
+                   (deliv ? `\n  📦 Delivery Date: ${deliv}` : '');
+        }).join('\n');
+                  const message =
+          `Hello ${lastOrderData.customerName},
+          Thank you for choosing Sapthala Designer Workshop. We are delighted to design something special for you! ✨
+
+          *Order Details:*
+          ${_itemLines}
+
+          *Total Amount:* ₹${_grandTotal.toLocaleString('en-IN')}
+          *Advance Paid:* ₹${_advance.toLocaleString('en-IN')}
+          *Balance Amount:* ₹${_balance.toLocaleString('en-IN')}
+
+          We truly appreciate your trust in Sapthala Designer Workshop. We look forward to making your outfit perfect for your special occasions.
+
+          Feel free to explore more of our exclusive designs — we would love to create more beautiful outfits for you! 💫
+
+          Thank you for shopping with us.
+          _Sapthala Designer Workshop_`;
           const waPhone = (lastOrderData.customerPhone || lastOrderData.customer?.phone || '').replace(/\D/g, '');
           const waLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
           console.log('📱 WhatsApp share link:', waLink);
@@ -4075,9 +4246,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                     staffId: staff.staffId,
                     name: staff.name,
                     role: staff.role,
+                    branch: staff.branch || '',
                     workflowStages: staff.workflowStages || [],
                     phone: staff.phone || '',
-                    avatarUrl: staff.avatarUrl || ''
+                    avatarUrl: staff.avatarUrl || '',
+                    isAvailable: staff.isAvailable !== false
                   },
                   adminId
                 });
@@ -4124,10 +4297,20 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                         if (typeof d === 'string') return d;                                               
                         return new Date(d).toISOString();
                       })(),
-                        customerPhone: order.customerPhone || '',
+                          customerPhone: order.customerPhone || '',
                         measurements: order.measurements || task.measurementsData || {},
-                        designNotes: task.designNotes || order.designNotes || '',
-                        images: order.designImages || task.designImages || []
+                        designNotes: order.designNotes || task.designNotes || '',
+                        images: order.designImages || task.designImages || [],
+                        designImages: order.designImages || task.designImages || [],
+                        orderDetails: {
+                          customerName: order.customerName,
+                          garmentType: order.garmentType,
+                          deliveryDate: order.deliveryDate,
+                          measurements: order.measurements,
+                          images: order.designImages || [],
+                          designImages: order.designImages || [],
+                          designNotes: order.designNotes
+                        }
                     });
                                         }
                   });
@@ -4157,7 +4340,12 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                 const db = firebaseIntegrationService.forClient(adminId);
                 const staffRes = await db.getCollection('staff', { where: [['staffId', '==', staffId]], limit: 1 });
                 const staff = staffRes?.data?.[0];
-                if (!staff) return res.status(404).json({ error: 'Staff not found' });
+               if (!staff) return res.status(404).json({ error: 'Staff not found' });
+                // If staff is marked busy/unavailable — return empty list immediately
+                if (staff.isAvailable === false) {
+                    console.log(`🚫 Staff ${staffId} is busy — returning no available tasks`);
+                    return res.json([]);
+                }
                 const myStages = staff.workflowStages || [];
 
                  const branch = staff.branch || req.query.branch || null;
@@ -4180,10 +4368,20 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                       return new Date(d._seconds * 1000).toISOString(); if (d.seconds !== undefined) 
                       return new Date(d.seconds * 1000).toISOString(); if (typeof d === 'string') 
                       return d; return new Date(d).toISOString(); })(),                      
-                    customerPhone: order.customerPhone || '',
+                   customerPhone: order.customerPhone || '',
                       measurements: order.measurements || task.measurementsData || {},
-                      designNotes: task.designNotes || order.designNotes || '',
-                      images: order.designImages || task.designImages || []
+                      designNotes: order.designNotes || task.designNotes || '',
+                      images: order.designImages || task.designImages || [],
+                      designImages: order.designImages || task.designImages || [],
+                      orderDetails: {
+                          customerName: order.customerName,
+                          garmentType: order.garmentType,
+                          deliveryDate: order.deliveryDate,
+                          measurements: order.measurements,
+                          images: order.designImages || [],
+                          designImages: order.designImages || [],
+                          designNotes: order.designNotes
+                        }
                   });
                     }
                   });
@@ -4204,6 +4402,12 @@ app.post('/api/staff/:staffId/accept-task', authenticateToken, async (req, res) 
     if (!adminId) return res.status(400).json({ error: 'adminId missing from token' });
     console.log(`✅ Task acceptance: ${staffId} -> ${orderId} -> ${stageId} (${adminId})`);
     const db = firebaseIntegrationService.forClient(adminId);
+    // Block if staff is busy
+    const staffCheck = await db.getCollection('staff', { where: [['staffId', '==', staffId]], limit: 1 });
+    const staffDoc = staffCheck?.data?.[0];
+    if (staffDoc && staffDoc.isAvailable === false) {
+        return res.status(403).json({ success: false, error: 'You are currently marked as busy. Please become available before accepting tasks.' });
+    }
     const orderRes = await db.getCollection('orders', { where: [['orderId', '==', orderId]], limit: 1 });
     const order = orderRes?.data?.[0];
     if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
@@ -4286,6 +4490,49 @@ const tasks = (order.workflowTasks || []).map(t =>
       return updated;
     });
 
+         // ── Stage deadline warning notifications ──────────────────────────
+        if (status === 'started') {
+            const startedTask = tasks[targetIdx];
+            const limitMins = startedTask?.timeLimitMinutes;
+            if (limitMins && limitMins > 0) {
+                const warnAt80 = Math.round(limitMins * 0.8 * 60000);   // 80% of time
+                const warnAt100 = limitMins * 60000;                     // deadline
+                // 80% warning
+                setTimeout(async () => {
+                    try {
+                        // Check task isn't already completed/paused before warning
+                        const snap = await db.getCollection('orders', { where: [['orderId','==',orderId]], limit:1 });
+                        const o = snap?.data?.[0];
+                        const t = (o?.workflowTasks||[]).find(x => x.stageId === stageId);
+                        if (t && t.status === 'started') {
+                            await sendBranchNotification(adminId, order.branch||'',
+                                `⚠️ Stage Time Warning — ${startedTask.stageName}`,
+                                `Order #${orderId} (${order.customerName||'Customer'}): ${startedTask.stageName} has used 80% of its ${startedTask.timeLimitDisplay||limitMins+'min'} time limit.`,
+                                { type: 'stage_time_warning', orderId, stageId, staffId, level: '80pct', branch: order.branch||'' }
+                            );
+                        }
+                    } catch(e) { console.warn('80% stage warn failed:', e.message); }
+                }, warnAt80);
+                // Deadline warning
+                setTimeout(async () => {
+                    try {
+                        const snap = await db.getCollection('orders', { where: [['orderId','==',orderId]], limit:1 });
+                        const o = snap?.data?.[0];
+                        const t = (o?.workflowTasks||[]).find(x => x.stageId === stageId);
+                        if (t && t.status === 'started') {
+                            await sendBranchNotification(adminId, order.branch||'',
+                                `🔴 Stage Overdue — ${startedTask.stageName}`,
+                                `Order #${orderId} (${order.customerName||'Customer'}): ${startedTask.stageName} has exceeded its ${startedTask.timeLimitDisplay||limitMins+'min'} time limit!`,
+                                { type: 'stage_time_overdue', orderId, stageId, staffId, level: 'overdue', branch: order.branch||'' }
+                            );
+                        }
+                    } catch(e) { console.warn('Overdue stage warn failed:', e.message); }
+                }, warnAt100);
+                console.log(`⏱ Deadline warnings scheduled for ${stageId} — 80% at ${warnAt80/60000}min, deadline at ${limitMins}min`);
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
     if (status === 'completed') {
       // Find next task that is still waiting or pending AFTER the completed one
       const nextIdx = (order.workflowTasks || []).findIndex(
@@ -4321,8 +4568,8 @@ const tasks = (order.workflowTasks || []).map(t =>
              try {
     if (!nextStageId) {
         const _branch = order.branch || '';
-        await sendAdminNotification(
-            adminId,
+        await sendBranchNotification(
+            adminId, _branch,
             '🎉 Order Fully Completed!',
             `Order #${orderId} — ${order.customerName || 'Customer'} is ready for delivery (Branch: ${_branch || '—'})`,
             {
@@ -4574,6 +4821,31 @@ app.get('/super-admin/*', (req, res) => {
   }
   res.status(404).send('Super admin panel not found');
 });
+// Serve staff portal files
+app.get('/staff', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal.html'));
+});
+
+app.get('/staff-portal.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal.html'));
+});
+
+app.get('/staff-portal-enhanced.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal-enhanced.html'));
+});
+
+app.get('/staff-login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal.html')); // Fallback to main portal
+});
+
+// Elegant Staff Portal Routes
+app.get('/staff-portal-elegant.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal-elegant.html'));
+});
+
+app.get('/staff-portal-dashboard.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'staff-portal-dashboard.html'));
+});
 
 // // Serve staff portal
 // app.get('/staff', (req, res) => {
@@ -4736,5 +5008,60 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
+
+// ── Delivery Date Alert Checker (runs every 6 hours) ─────────────────────
+async function _runDeliveryAlerts() {
+    try {
+        if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) return;
+        // Get all admin IDs from connected clients
+        const adminIds = [..._sseClients.keys()];
+        if (!adminIds.length) return;
+
+        const today = new Date(); today.setHours(0,0,0,0);
+        const twoDaysLater = new Date(today); twoDaysLater.setDate(today.getDate() + 2);
+
+        for (const adminId of adminIds) {
+            try {
+                const db = firebaseIntegrationService.forClient(adminId);
+                const res = await db.getCollection('orders', {
+                    where: [['status', 'not-in', ['completed','delivered','cancelled']]],
+                    limit: 500
+                });
+                const orders = res.data || [];
+
+                for (const order of orders) {
+                    const raw = order.deliveryDate;
+                    if (!raw) continue;
+                    let d;
+                    if (raw._seconds) d = new Date(raw._seconds * 1000);
+                    else if (raw.seconds) d = new Date(raw.seconds * 1000);
+                    else { d = new Date(raw); }
+                    if (isNaN(d)) continue;
+                    d.setHours(0,0,0,0);
+
+                    const diff = d - today;
+                    const days = Math.round(diff / 86400000);
+                    let title = null, body = null;
+
+                    if (days < 0)        { title = `🚨 Delivery OVERDUE — ${order.customerName||'Customer'}`; body = `Order #${order.orderId} (${order.garmentType||''}) was due ${Math.abs(days)}d ago. Branch: ${order.branch||'—'}`; }
+                    else if (days === 0) { title = `⚠️ Delivery DUE TODAY — ${order.customerName||'Customer'}`; body = `Order #${order.orderId} (${order.garmentType||''}) must be delivered today. Branch: ${order.branch||'—'}`; }
+                    else if (days <= 2)  { title = `🔔 Delivery in ${days}d — ${order.customerName||'Customer'}`; body = `Order #${order.orderId} (${order.garmentType||''}) due ${d.toLocaleDateString('en-IN')}. Branch: ${order.branch||'—'}`; }
+
+                    if (title) {
+                        await sendBranchNotification(adminId, order.branch || '', title, body, {
+                            type: 'delivery_alert', orderId: order.orderId,
+                            customerName: order.customerName || '',
+                            branch: order.branch || '', daysLeft: days
+                        });
+                    }
+                }
+            } catch(e) { console.warn(`Delivery alert check failed for ${adminId}:`, e.message); }
+        }
+    } catch(e) { console.warn('_runDeliveryAlerts error:', e.message); }
+}
+
+// Run once on startup after 2 min delay, then every 6 hours
+setTimeout(_runDeliveryAlerts, 2 * 60 * 1000);
+setInterval(_runDeliveryAlerts, 6 * 60 * 60 * 1000);
 
 module.exports = app;

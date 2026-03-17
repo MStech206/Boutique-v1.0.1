@@ -160,6 +160,16 @@ class DataFlowService {
       if (!fbOrder) {
         await firebaseIntegrationService.syncOrder(orderData);
         fbOrder = await this._getOrder(orderData.orderId);
+        // Patch fields that syncOrder may not save
+        if (fbOrder && (orderData.paymentMode || orderData.paymentRemarks)) {
+          await this._setOrder(orderData.orderId, {
+            paymentMode: orderData.paymentMode || '',
+            paymentRemarks: orderData.paymentRemarks || '',
+            advanceAmount: orderData.advanceAmount || 0,
+            balanceAmount: orderData.balanceAmount || 0,
+            trialDate: orderData.trialDate || null
+          });
+        }
       }
 
       // Auto-assign first task
@@ -173,9 +183,13 @@ class DataFlowService {
           firstTask.assignedToName = availableStaff.name || availableStaff.staffId;
           firstTask.updatedAt = new Date();
 
-          // persist order update
-          await this._setOrder(fbOrder.orderId, { workflowTasks: fbOrder.workflowTasks, status: fbOrder.status });
-
+         // persist order update — include paymentMode/paymentRemarks so they aren't lost
+          await this._setOrder(fbOrder.orderId, {
+            workflowTasks: fbOrder.workflowTasks,
+            status: fbOrder.status,
+            paymentMode: fbOrder.paymentMode || orderData.paymentMode || '',
+            paymentRemarks: fbOrder.paymentRemarks || orderData.paymentRemarks || ''
+          });
           // increment staff workload
           const staffDoc = await this._getStaffById(availableStaff.staffId || availableStaff.id);
           const newCount = (staffDoc && staffDoc.currentTaskCount ? staffDoc.currentTaskCount : 0) + 1;
