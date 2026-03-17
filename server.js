@@ -308,7 +308,7 @@ app.get(['/staff', '/staff/*'], (req, res) => {
        invalidateCache([`notifs_${adminId}`]);
         // Also bust any sub-admin caches under this adminId
         try { if (typeof invalidateCache === 'function') invalidateCache([`notifs_sub_`]); } catch(e){}
-        const _pushPayload = { type: 'notification', title, body, data };
+        const _pushPayload = { type: 'notification', notifId, title, body, data };
         if (data && data.type === 'order_complete') _pushPayload.event = 'order_complete';
         _ssePush(adminId, _pushPayload);
         console.log(`🔔 Notification saved + pushed via SSE: ${title}`);
@@ -319,6 +319,7 @@ app.get(['/staff', '/staff/*'], (req, res) => {
 
 // ── SSE client registry for real-time push ───────────────────────────────
 // ── Helper: notify admin + sub-admin of the related branch ───────────────
+// Line 322
 async function sendBranchNotification(adminId, branch, title, body, data = {}) {
     // 1. Always notify the main admin
     await sendAdminNotification(adminId, title, body, data);
@@ -326,43 +327,50 @@ async function sendBranchNotification(adminId, branch, title, body, data = {}) {
     // 2. Find sub-admin(s) for this branch and notify them too
     if (!branch) return;
     try {
-       let subAdmins = [];
-        // Firestore — users are stored GLOBALLY, not per-client
+        let subAdmins = [];
+
         if (firebaseIntegrationService && firebaseIntegrationService.initialized) {
             try {
-                // Fetch all sub-admins (no compound index needed — filter branch in JS)
-                const res = await firebaseIntegrationService.getCollection('users', {
-                    where: [['role', '==', 'sub-admin']],
-                    limit: 200
-                });
-                if (res.success && Array.isArray(res.data)) {
-                    // Normalize branch for loose match: "BHEL" matches "SAPTHALA.BHEL" etc.
-                    const branchNorm = branch.toString().trim().toLowerCase();
-                    subAdmins = res.data.filter(u => {
-                        const ub = (u.branch || u.branchId || '').toString().trim().toLowerCase();
-                        return ub === branchNorm
-                            || ub.includes(branchNorm)
-                            || branchNorm.includes(ub);
+                // ✅ FIX: Cache the global sub-admin list for 10 minutes
+                // Previously this was fetching 200 users from Firestore on EVERY order alert
+                // e.g. 30 overdue orders × 200 reads = 6,000 reads per delivery alert run
+                const cacheKey = `subadmins_global`;
+                let cachedSubAdmins = getCache(cacheKey);
+
+                if (cachedSubAdmins) {
+                    // ✅ Use cached result — zero Firestore reads
+                    subAdmins = cachedSubAdmins;
+                    console.log(`✅ Sub-admins loaded from cache (${subAdmins.length} total)`);
+                } else {
+                    // ✅ Only fetch from Firestore when cache is empty/expired
+                    const res = await firebaseIntegrationService.getCollection('users', {
+                        where: [['role', '==', 'sub-admin']],
+                        limit: 200
                     });
-                    console.log(`🔍 Found ${subAdmins.length} sub-admin(s) for branch "${branch}"`);
+                    if (res.success && Array.isArray(res.data)) {
+                        subAdmins = res.data;
+                        // ✅ Cache for 10 minutes — sub-admins don't change frequently
+                        setCache(cacheKey, subAdmins, 10 * 60 * 1000);
+                        console.log(`✅ Sub-admins fetched from Firestore and cached (${subAdmins.length} total)`);
+                    }
                 }
+
+                // Filter by branch (done in JS, no extra Firestore read needed)
+                const branchNorm = branch.toString().trim().toLowerCase();
+                subAdmins = subAdmins.filter(u => {
+                    const ub = (u.branch || u.branchId || '').toString().trim().toLowerCase();
+                    return ub === branchNorm
+                        || ub.includes(branchNorm)
+                        || branchNorm.includes(ub);
+                });
+                console.log(`🔍 Found ${subAdmins.length} sub-admin(s) for branch "${branch}"`);
+
             } catch(e) { console.warn('Global users Firestore lookup failed:', e.message); }
         }
-        // // MongoDB fallback
-        // if (subAdmins.length === 0 && typeof User !== 'undefined') {
-        //     try {
-        //         const allSA = await User.find({ role: 'sub-admin' }).select('username branch branchId').lean();
-        //         const branchNorm = branch.toString().trim().toLowerCase();
-        //         subAdmins = allSA.filter(u => {
-        //             const ub = (u.branch || u.branchId || '').toString().trim().toLowerCase();
-        //             return ub === branchNorm || ub.includes(branchNorm) || branchNorm.includes(ub);
-        //         });
-        //     } catch(e) { console.warn('MongoDB sub-admin fallback failed:', e.message); }
-        // }
+
         for (const sa of subAdmins) {
             const saId = sa.username || sa.id || sa._id;
             if (!saId) continue;
-            // Sub-admin shares same Firestore tree as admin — write notif tagged with their username
             try {
                 const db = firebaseIntegrationService.forClient(adminId);
                 const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,6)}`;
@@ -370,17 +378,17 @@ async function sendBranchNotification(adminId, branch, title, body, data = {}) {
                     adminId, subAdminUsername: saId, branch,
                     title, body, data, read: false, createdAt: new Date()
                 });
-                // Push SSE to sub-admin if they are connected
                 _ssePush(saId, { type: 'notification', title, body, data });
-               invalidateCache([`notifs_sub_${saId}`, `notifs_${adminId}`]);
+                invalidateCache([`notifs_sub_${saId}`, `notifs_${adminId}`]);
                 console.log(`🔔 Branch notification sent to sub-admin: ${saId} (branch: ${branch})`);
             } catch(e) { console.warn(`Sub-admin notif failed for ${saId}:`, e.message); }
         }
+
     } catch(e) { console.warn('sendBranchNotification sub-admin lookup failed:', e.message); }
 }
-
 // ── SSE client registry for real-time push ───────────────────────────────
 const _sseClients = new Map();
+const _alertedOrders = new Set(); // ✅ tracks orders already alerted today — prevents repeat reads every 6hr
 function _ssePush(adminId, payload) {
     const clients = _sseClients.get(adminId);
     if (!clients || clients.size === 0) return;
@@ -727,12 +735,13 @@ app.get('/api/public/reports/last-orders', async (req, res) => {
 // Firebase Integration Status (for admin panels)
 app.get('/api/firebase/status', async (req, res) => {
   try {
+    // Reuse the same 1-min cache as the public health check
+    const cached = getCache('health_firestore');
+    if (cached) return res.json({ integrated: cached.success, status: cached.success ? 'connected' : 'disconnected', details: cached });
     const health = await firebaseIntegrationService.healthCheck();
-    res.json({
-      integrated: health.healthy,
-      status: health.healthy ? 'connected' : 'disconnected',
-      details: health
-    });
+    const result = { integrated: health.healthy, status: health.healthy ? 'connected' : 'disconnected', details: health };
+    setCache('health_firestore', { success: health.healthy, ...health }, 60 * 1000);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ integrated: false, status: 'error', error: error.message });
   }
@@ -1626,7 +1635,8 @@ app.post('/api/admin/sub-admins', authenticateToken, async (req, res) => {
     await clientDB(req).setDocument('users', username, subAdminData);
 
     console.log(`✅ Sub-admin created in Firestore: ${username} for branch ${branchId} (adminId: ${adminId})`);
-        invalidateCache([`admin_sub_admins_${adminId}`, `staff_list_${adminId}`, `branches_all`, `public_branches_${adminId}`]);
+        // Line 1627 — existing invalidateCache call when sub-admin is created
+invalidateCache([`admin_sub_admins_${adminId}`, `staff_list_${adminId}`, `branches_all`, `public_branches_${adminId}`, `subadmins_global`]);
     res.json({ success: true, subAdmin: { username, branch: branchId, role: 'sub-admin', permissions: subAdminData.permissions } });
   } catch (error) {
     console.error('Create sub-admin error:', error);
@@ -3000,49 +3010,47 @@ app.get('/api/admin/orders', authenticateToken, async (req, res) => {
   }
 });
            app.get('/api/admin/notifications', authenticateToken, async (req, res) => {
-              try {
-                  const isSubAdmin = req.user.role === 'sub-admin';
-                  const myBranch = (req.user.branch || '').toString().trim();
-                  // All notifications are stored under adminId — sub-admins share the same adminId
-                  const cacheKey = isSubAdmin
-                      ? `notifs_sub_${req.user.username}`
-                      : `notifs_${req.user.adminId}`;
-                  const cached = getCache(cacheKey);
-                  // ... fetch from Firestore ...
-              setCache(cacheKey, resp, 2 * 60 * 1000); // 2 min TTL
-                  if (cached) return res.json(cached);
+    try {
+        const isSubAdmin = req.user.role === 'sub-admin';
+        const myBranch = (req.user.branch || '').toString().trim();
+        const cacheKey = isSubAdmin
+            ? `notifs_sub_${req.user.username}`
+            : `notifs_${req.user.adminId}`;
 
-                  const db = firebaseIntegrationService.forClient(req.user.adminId);
-                  const result = await db.getCollection('notifications', {
-                      where: [['adminId', '==', req.user.adminId]],
-                      limit: 50
-                  });
+        // ✅ Check cache FIRST before any Firestore call
+        const cached = getCache(cacheKey);
+        if (cached) return res.json(cached);
 
-                 const NOTIF_TYPES = ['order_complete','delivery_alert','stage_time_warning','stage_time_overdue'];
-                  let notifications = (result.data || [])
-                      .filter(n => NOTIF_TYPES.includes(n.data?.type));
+        const db = firebaseIntegrationService.forClient(req.user.adminId);
+        const result = await db.getCollection('notifications', {
+            where: [['adminId', '==', req.user.adminId]],
+            limit: 50
+        });
 
-                  // Sub-admins: only see notifications tagged for their branch OR their username
-                  if (isSubAdmin && myBranch) {
-                      notifications = notifications.filter(n => {
-                          const nb = (n.branch || n.data?.branch || '').toString().trim();
-                          const targetSa = (n.subAdminUsername || '').toString().trim();
-                          // show if branch matches OR explicitly targeted at this sub-admin
-                          return nb === myBranch || targetSa === req.user.username;
-                      });
-                  }
+        const NOTIF_TYPES = ['order_complete','delivery_alert','stage_time_warning','stage_time_overdue'];
+        let notifications = (result.data || [])
+            .filter(n => NOTIF_TYPES.includes(n.data?.type));
 
-                  notifications.sort((a, b) => {
-                      const ta = a.createdAt?._seconds || new Date(a.createdAt || 0).getTime() / 1000;
-                      const tb = b.createdAt?._seconds || new Date(b.createdAt || 0).getTime() / 1000;
-                      return tb - ta;
-                  });
+        if (isSubAdmin && myBranch) {
+            notifications = notifications.filter(n => {
+                const nb = (n.branch || n.data?.branch || '').toString().trim();
+                const targetSa = (n.subAdminUsername || '').toString().trim();
+                return nb === myBranch || targetSa === req.user.username;
+            });
+        }
 
-                  const resp = { notifications };
-                  setCache(cacheKey, resp, 60 * 1000); // 1 min cache — keep fresh
-                  res.json(resp);
-              } catch(err) { res.status(500).json({ error: err.message }); }
-          });
+        notifications.sort((a, b) => {
+            const ta = a.createdAt?._seconds || new Date(a.createdAt || 0).getTime() / 1000;
+            const tb = b.createdAt?._seconds || new Date(b.createdAt || 0).getTime() / 1000;
+            return tb - ta;
+        });
+
+        const resp = { notifications };
+        // ✅ Cache AFTER building resp
+        setCache(cacheKey, resp, 60 * 1000); // 1 min TTL
+        res.json(resp);
+    } catch(err) { res.status(500).json({ error: err.message }); }
+});
           
          app.get('/api/admin/notifications/stream', (req, res, next) => {
             if (req.query.token && !req.headers.authorization) {
@@ -5016,12 +5024,25 @@ app.use((err, req, res, next) => {
 });
 
 // ── Delivery Date Alert Checker (runs every 6 hours) ─────────────────────
+
 async function _runDeliveryAlerts() {
+
+    // ✅ FIX 1: Skip entirely outside business hours — zero Firestore reads at night
+    const hour = new Date().getHours();
+    if (hour < 8 || hour > 22) {
+        console.log(`⏰ Delivery alerts skipped — outside business hours (${hour}:00)`);
+        return;
+    }
+
     try {
         if (!firebaseIntegrationService || !firebaseIntegrationService.initialized) return;
+
         // Get all admin IDs from connected clients
         const adminIds = [..._sseClients.keys()];
-        if (!adminIds.length) return;
+        if (!adminIds.length) {
+            console.log('⏭ Delivery alerts skipped — no active SSE clients connected');
+            return;
+        }
 
         const today = new Date(); today.setHours(0,0,0,0);
         const twoDaysLater = new Date(today); twoDaysLater.setDate(today.getDate() + 2);
@@ -5034,10 +5055,12 @@ async function _runDeliveryAlerts() {
                     limit: 500
                 });
                 const orders = res.data || [];
+                console.log(`📦 Delivery alert check: ${orders.length} active orders for adminId: ${adminId}`);
 
                 for (const order of orders) {
                     const raw = order.deliveryDate;
                     if (!raw) continue;
+
                     let d;
                     if (raw._seconds) d = new Date(raw._seconds * 1000);
                     else if (raw.seconds) d = new Date(raw.seconds * 1000);
@@ -5053,7 +5076,17 @@ async function _runDeliveryAlerts() {
                     else if (days === 0) { title = `⚠️ Delivery DUE TODAY — ${order.customerName||'Customer'}`; body = `Order #${order.orderId} (${order.garmentType||''}) must be delivered today. Branch: ${order.branch||'—'}`; }
                     else if (days <= 2)  { title = `🔔 Delivery in ${days}d — ${order.customerName||'Customer'}`; body = `Order #${order.orderId} (${order.garmentType||''}) due ${d.toLocaleDateString('en-IN')}. Branch: ${order.branch||'—'}`; }
 
+                    // ✅ FIX 2: Skip if we already sent this alert today
+                    // Prevents the same overdue order from triggering reads on every 6hr run
+                    const alertKey = `${order.orderId}_${today.toDateString()}`;
+                    if (title && _alertedOrders.has(alertKey)) {
+                        console.log(`⏭ Skipping already-alerted order today: ${order.orderId}`);
+                        continue;
+                    }
+
                     if (title) {
+                        // ✅ Mark as alerted before sending (prevents double-fire)
+                        _alertedOrders.add(alertKey);
                         await sendBranchNotification(adminId, order.branch || '', title, body, {
                             type: 'delivery_alert', orderId: order.orderId,
                             customerName: order.customerName || '',
@@ -5065,7 +5098,6 @@ async function _runDeliveryAlerts() {
         }
     } catch(e) { console.warn('_runDeliveryAlerts error:', e.message); }
 }
-
 // Run once on startup after 2 min delay, then every 6 hours
 setTimeout(_runDeliveryAlerts, 2 * 60 * 1000);
 setInterval(_runDeliveryAlerts, 6 * 60 * 60 * 1000);

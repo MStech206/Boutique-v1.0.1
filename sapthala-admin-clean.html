@@ -1802,7 +1802,7 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
             <div id="orders" class="tab-panel">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
                     <h2 style="font-size: 28px; font-weight: bold; color: #1e293b; margin: 0;">📦 Orders Management</h2>
-                    <button onclick="(function(){const btn=this;btn.innerHTML='🔄';btn.disabled=true;loadOrders({}).finally(()=>{btn.innerHTML='🔄 Refresh';btn.disabled=false;})}).call(this)" style="display:flex;align-items:center;gap:6px;padding:9px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 3px 10px rgba(99,102,241,0.25);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">🔄 Refresh</button>
+                <button onclick="(function(){const btn=this;btn.innerHTML='🔄';btn.disabled=true;loadOrders(window._activeOrderFilter||{},true).finally(()=>{btn.innerHTML='🔄 Refresh';btn.disabled=false;})}).call(this)" style="display:flex;align-items:center;gap:6px;padding:9px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 3px 10px rgba(99,102,241,0.25);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">🔄 Refresh</button>
                     <span id="ordersDataSource" style="padding: 8px 14px; border-radius: 8px; background: #dcfce7; color: #065f46; font-weight: 700; font-size: 13px; display: none;">🔥 Firebase</span>
                 </div>
                 <!-- ✅ Status filter bar -->
@@ -1812,7 +1812,8 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                     <button id="orderFilterPending"  onclick="setOrderFilter('pending')"   style="padding:7px 18px;border-radius:20px;border:2px solid #f59e0b;background:white;color:#f59e0b;font-weight:600;cursor:pointer;font-size:13px;">⏳ Pending</button>
                     <button id="orderFilterProgress" onclick="setOrderFilter('in_progress')" style="padding:7px 18px;border-radius:20px;border:2px solid #3b82f6;background:white;color:#3b82f6;font-weight:600;cursor:pointer;font-size:13px;">🔄 In Progress</button>
                     <button id="orderFilterCompleted" onclick="setOrderFilter('completed')" style="padding:7px 18px;border-radius:20px;border:2px solid #10b981;background:white;color:#10b981;font-weight:600;cursor:pointer;font-size:13px;">✅ Completed</button>
-                
+                    <button id="orderFilterOverdue" onclick="setOrderFilter('overdue')" style="padding:7px 18px;border-radius:20px;border:2px solid #dc2626;background:white;color:#dc2626;font-weight:600;cursor:pointer;font-size:13px;">⚠️ Overdue</button>
+
                     <!-- Delivered button omitted for now since it is not specified in the requirements.  Can be added later if the feature is required.
 
                      <button id="orderFilterDelivered" onclick="setOrderFilter('delivered')" style="padding:7px 18px;border-radius:20px;border:2px solid #8b5cf6;background:white;color:#8b5cf6;font-weight:600;cursor:pointer;font-size:13px;">🚚 Delivered</button>
@@ -2044,11 +2045,14 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                     <label>PIN/Password (4 digits) *</label>
                     <input type="text" id="staffPin" placeholder="Enter 4-digit PIN" maxlength="4" pattern="[0-9]{4}" required>
                 </div>
+                <!-- Line 2049 — REPLACE the existing staffBranch form-group -->
                 <div class="form-group">
                     <label>Branch *</label>
                     <select id="staffBranch" required style="padding:10px;border-radius:8px;border:1px solid #cbd5e1;background:white;font-weight:600;">
                         <option value="">Select branch</option>
                     </select>
+                    <!-- ✅ ADD: shown only for sub-admins via JS -->
+                    <div id="staffBranchLockHint" style="display:none;font-size:12px;color:#64748b;margin-top:4px;">🔒 Locked to your branch</div>
                     <datalist id="branchesDatalist" style="display:none"></datalist>
                 </div>
                 <div class="form-group">
@@ -2598,129 +2602,141 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
         }
     } catch (e) { console.warn('Could not populate global branch filters', e); }
 }
-                        async function loadNotifications() {
-                        try {
-                            
-                            const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
-                            const res = await fetch('/api/admin/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
-                            const data = await res.json();
-                             const _cu = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
-                            const _isSubAdmin = _cu.role === 'sub-admin';
-                            const _myBranch = (_cu.branch || '').toString();
-                            const notifs = (data.notifications || []);
-                            const unread = notifs.filter(n => !n.read).length;
-                            const badge = document.getElementById('notifBadge');
-                            if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
-                            else { badge.style.display = 'none'; }
-                            const list = document.getElementById('notifList');
-                            if (notifs.length === 0) {
-                                list.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#94a3b8;">🔕 No notifications yet</div>';
-                                return;
-                            }
-                            const now = new Date();
-                            list.innerHTML = notifs.map(n => {
-                                const deliveryDate = n.data?.deliveryDate || n.deliveryDate;
-                                const isExpired = deliveryDate && new Date(deliveryDate._seconds ? deliveryDate._seconds*1000 : deliveryDate) < now;
-                                const cardBg = isExpired ? 'linear-gradient(135deg,#fff1f2,#fee2e2)' : (n.read ? '#f1f5f9' : 'linear-gradient(135deg,#eef2ff,#f5f3ff)');
-                                const borderColor = isExpired ? '#f87171' : (n.read ? '#cbd5e1' : '#6366f1');
-                                const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
-                                const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
-                                const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
-                                 const _orderId = n.data?.orderId || '';
-                                const _phone = n.data?.customerPhone || '';
-                               const _waSent = !!n.whatsappSent;         // sent by ME
-                                const _waSentByAny = !!n.whatsappSentByAnyone; // sent by anyone
-                                const _waSentAt = n.whatsappSentAt?._seconds ? n.whatsappSentAt._seconds * 1000 : (n.whatsappSentAt || null);
-                                const _waExpired = _waSentByAny && _waSentAt && (Date.now() - _waSentAt > 30 * 60 * 1000);
-                                const _waLastChance = _waSentByAny && !_waExpired && !_waSent;
-                                const _waLabel = (_waSent || (_waSentByAny && _waExpired)) ? '✅ Sent' : (_waLastChance ? '📱 Last Chance (Sent by other)' : '📱 Send WhatsApp');
-                                const _waStyle = _waExpired
-                                    ? 'margin-top:8px;width:100%;padding:7px;background:#94a3b8;color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:not-allowed;opacity:0.6;'
-                                    : _waLastChance
-                                        ? 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;'
-                                        : 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;';
-                                const _waBtn = (n.data?.type === 'order_complete')
-                                    ? `<button id="waBtn_${n.id}" onclick="notifSendWhatsApp('${n.id}','${_orderId}','${_phone}')" ${_waExpired ? 'disabled' : ''} style="${_waStyle}">${_waLabel}${_waLastChance && _waSentAt ? ` · deletes in ${Math.max(0,Math.ceil((30*60*1000-(Date.now()-_waSentAt))/60000))}min` : ''}</button>`
-                                    : '';
-                                return `
-                                <div id=\"notif-card-${n.id}\" style=\"padding:14px 16px;border-radius:12px;margin-bottom:8px;background:${cardBg};border-left:4px solid ${borderColor};border:1px solid ${borderSolid};position:relative;transition:opacity 0.4s;\">
-                                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                                        <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
-                                            <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
-                                            <div style="font-size:13px;color:${bodyColor};margin-top:2px;line-height:1.4;">${n.body}</div>
-                                            <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
-                                                🕐 ${new Date(n.createdAt?._seconds ? n.createdAt._seconds*1000 : n.createdAt).toLocaleString()}
-                                                ${isExpired ? '<span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">⚠ EXPIRED</span>' : ''}
-                                                ${!n.read && !isExpired ? '<span style="background:#6366f1;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
-                                            </div>
-                                        </div>
-                                        <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;">🗑</button>
-                                    </div>
-                                    ${_waBtn}
-                                </div>`;
-                            }).join('');
-                            // Popup for new order_complete notifications
-                            const newComplete = notifs.find(n => !n.read && !n.whatsappSent && n.data?.type === 'order_complete');
-                            if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
-                                sessionStorage.setItem('popup_' + newComplete.id, '1');
-                                showOrderCompletePopup(newComplete);
-                            }
-                        } catch(e) { console.warn('Notifications error:', e); }
-                    }
-
-                   // Named global so it can be called after login
-                    function connectNotifSSE() {
-                        if (window._notifSSE && window._notifSSE.readyState === 1) return; // already OPEN
-                        const _t = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
-                        if (!_t) return; // not logged in yet — will be called again after login
-                        if (window._notifSSE) { try { window._notifSSE.close(); } catch(e){} window._notifSSE = null; }
-                        const _es = new EventSource('/api/admin/notifications/stream?token=' + encodeURIComponent(_t));
-                        _es.onopen = function() { console.log('📡 Notif SSE connected'); };
-                        _es.onmessage = function(e) {
+                         
+                        async function loadNotifications(force = false) {
                             try {
-                                const p = JSON.parse(e.data);
-                               if (p.type === 'notification') {
-                                    if (p.event === 'order_complete') {
-                                        loadNotifications();
-                                        // Show popup for new order_complete — use real notifId
-                                        const _popId = p.data?.notifId || ('sse_' + Date.now());
-                                        if (!sessionStorage.getItem('popup_' + _popId)) {
-                                            sessionStorage.setItem('popup_' + _popId, '1');
-                                            showOrderCompletePopup({ id: _popId, title: p.title, body: p.body, data: p.data || {} });
-                                        }
-                                    } else if (p.event === 'whatsapp_sent') {
-                                        // Another user sent WhatsApp — silently refresh panel to show updated state
-                                        loadNotifications();
-                                        // Update any open popup button in real-time
-                                        const _wbtn = document.getElementById('popupWaBtn_' + p.notifId);
-                                        if (_wbtn && p.sentBy) {
-                                            _wbtn.disabled = true;
-                                            _wbtn.textContent = '✅ Sent by ' + p.sentBy;
-                                            _wbtn.style.background = 'rgba(255,255,255,0.2)';
-                                            _wbtn.style.opacity = '0.7';
-                                        }
-                                        const _lbtn = document.getElementById('waBtn_' + p.notifId);
-                                        if (_lbtn) {
-                                            _lbtn.disabled = true;
-                                            _lbtn.textContent = '✅ Sent by ' + p.sentBy;
-                                            _lbtn.style.background = '#94a3b8';
-                                        }
-                                    } else {
-                                        loadNotifications();
-                                    }
+                                const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                                // ✅ force=true bypasses server 1-min cache — used when SSE fires
+                                const url = '/api/admin/notifications' + (force ? '?nocache=1' : '');
+                                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                                const data = await res.json();
+                                const _cu = JSON.parse(localStorage.getItem('sapthala_user') || sessionStorage.getItem('sapthala_user') || '{}');
+                                const _isSubAdmin = _cu.role === 'sub-admin';
+                                const _myBranch = (_cu.branch || '').toString();
+                                const notifs = (data.notifications || []);
+                                const unread = notifs.filter(n => !n.read).length;
+                                const badge = document.getElementById('notifBadge');
+                                if (unread > 0) { badge.style.display = 'flex'; badge.textContent = unread; }
+                                else { badge.style.display = 'none'; }
+                                const list = document.getElementById('notifList');
+                                if (notifs.length === 0) {
+                                    list.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#94a3b8;">🔕 No notifications yet</div>';
+                                    return;
                                 }
-                            } catch(err) {}
-                        };
-                        _es.onerror = function() {
-                            _es.close();
-                            window._notifSSE = null;
-                            clearTimeout(window._notifSSETimer);
-                            window._notifSSETimer = setTimeout(connectNotifSSE, 8000);
-                        };
-                        window._notifSSE = _es;
-                    }
-                    connectNotifSSE(); // try on load (works if already logged in / page refresh)
-                    loadNotifications();
+                                const now = new Date();
+                                list.innerHTML = notifs.map(n => {
+                                    const deliveryDate = n.data?.deliveryDate || n.deliveryDate;
+                                    const isExpired = deliveryDate && new Date(deliveryDate._seconds ? deliveryDate._seconds*1000 : deliveryDate) < now;
+                                    const cardBg = isExpired ? 'linear-gradient(135deg,#fff1f2,#fee2e2)' : (n.read ? '#f1f5f9' : 'linear-gradient(135deg,#eef2ff,#f5f3ff)');
+                                    const borderColor = isExpired ? '#f87171' : (n.read ? '#cbd5e1' : '#6366f1');
+                                    const borderSolid = isExpired ? '#fca5a5' : (n.read ? '#e2e8f0' : '#c7d2fe');
+                                    const titleColor = isExpired ? '#991b1b' : (n.read ? '#64748b' : '#1e1b4b');
+                                    const bodyColor = isExpired ? '#b91c1c' : (n.read ? '#94a3b8' : '#4338ca');
+                                    const _orderId = n.data?.orderId || '';
+                                    const _phone = n.data?.customerPhone || '';
+                                    const _waSent = !!n.whatsappSent;
+                                    const _waSentByAny = !!n.whatsappSentByAnyone;
+                                    const _waSentAt = n.whatsappSentAt?._seconds ? n.whatsappSentAt._seconds * 1000 : (n.whatsappSentAt || null);
+                                    const _waExpired = _waSentByAny && _waSentAt && (Date.now() - _waSentAt > 30 * 60 * 1000);
+                                    const _waLastChance = _waSentByAny && !_waExpired && !_waSent;
+                                    const _waLabel = (_waSent || (_waSentByAny && _waExpired)) ? '✅ Sent' : (_waLastChance ? '📱 Last Chance (Sent by other)' : '📱 Send WhatsApp');
+                                    const _waStyle = _waExpired
+                                        ? 'margin-top:8px;width:100%;padding:7px;background:#94a3b8;color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:not-allowed;opacity:0.6;'
+                                        : _waLastChance
+                                            ? 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;'
+                                            : 'margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;';
+                                    const _waBtn = (n.data?.type === 'order_complete')
+                                        ? `<button id="waBtn_${n.id}" onclick="notifSendWhatsApp('${n.id}','${_orderId}','${_phone}')" ${_waExpired ? 'disabled' : ''} style="${_waStyle}">${_waLabel}${_waLastChance && _waSentAt ? ` · deletes in ${Math.max(0,Math.ceil((30*60*1000-(Date.now()-_waSentAt))/60000))}min` : ''}</button>`
+                                        : '';
+                                    return `
+                                    <div id="notif-card-${n.id}" style="padding:14px 16px;border-radius:12px;margin-bottom:8px;background:${cardBg};border-left:4px solid ${borderColor};border:1px solid ${borderSolid};position:relative;transition:opacity 0.4s;">
+                                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                            <div onclick="markRead('${n.id}')" style="flex:1;cursor:pointer;">
+                                                <div style="font-weight:700;font-size:14px;color:${titleColor};margin-bottom:4px;">${n.title}</div>
+                                                <div style="font-size:13px;color:${bodyColor};margin-top:2px;line-height:1.4;">${n.body}</div>
+                                                <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+                                                    🕐 ${new Date(n.createdAt?._seconds ? n.createdAt._seconds*1000 : n.createdAt).toLocaleString()}
+                                                    ${isExpired ? '<span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">⚠ EXPIRED</span>' : ''}
+                                                    ${!n.read && !isExpired ? '<span style="background:#6366f1;color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;">NEW</span>' : ''}
+                                                </div>
+                                            </div>
+                                            <button onclick="deleteNotification('${n.id}')" title="Delete" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:6px;">🗑</button>
+                                        </div>
+                                        ${_waBtn}
+                                    </div>`;
+                                }).join('');
+                                // Popup for new order_complete notifications (on page load/refresh)
+                                const newComplete = notifs.find(n => !n.read && !n.whatsappSent && n.data?.type === 'order_complete');
+                                if (newComplete && !sessionStorage.getItem('popup_' + newComplete.id)) {
+                                    sessionStorage.setItem('popup_' + newComplete.id, '1');
+                                    showOrderCompletePopup(newComplete);
+                                }
+                            } catch(e) { console.warn('Notifications error:', e); }
+                        }
+
+                        // Named global so it can be called after login
+                        function connectNotifSSE() {
+                            if (window._notifSSE && window._notifSSE.readyState === 1) return; // already OPEN
+                            const _t = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+                            if (!_t) return; // not logged in yet — will be called again after login
+                            if (window._notifSSE) { try { window._notifSSE.close(); } catch(e){} window._notifSSE = null; }
+                            const _es = new EventSource('/api/admin/notifications/stream?token=' + encodeURIComponent(_t));
+                            _es.onopen = function() { console.log('📡 Notif SSE connected'); };
+                            _es.onmessage = function(e) {
+                                try {
+                                    const p = JSON.parse(e.data);
+                                    if (p.type === 'notification') {
+                                        if (p.event === 'order_complete') {
+                                            // ✅ Force-refresh bypassing 1-min cache — new card appears instantly in panel
+                                            loadNotifications(true);
+                                            // ✅ Use real notifId from SSE so WhatsApp button maps to correct Firestore doc
+                                            const _popId = p.notifId || p.data?.notifId || ('sse_' + Date.now());
+                                            if (!sessionStorage.getItem('popup_' + _popId)) {
+                                                sessionStorage.setItem('popup_' + _popId, '1');
+                                                showOrderCompletePopup({
+                                                    id: _popId,
+                                                    title: p.title,
+                                                    body: p.body,
+                                                    data: { ...p.data, notifId: _popId }
+                                                });
+                                            }
+                                            // ✅ Refresh the order card live (green glow + status update)
+                                            if (p.data?.orderId) refreshOrderCard(p.data.orderId);
+
+                                        } else if (p.event === 'whatsapp_sent') {
+                                            // Another user sent WhatsApp — silently refresh panel
+                                            loadNotifications();
+                                            // Update popup button if open
+                                            const _wbtn = document.getElementById('popupWaBtn_' + p.notifId);
+                                            if (_wbtn && p.sentBy) {
+                                                _wbtn.disabled = true;
+                                                _wbtn.textContent = '✅ Sent by ' + p.sentBy;
+                                                _wbtn.style.background = 'rgba(255,255,255,0.2)';
+                                                _wbtn.style.opacity = '0.7';
+                                            }
+                                            // Update notification panel button
+                                            const _lbtn = document.getElementById('waBtn_' + p.notifId);
+                                            if (_lbtn) {
+                                                _lbtn.disabled = true;
+                                                _lbtn.textContent = '✅ Sent by ' + p.sentBy;
+                                                _lbtn.style.background = '#94a3b8';
+                                            }
+                                        } else {
+                                            loadNotifications();
+                                        }
+                                    }
+                                } catch(err) {}
+                            };
+                            _es.onerror = function() {
+                                _es.close();
+                                window._notifSSE = null;
+                                clearTimeout(window._notifSSETimer);
+                                window._notifSSETimer = setTimeout(connectNotifSSE, 8000);
+                            };
+                            window._notifSSE = _es;
+                        }
+                        connectNotifSSE(); // try on load (works if already logged in / page refresh)
+                        loadNotifications();
 
                 function toggleNotifications() {
                     const dd = document.getElementById('notifDropdown');
@@ -2787,7 +2803,56 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                     requestAnimationFrame(() => { const b = document.getElementById('popupBar_'+notif.id); if(b) b.style.width='0%'; });
                     setTimeout(() => { if (popup.parentNode) { popup.style.transition='opacity 0.5s'; popup.style.opacity='0'; setTimeout(()=>popup.remove(),500); } }, 15000);
                 }
-                // ADD after showOrderCompletePopup closing brace:
+              async function refreshOrderCard(orderId) {
+    try {
+        const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
+        const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}?nocache=1`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const fresh = await res.json();
+        const order = fresh.order || fresh;
+
+        // Find card using id="ocard-${oid}" from line 6001
+        const card = document.getElementById(`ocard-${orderId}`);
+        if (!card) return; // not visible — popup already shown, that's enough
+
+        // Update card background + border to green
+        card.style.transition = 'all 0.4s ease';
+        card.style.background = '#f0fdf4';
+        card.style.borderColor = '#86efac';
+        card.style.borderLeftColor = '#059669';
+
+        // Update status badge (line 6021)
+        const summaryRow = card.querySelector('[onclick^="toggleOrderCard"]');
+        if (summaryRow) {
+            const badge = summaryRow.querySelector('span[style*="border-radius:20px"]');
+            if (badge) {
+                badge.textContent = 'completed';
+                badge.style.background = '#d1fae520';
+                badge.style.color = '#059669';
+            }
+        }
+
+        // Update progress bar to 100% (line 6018)
+        const progressFill = card.querySelector('[style*="transition:width"]');
+        if (progressFill) {
+            progressFill.style.width = '100%';
+            progressFill.style.background = '#059669';
+        }
+        const progressText = card.querySelector('[style*="Progress"]');
+        if (progressText) progressText.textContent = 'Progress 100%';
+
+        // Green glow for 3s
+        card.style.boxShadow = '0 0 0 3px #6ee7b7';
+        setTimeout(() => { card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }, 3000);
+
+        // Keep in-memory snapshot in sync
+        if (window._orderSnapshots) window._orderSnapshots[orderId] = order;
+        console.log(`✅ Order card ocard-${orderId} refreshed live`);
+    } catch(err) { console.warn('refreshOrderCard error:', err); }
+}
+                 
                 async function notifSendWhatsApp(notifId, orderId, phone) {
                     const token = localStorage.getItem('sapthala_token') || sessionStorage.getItem('sapthala_token');
 
@@ -4885,6 +4950,7 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                     if (psc) psc.style.display = 'block';
                 }, 800);
             }, 500);
+            setTimeout(_updateStickyBar, 50);
         }
 
         function generateMeasurementFields() {
@@ -5514,36 +5580,65 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
             }
         }
 
-        function resetOrderForm() {
-            // Reset form fields
-            document.getElementById('customerName').value = '';
-            document.getElementById('customerPhone').value = '';
-            document.getElementById('customerAddress').value = '';
-            document.getElementById('designDescription').value = '';
-            document.getElementById('designNotes').value = '';
-            document.getElementById('advancePayment').value = '';
-            document.getElementById('deliveryDate').value = '';
-            
-            // Reset sections visibility
-            document.getElementById('categorySection').style.display = 'none';
-            document.getElementById('measurementSection').style.display = 'none';
-            document.getElementById('pricingSection').style.display = 'none';
-            
-            // Reset selections
-            document.querySelectorAll('.category-btn, .subcategory-btn, .garment-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Reset current order
-            currentOrder = { customer: {}, category: '', subcategory: '', garment: null, measurements: {}, design: {}, pricing: {}, images: [] };
-            
-            // Reset image preview
-            document.getElementById('imagePreview').innerHTML = '';
-            document.getElementById('designImages').value = '';
-            clearCart();
-            renderCartItems();
-            editingCartIndex = -1;
-        }
+       function resetOrderForm() {
+    // Reset form fields
+    document.getElementById('customerName').value = '';
+    document.getElementById('customerPhone').value = '';
+    document.getElementById('customerAddress').value = '';
+    document.getElementById('designDescription').value = '';
+    document.getElementById('designNotes').value = '';
+    document.getElementById('advancePayment').value = '';
+    document.getElementById('deliveryDate').value = '';
+
+    // ── newly added clears ──
+    try { document.getElementById('trialDate').value = ''; } catch(e){}
+    try { document.getElementById('otherExpenses').value = ''; } catch(e){}
+    try { document.getElementById('paymentRemarks').value = ''; } catch(e){}
+
+    // Discount — uncheck, hide controls & display, clear values
+    try {
+        const dc = document.getElementById('discountEnabled');
+        if (dc) { dc.checked = false; }
+        document.getElementById('discountPercent').value = '';
+        document.getElementById('discountAmount').value = '';
+        document.getElementById('discountControls').style.display = 'none';
+        document.getElementById('discountControls').classList.add('hidden');
+        document.getElementById('discountDisplay').style.display = 'none';
+        document.getElementById('discountDisplay').classList.add('hidden');
+    } catch(e){}
+
+    // Payment mode — deselect all highlighted labels
+    try {
+        ['pm-cash','pm-card','pm-upi'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.borderColor = '#e2e8f0', el.style.background = '';
+        });
+        if (typeof currentOrder !== 'undefined') currentOrder.paymentMode = '';
+    } catch(e){}
+
+    // Reset sections visibility
+    document.getElementById('categorySection').style.display = 'none';
+    document.getElementById('measurementSection').style.display = 'none';
+    document.getElementById('pricingSection').style.display = 'none';
+
+    // Reset selections
+    document.querySelectorAll('.category-btn, .subcategory-btn, .garment-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Reset current order
+    currentOrder = { customer: {}, category: '', subcategory: '', garment: null, measurements: {}, design: {}, pricing: {}, images: [] };
+
+    // Reset image preview
+    document.getElementById('imagePreview').innerHTML = '';
+    document.getElementById('designImages').value = '';
+    clearCart();
+    renderCartItems();
+    editingCartIndex = -1;
+
+    // Clear sticky bar
+    try { if (typeof _clearStickyBar === 'function') _clearStickyBar(); } catch(e){}
+}
 
         // Dashboard Functions
         // Helper: compute dashboard numbers from locally cached orders (localStorage)
@@ -5694,15 +5789,31 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
 
                 let list = Array.isArray(orders) ? orders : (orders.orders || orders.data || []);
                 if (filters.status) {
-                    const s = filters.status;
-                    if (s === 'pending') {
-                        list = list.filter(o => o.status === 'pending' || o.status === 'in_progress' || o.status === 'assigned');
-                    } else if (s === 'completed') {
-                        list = list.filter(o => o.status === 'completed' || o.status === 'delivered' || o.status === 'ready');
-                    } else {
-                        list = list.filter(o => (o.status || '').toString().toLowerCase() === s.toString().toLowerCase());
-                    }
+                const s = filters.status;
+                if (s === 'pending') {
+                    list = list.filter(o => o.status === 'pending' || o.status === 'in_progress' || o.status === 'assigned');
+                } else if (s === 'completed') {
+                    list = list.filter(o => o.status === 'completed' || o.status === 'delivered' || o.status === 'ready');
+                } else if (s === 'overdue') {
+                    // ✅ Overdue = delivery date is in the past AND order not completed/delivered/cancelled
+                    const _today = new Date(); _today.setHours(0,0,0,0);
+                    list = list.filter(o => {
+                        const st = (o.status || '').toLowerCase();
+                        if (st === 'completed' || st === 'delivered' || st === 'cancelled') return false;
+                        const raw = o.deliveryDate;
+                        if (!raw) return false;
+                        let d;
+                        if (raw._seconds)      d = new Date(raw._seconds * 1000);
+                        else if (raw.seconds)  d = new Date(raw.seconds * 1000);
+                        else                   d = new Date(typeof raw === 'string' && raw.length === 10 ? raw + 'T12:00:00' : raw);
+                        if (isNaN(d)) return false;
+                        d.setHours(0,0,0,0);
+                        return d < _today; // ✅ delivery date is strictly before today
+                    });
+                } else {
+                    list = list.filter(o => (o.status || '').toString().toLowerCase() === s.toString().toLowerCase());
                 }
+            }
 
                 // If specific orderId requested, try to find and show only that order
                 if (filters.orderId) {
@@ -5814,13 +5925,28 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                     setOrderFilter('pending');       // ✅ this calls loadOrders({status:'pending'})
                 }
         // ✅ Central filter function — updates button styles + loads filtered orders
+            
             function setOrderFilter(status) {
-                // Update button highlight states
-                const filters = { '': 'orderFilterAll', 'pending': 'orderFilterPending', 'in_progress': 'orderFilterProgress', 'completed': 'orderFilterCompleted', 'delivered': 'orderFilterDelivered' };
+                // ✅ Added overdue to filters map
+                const filters = {
+                    '': 'orderFilterAll',
+                    'pending': 'orderFilterPending',
+                    'in_progress': 'orderFilterProgress',
+                    'completed': 'orderFilterCompleted',
+                    'delivered': 'orderFilterDelivered',
+                    'overdue': 'orderFilterOverdue'
+                };
                 Object.entries(filters).forEach(([val, id]) => {
                     const btn = document.getElementById(id);
                     if (!btn) return;
-                    const colors = { '': '#6366f1', 'pending': '#f59e0b', 'in_progress': '#3b82f6', 'completed': '#10b981', 'delivered': '#8b5cf6' };
+                    const colors = {
+                        '': '#6366f1',
+                        'pending': '#f59e0b',
+                        'in_progress': '#3b82f6',
+                        'completed': '#10b981',
+                        'delivered': '#8b5cf6',
+                        'overdue': '#dc2626'   // ✅ red for overdue
+                    };
                     const c = colors[val] || '#6366f1';
                     if (val === status) {
                         btn.style.background = c; btn.style.color = 'white'; btn.style.borderColor = c;
@@ -5831,11 +5957,25 @@ window.checkAuthStatus = function(){ if (localStorage.getItem('sapthala_logged_i
                 // Show/hide active filter badge
                 const badge = document.getElementById('orderFilterBadge');
                 if (badge) {
-                    if (status) { badge.textContent = '🔍 Showing: ' + status.replace('_', ' '); badge.style.display = 'inline-block'; }
-                    else { badge.style.display = 'none'; }
+                    if (status) {
+                        badge.textContent = '🔍 Showing: ' + status.replace('_', ' ');
+                        badge.style.display = 'inline-block';
+                        // ✅ Red badge for overdue
+                        if (status === 'overdue') {
+                            badge.style.background = '#fee2e2';
+                            badge.style.color = '#991b1b';
+                        } else {
+                            badge.style.background = '#fef3c7';
+                            badge.style.color = '#92400e';
+                        }
+                    } else {
+                        badge.style.display = 'none';
+                    }
                 }
-                // Load orders with filter
-                loadOrders(status ? { status } : {}).catch(e => console.warn('setOrderFilter loadOrders failed', e));
+             // ✅ Save active filter so Refresh button can reuse it
+            window._activeOrderFilter = status ? { status } : {};
+            // Load orders with filter
+            loadOrders(window._activeOrderFilter, true).catch(e => console.warn('setOrderFilter loadOrders failed', e));
             }
 
         // REPLACE lines 5388-5422 (entire displayOrders function) WITH:
@@ -7560,7 +7700,25 @@ const bres = await fetch('/api/public/branches' + (_u5.adminId ? '?adminId=' + e
                         const o4 = document.createElement('option'); o4.value = value; o4.textContent = `${display} (${value})`; orderBranch.appendChild(o4);
                     }
                 });
-
+                    // Sub-admin: auto-select and LOCK staffBranch to their branch
+                if (_isSubAdmin && _subBranch && staffBranchSelect) {
+                    const matched = Array.from(staffBranchSelect.options).find(o =>
+                        o.value.toString() === _subBranch
+                    );
+                    if (matched) staffBranchSelect.value = matched.value;
+                    staffBranchSelect.disabled = true;
+                    staffBranchSelect.style.background = '#f1f5f9';
+                    staffBranchSelect.style.color = '#64748b';
+                    staffBranchSelect.style.cursor = 'not-allowed';
+                     // ✅ Show lock hint
+                    const hint = document.getElementById('staffBranchLockHint');
+                    if (hint) hint.style.display = 'block';
+                } else if (staffBranchSelect) {
+                    staffBranchSelect.disabled = false;
+                    staffBranchSelect.style.background = 'white';
+                    staffBranchSelect.style.color = '';
+                    staffBranchSelect.style.cursor = '';
+                }
                 // Sub-admin: auto-select and lock their branch. Admin: must choose manually.
                 if (_isSubAdmin && _subBranch && orderBranch) {
                     const matched = Array.from(orderBranch.options).find(o =>
@@ -8206,13 +8364,20 @@ document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 } catch(e){}
             } catch(e){}
         }
-
+        function _clearStickyBar(){
+            document.getElementById('stickyTotalMain').textContent = '₹0';
+            document.getElementById('stickyBase').textContent      = '₹0';
+            document.getElementById('stickyAddons').textContent    = '₹0';
+            document.getElementById('stickyAdvance').textContent   = '₹0';
+            document.getElementById('stickyBalance').textContent   = '₹0';
+            document.getElementById('stickyItems').textContent     = '0';
+        }
         function _showTabUI(tabName){
             const bar  = document.getElementById('stickyTotalBar');
             const fabs = document.getElementById('scrollFabGroup');
             const isNewOrder = tabName === 'new-order';
             const showFabs   = SCROLL_TABS.includes(tabName);
-            if(bar)  { bar.classList.toggle('visible', isNewOrder); }
+           if(bar)  { bar.classList.toggle('visible', isNewOrder); if(!isNewOrder) _clearStickyBar(); }
            if(fabs) {
                 fabs.style.paddingBottom = isNewOrder ? '104px' : '24px';
                 // hide by default — only show while scrolling
